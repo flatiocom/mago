@@ -58,7 +58,10 @@ use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::FunctionLikeParameterList;
+use mago_syntax::cst::Literal;
+use mago_syntax::cst::Return;
 use mago_syntax::cst::Statement;
+use mago_syntax::utils::find_returns_in_statement;
 use mago_text_edit::Safety;
 use mago_text_edit::TextEdit;
 
@@ -386,7 +389,7 @@ where
         }
     }
 
-    check_return_type_width(context, block_context, &mut artifacts, function_like_metadata);
+    check_return_type_width(context, block_context, &mut artifacts, function_like_metadata, &body);
     check_thrown_types(context, block_context, &mut artifacts, function_like_metadata);
 
     std::mem::swap(&mut context.type_resolution_context, &mut previous_type_resolution_context);
@@ -404,6 +407,9 @@ where
     }
     parent_artifacts.symbol_references.extend(std::mem::take(&mut artifacts.symbol_references));
     parent_artifacts.pending_readonly_property_writes.append(&mut artifacts.pending_readonly_property_writes);
+    parent_artifacts
+        .assigned_property_types
+        .absorb(std::mem::take(&mut artifacts.assigned_property_types), context.codebase);
 
     Ok(artifacts)
 }
@@ -959,6 +965,7 @@ fn check_return_type_width<'ctx, A>(
     block_context: &BlockContext<'ctx>,
     artifacts: &mut AnalysisArtifacts,
     function_like_metadata: &'ctx FunctionLikeMetadata,
+    body: &FunctionLikeBody<'_, '_>,
 ) where
     A: Arena,
 {
@@ -977,14 +984,9 @@ fn check_return_type_width<'ctx, A>(
         return;
     };
 
-    let is_overriding_method = function_like_metadata.kind.is_method()
-        && block_context.scope.get_class_like_name().is_some_and(|class_name| {
-            context.codebase.method_is_overriding(class_name.as_bytes(), function_like_metadata.name.as_bytes())
-        });
-
-    if is_overriding_method {
+    let Some(width_scope) = get_return_width_scope(context, block_context, function_like_metadata) else {
         return;
-    }
+    };
 
     if artifacts.inferred_return_types.is_empty() {
         return;
@@ -998,24 +1000,100 @@ fn check_return_type_width<'ctx, A>(
         return;
     }
 
-    check_return_type_metadata_width(context, block_context, artifacts, function_like_metadata, return_type_metadata);
+    let returns_only_one_constant = [TUnion::is_null, TUnion::is_true, TUnion::is_false]
+        .into_iter()
+        .any(|is_constant| artifacts.inferred_return_types.iter().all(|ret| is_constant(ret)));
 
-    // The effective (docblock) type and the native hint are separate declarations
-    // with separate source spans, so each overly-wide one needs its own fix. When
-    // a docblock overrides the return type, check the native hint too; without an
-    // override `return_type_metadata` already *is* the native declaration, so this
-    // would just be a duplicate check.
-    if return_type_metadata.from_docblock
-        && let Some(native_return_type_metadata) = function_like_metadata.return_type_declaration_metadata.as_ref()
-    {
-        check_return_type_metadata_width(
-            context,
-            block_context,
-            artifacts,
-            function_like_metadata,
-            native_return_type_metadata,
-        );
+    if width_scope == ReturnWidthScope::AllBranchesOfOverride && returns_only_one_constant {
+        return;
     }
+
+    let may_narrow_bool = width_scope != ReturnWidthScope::NullBranch
+        && !function_like_metadata.kind.is_closure()
+        && !function_like_metadata.kind.is_arrow_function()
+        && !has_single_literal_bool_return(body);
+
+    check_return_type_metadata_width(
+        context,
+        block_context,
+        artifacts,
+        function_like_metadata,
+        &with_native_null(function_like_metadata, return_type_metadata),
+        width_scope,
+        may_narrow_bool,
+    );
+}
+
+fn with_native_null<'metadata>(
+    function_like_metadata: &FunctionLikeMetadata,
+    return_type_metadata: &'metadata TypeMetadata,
+) -> Cow<'metadata, TypeMetadata> {
+    let native_has_null = function_like_metadata
+        .return_type_declaration_metadata
+        .as_ref()
+        .is_some_and(|native_return_type_metadata| native_return_type_metadata.type_union.has_null());
+
+    if !return_type_metadata.from_docblock || !native_has_null || return_type_metadata.type_union.has_null() {
+        return Cow::Borrowed(return_type_metadata);
+    }
+
+    let mut nullable_return_type_metadata = return_type_metadata.clone();
+    nullable_return_type_metadata.type_union = nullable_return_type_metadata.type_union.as_nullable();
+
+    Cow::Owned(nullable_return_type_metadata)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReturnWidthScope {
+    AllBranches,
+    AllBranchesOfOverride,
+    NullBranch,
+}
+
+fn get_return_width_scope<'ctx, A>(
+    context: &Context<'ctx, '_, A>,
+    block_context: &BlockContext<'ctx>,
+    function_like_metadata: &FunctionLikeMetadata,
+) -> Option<ReturnWidthScope>
+where
+    A: Arena,
+{
+    let (Some(method_metadata), Some(class_like)) =
+        (function_like_metadata.method_metadata.as_ref(), block_context.scope.get_class_like())
+    else {
+        return Some(ReturnWidthScope::AllBranches);
+    };
+
+    let is_private = method_metadata.visibility.is_private();
+    let is_final_class = class_like.flags.is_final() || class_like.name_span.is_none();
+    let subclass_may_override = !is_private && !is_final_class && !method_metadata.is_final;
+    let is_overriding = !is_private
+        && context.codebase.method_is_overriding(class_like.name.as_bytes(), function_like_metadata.name.as_bytes());
+
+    if !class_like.kind.is_trait() {
+        if is_overriding {
+            return Some(ReturnWidthScope::AllBranchesOfOverride);
+        }
+
+        if !subclass_may_override {
+            return Some(ReturnWidthScope::AllBranches);
+        }
+    }
+
+    (!subclass_may_override || method_metadata.is_static).then_some(ReturnWidthScope::NullBranch)
+}
+
+fn has_single_literal_bool_return(body: &FunctionLikeBody<'_, '_>) -> bool {
+    let FunctionLikeBody::Statements(statements, _) = body else {
+        return false;
+    };
+
+    let returns = statements.iter().flat_map(find_returns_in_statement).collect::<Vec<_>>();
+
+    matches!(
+        returns.as_slice(),
+        [Return { value: Some(Expression::Literal(Literal::True(_) | Literal::False(_))), .. }]
+    )
 }
 
 fn check_return_type_metadata_width<'ctx, A>(
@@ -1024,6 +1102,8 @@ fn check_return_type_metadata_width<'ctx, A>(
     artifacts: &mut AnalysisArtifacts,
     function_like_metadata: &'ctx FunctionLikeMetadata,
     return_type_metadata: &TypeMetadata,
+    width_scope: ReturnWidthScope,
+    may_narrow_bool: bool,
 ) where
     A: Arena,
 {
@@ -1039,6 +1119,28 @@ fn check_return_type_metadata_width<'ctx, A>(
 
     let expanded_declared =
         expand_type_metadata(context, block_context, artifacts, function_like_metadata, return_type_metadata);
+
+    if may_narrow_bool
+        && let Some(only_returned_bool) =
+            get_only_returned_bool(context, artifacts, return_type_metadata, &expanded_declared)
+    {
+        let never_returned_bool = if only_returned_bool.is_true() {
+            TAtomic::Scalar(TScalar::r#false())
+        } else {
+            TAtomic::Scalar(TScalar::r#true())
+        };
+
+        report_overly_wide_return_type(
+            context,
+            function_like_metadata,
+            return_type_metadata,
+            &expanded_declared,
+            &[&never_returned_bool],
+            Some(only_returned_bool.get_id().to_string()),
+        );
+
+        return;
+    }
 
     let any_inferred_matches = |declared_atomic: &TAtomic| -> bool {
         artifacts.inferred_return_types.iter().any(|ret| {
@@ -1082,37 +1184,80 @@ fn check_return_type_metadata_width<'ctx, A>(
         .types
         .iter()
         .filter(|declared_atomic| !any_inferred_matches(declared_atomic))
-        .filter(|declared_atomic| {
-            !(return_type_metadata.from_docblock
-                && declared_atomic.is_null()
-                && function_like_metadata
-                    .return_type_declaration_metadata
-                    .as_ref()
-                    .is_some_and(|n| n.type_union.has_null()))
-        })
+        .filter(|declared_atomic| width_scope != ReturnWidthScope::NullBranch || declared_atomic.is_null())
         .collect::<Vec<_>>();
     if unused_atomics.is_empty() {
         return;
     }
 
+    let narrowed_type_text = get_narrowed_return_type_text(context, return_type_metadata.span, &unused_atomics);
+
+    report_overly_wide_return_type(
+        context,
+        function_like_metadata,
+        return_type_metadata,
+        &expanded_declared,
+        &unused_atomics,
+        narrowed_type_text,
+    );
+}
+
+fn get_only_returned_bool<A>(
+    context: &Context<'_, '_, A>,
+    artifacts: &AnalysisArtifacts,
+    return_type_metadata: &TypeMetadata,
+    expanded_declared: &TUnion,
+) -> Option<TAtomic>
+where
+    A: Arena,
+{
+    let [TAtomic::Scalar(TScalar::Bool(declared_bool))] = expanded_declared.types.as_ref() else {
+        return None;
+    };
+
+    if !declared_bool.is_general() {
+        return None;
+    }
+
+    if !return_type_metadata.from_docblock && !context.settings.version.is_supported(Feature::TrueTypeHint) {
+        return None;
+    }
+
+    if artifacts.inferred_return_types.iter().all(|ret| ret.is_true()) {
+        Some(TAtomic::Scalar(TScalar::r#true()))
+    } else if artifacts.inferred_return_types.iter().all(|ret| ret.is_false()) {
+        Some(TAtomic::Scalar(TScalar::r#false()))
+    } else {
+        None
+    }
+}
+
+fn report_overly_wide_return_type<A>(
+    context: &mut Context<'_, '_, A>,
+    function_like_metadata: &FunctionLikeMetadata,
+    return_type_metadata: &TypeMetadata,
+    expanded_declared: &TUnion,
+    unused_atomics: &[&TAtomic],
+    narrowed_type_text: Option<String>,
+) where
+    A: Arena,
+{
     let unused_list = unused_atomics.iter().map(|a| a.get_id().to_string()).collect::<Vec<_>>().join("`, `");
 
     let declared_str = expanded_declared.get_id();
     let return_span = return_type_metadata.span;
     let function_label = function_like_metadata.name;
-
-    let narrowed_type_text = get_narrowed_return_type_text(context, return_span, &unused_atomics);
+    let declaration_head = function_like_metadata
+        .name_span
+        .map_or(function_like_metadata.span, |name_span| Span::between(function_like_metadata.span, name_span));
 
     let mut issue = Issue::help(format!(
         "Declared return type `{declared_str}` for `{function_label}` has unused branches: `{unused_list}`."
     ))
+    .with_annotation(Annotation::primary(declaration_head).with_message("No path in this body produces that value."))
     .with_annotation(
-        Annotation::primary(return_span)
+        Annotation::secondary(return_span)
             .with_message(format!("Declared as `{declared_str}`, but `{unused_list}` is never returned.")),
-    )
-    .with_annotation(
-        Annotation::secondary(function_like_metadata.name_span.unwrap_or(function_like_metadata.span))
-            .with_message("No path in this body produces that value."),
     )
     .with_note("A return type wider than the body produces is misleading.")
     .with_note("Callers must handle branches the function never actually returns.")

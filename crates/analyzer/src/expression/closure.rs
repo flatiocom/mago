@@ -33,6 +33,7 @@ use crate::statement::function_like::FunctionLikeBody;
 use crate::statement::function_like::analyze_function_like;
 use crate::statement::function_like::resolve_closure_like_type;
 use crate::statement::function_like::unused_parameter;
+use crate::statement::function_like::unused_parameter::UnusedParameterScope;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for Closure<'arena> {
     fn analyze<'ctx, A>(
@@ -261,8 +262,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Closure<'arena> {
                 function_metadata,
                 self.parameter_list.parameters.as_slice(),
                 FunctionLikeBody::Statements(self.body.statements.as_slice(), self.body.span()),
+                UnusedParameterScope::Trailing,
                 context,
             );
+
+            if let Some(use_clause) = self.use_clause.as_ref() {
+                unused_parameter::check_unused_closure_uses(use_clause, self.body.statements.as_slice(), s, context);
+            }
         }
 
         Ok(())

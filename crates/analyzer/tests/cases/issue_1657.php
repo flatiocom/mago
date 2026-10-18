@@ -13,6 +13,7 @@ enum Issue1657Color: string
         self::Blue->value => 2,
     ];
 
+    // @mago-expect analysis:unused-class-constant
     /** @var value-of<self> */
     private const string DEFAULT_NAME = 'red';
 
@@ -31,6 +32,7 @@ class Issue1657Registry
         Issue1657Color::Blue->value => 2,
     ];
 
+    // @mago-expect analysis:unused-class-constant
     /** @var value-of<Issue1657Color> */
     private const string DEFAULT = 'red';
 

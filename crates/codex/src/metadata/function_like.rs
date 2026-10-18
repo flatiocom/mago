@@ -52,6 +52,16 @@ pub struct MethodMetadata {
     /// is the `TUnion` type constraint that `T` must satisfy for this specific method
     /// to be considered callable.
     pub where_constraints: WordMap<TypeMetadata>,
+
+    pub effect_dependencies: Option<Vec<EffectDependency>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum EffectDependency {
+    Function { name: Word, global_fallback: Option<Word> },
+    Method { class: Word, method: Word },
+    Constructor(Word),
 }
 
 /// Distinguishes between different kinds of callable constructs in PHP.

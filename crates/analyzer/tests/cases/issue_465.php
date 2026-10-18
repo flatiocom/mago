@@ -6,6 +6,8 @@ class PsalmFoo
 {
     /**
      * @var null|array{uuid: non-empty-string}
+     *
+     * @mago-expect analysis:unused-property-type
      */
     private null|array $data = null;
 
@@ -38,6 +40,8 @@ class PHPStanFoo
 {
     /**
      * @var null|array{uuid: non-empty-string}
+     *
+     * @mago-expect analysis:unused-property-type
      */
     private null|array $data = null;
 
@@ -70,6 +74,8 @@ class GenericFoo
 {
     /**
      * @var null|array{uuid: non-empty-string}
+     *
+     * @mago-expect analysis:unused-property-type
      */
     private null|array $data = null;
 

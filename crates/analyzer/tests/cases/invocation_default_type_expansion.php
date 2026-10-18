@@ -9,9 +9,12 @@ final class DefaultFlagsAttribute
 
 function mapped_default(#[DefaultFlagsAttribute] int $page = 1): void {}
 
+/** @mago-expect analysis:unused-statement */
 new DefaultFlagsAttribute();
+/** @mago-expect analysis:unused-statement */
 new DefaultFlagsAttribute(flags: 3);
 // @mago-expect analysis:invalid-argument
+/** @mago-expect analysis:unused-statement */
 new DefaultFlagsAttribute(flags: 8);
 
 final class LargeFlags
@@ -47,6 +50,7 @@ final class LargeWildcardFlagsAttribute
 
 function mapped_large_wildcard_default(#[LargeWildcardFlagsAttribute] int $page = 1): void {}
 
+/** @mago-expect analysis:unused-statement */
 new LargeWildcardFlagsAttribute();
 
 final class WildcardFlags
@@ -63,8 +67,10 @@ final class WildcardFlagsAttribute
     public function __construct(int $flags = 0) {}
 }
 
+/** @mago-expect analysis:unused-statement */
 new WildcardFlagsAttribute(flags: 3);
 // @mago-expect analysis:invalid-argument
+/** @mago-expect analysis:unused-statement */
 new WildcardFlagsAttribute(flags: 8);
 
 const DEFAULT_FLAGS = 1;

@@ -38,6 +38,7 @@ interface Handle
 
 class StreamProcessor
 {
+    // @mago-expect analysis:unused-property-type
     private ?Handle $currentBody = null;
 
     public function process(int $maxBytes): string

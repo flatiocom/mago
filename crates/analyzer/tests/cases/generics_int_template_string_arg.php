@@ -18,4 +18,5 @@ final class GenIntCnstFE
 }
 
 /** @mago-expect analysis:invalid-argument,template-constraint-violation */
+/** @mago-expect analysis:unused-statement */
 new GenIntCnstFE('hello');

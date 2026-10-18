@@ -24,4 +24,5 @@ final class GenNotSized
 }
 
 /** @mago-expect analysis:template-constraint-violation,possibly-invalid-argument */
+/** @mago-expect analysis:unused-statement */
 new GenSizedHolder2(new GenNotSized());

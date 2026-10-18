@@ -9,4 +9,5 @@ final class ClassesWithDestructor
     }
 }
 
+/** @mago-expect analysis:unused-statement */
 new ClassesWithDestructor();

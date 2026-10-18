@@ -6,6 +6,7 @@ use mago_names::kind::NameKind;
 use mago_names::scope::NamespaceScope;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
+use mago_reporting::Level;
 use mago_span::HasSpan;
 use mago_syntax::comments::docblock::PrecedingDocblocks;
 use mago_syntax::cst::Call;
@@ -24,6 +25,7 @@ use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::plugin::HookAction;
 use crate::plugin::context::HookContext;
+use crate::statement::unused_instantiation::instantiation_has_no_effect;
 use crate::utils::docblock::populate_docblock_variables;
 use crate::utils::docblock::populate_docblock_variables_excluding;
 use crate::utils::expression::expression_has_observable_side_effect;
@@ -44,6 +46,7 @@ pub mod r#static;
 pub mod switch;
 pub mod r#try;
 pub mod unset;
+mod unused_instantiation;
 pub mod use_statement;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for Statement<'arena> {
@@ -217,7 +220,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Statement<'arena> {
         if let Statement::Expression(expression) = self
             && context.settings.find_unused_expressions
         {
-            detect_unused_statement_expressions(expression.expression, self, context, artifacts);
+            detect_unused_statement_expressions(expression.expression, self, context, block_context, artifacts);
         }
 
         // Call plugin after_statement hooks
@@ -314,6 +317,7 @@ fn detect_unused_statement_expressions<'ast, 'arena, A>(
     expression: &'ast Expression<'arena>,
     statement: &'ast Statement<'arena>,
     context: &mut Context<'_, 'arena, A>,
+    block_context: &BlockContext<'_>,
     artifacts: &AnalysisArtifacts,
 ) where
     A: Arena,
@@ -393,12 +397,21 @@ fn detect_unused_statement_expressions<'ast, 'arena, A>(
 
             "Calling a pure function without using its result has no effect (consider using the result or removing the call)."
         }
+        Expression::Instantiation(instantiation) => {
+            if !instantiation_has_no_effect(instantiation, context, block_context, artifacts) {
+                return;
+            }
+
+            "Instantiating a class whose constructor has no side effect without using the object has no effect."
+        }
         _ => return,
     };
 
+    let level = if matches!(expression, Expression::Instantiation(_)) { Level::Warning } else { Level::Note };
+
     context.collector.report_with_code(
         IssueCode::UnusedStatement,
-        Issue::note("Expression has no effect as a statement")
+        Issue::new(level, "Expression has no effect as a statement")
             .with_annotation(Annotation::primary(expression.span()).with_message(useless_expression_message))
             .with_note("This expression does not produce a side effect or return value that is used.")
             .with_help(

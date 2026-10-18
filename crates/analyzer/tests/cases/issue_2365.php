@@ -31,6 +31,7 @@ final class Reproducer
             return;
         }
 
+        /** @mago-expect analysis:unused-statement */
         new Target($strictValue);
     }
 

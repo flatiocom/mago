@@ -26,4 +26,5 @@ final class GenZooCs
 }
 
 /** @mago-expect analysis:invalid-argument */
+/** @mago-expect analysis:unused-statement */
 new GenZooCs(GenCarCs::class);

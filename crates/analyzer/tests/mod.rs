@@ -917,9 +917,23 @@ test_case!(unused_template_parameter);
 test_case!(unused_function_template_parameter);
 test_case!(unused_method);
 test_case!(unused_property);
+test_case!(unused_class_constant);
+test_case!(unused_closure_use_variable, {
+    let mut s = crate::framework::default_test_settings();
+    s.find_unused_parameters = true;
+    s
+});
 test_case!(docblock_var_widens_inferred_type);
+test_case!(unused_property_type);
+test_case!(overly_wide_bool_property_type, {
+    let mut s = crate::framework::default_test_settings();
+    s.find_overly_wide_bool_property_types = true;
+    s
+});
+test_case!(overly_wide_bool_property_type_is_off_by_default);
 test_case!(redundant_int_cast);
 test_case!(unused_edge_cases);
+test_case!(unused_pure_instantiation);
 test_case!(uninitialized_property);
 test_case!(property_hooks);
 test_case!(interface_property_hook);
@@ -1092,9 +1106,29 @@ test_case!(overly_wide_return_type, {
     s.find_overly_wide_return_types = true;
     s
 });
+test_case!(overly_wide_return_type_docblock_and_native, {
+    let mut s = crate::framework::default_test_settings();
+    s.find_overly_wide_return_types = true;
+    s
+});
+test_case!(overly_wide_return_type_bool, {
+    let mut s = crate::framework::default_test_settings();
+    s.find_overly_wide_return_types = true;
+    s
+});
 test_case!(missing_type_hint_without_native_equivalent, {
     let mut s = crate::framework::default_test_settings();
     s.check_missing_type_hints = true;
+    s
+});
+test_case!(unused_parameter_phpstan_scope, {
+    let mut s = crate::framework::default_test_settings();
+    s.find_unused_parameters = true;
+    s
+});
+test_case!(overly_wide_return_type_method_scope, {
+    let mut s = crate::framework::default_test_settings();
+    s.find_overly_wide_return_types = true;
     s
 });
 test_case!(side_effects_in_condition, {

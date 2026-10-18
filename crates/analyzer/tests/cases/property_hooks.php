@@ -151,6 +151,7 @@ class GetHookWrongTypeBlock
 
 class GetHookNullable
 {
+    // @mago-expect analysis:unused-property-type
     private null|string $backing = null;
 
     public string $nonNullable {

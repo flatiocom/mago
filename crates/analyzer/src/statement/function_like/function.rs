@@ -22,7 +22,6 @@ use crate::statement::function_like::FunctionLikeBody;
 use crate::statement::function_like::analyze_function_like;
 use crate::statement::function_like::check_unused_function_template_parameters;
 use crate::statement::function_like::report_parameter_template_bound_violations;
-use crate::statement::function_like::unused_parameter;
 use crate::utils::missing_type_hints;
 
 /// Reports a duplicate function definition issue.
@@ -120,15 +119,6 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Function<'arena> {
         check_unused_function_template_parameters(context, function_metadata, self.name.span(), "function", || {
             function_name
         });
-
-        if context.settings.find_unused_parameters {
-            unused_parameter::check_unused_params(
-                function_metadata,
-                self.parameter_list.parameters.as_slice(),
-                FunctionLikeBody::Statements(self.body.statements.as_slice(), self.body.span()),
-                context,
-            );
-        }
 
         // Check for missing type hints
         for parameter in &self.parameter_list.parameters {

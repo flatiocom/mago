@@ -94,6 +94,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `find-unused-expressions` | `true` | Report expressions whose result is discarded, like `$a + $b;`. |
 | `find-unused-definitions` | `true` | Report private definitions that are never referenced. |
 | `find-overly-wide-return-types` | `false` | Warn when a declared return type contains a branch the body never produces, like `: string\|false` on a function that always returns a string. Available since 1.20.0. |
+| `find-overly-wide-bool-property-types` | `false` | Report a private `bool` property that is only ever given `true`, or only ever `false`, as `overly-wide-bool-property-type`, so its type can be the literal. A class that uses a trait is skipped, because a trait method may write the property. |
 | `analyze-dead-code` | `false` | Analyse code that appears unreachable. |
 | `memoize-properties` | `true` | Track literal property values for sharper inference, at the cost of some memory. |
 | `allow-possibly-undefined-array-keys` | `true` | **Deprecated.** Allow accessing keys that may be missing without flagging it. Setting this to `false` warns on `array<K, V>` reads with a single literal key but does not widen the type to `T\|null`. Use `strict-array-index-existence` instead. |

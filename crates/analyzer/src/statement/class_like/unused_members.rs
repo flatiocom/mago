@@ -1,11 +1,11 @@
-//! Checks for unused private/protected class members (properties and methods).
+//! Checks for unused private/protected class members (properties, methods and constants).
 //!
-//! This module detects properties and methods that are declared but never used:
+//! This module detects properties, methods and constants that are declared but never used:
 //! - Private members in any class
-//! - Protected members in final classes (since they can't be accessed by subclasses)
+//! - Protected properties and methods in final classes (since they can't be accessed by subclasses)
 //!
-//! It also performs transitive analysis: if a member is only referenced by other
-//! unused members, it is also considered unused.
+//! It also performs transitive analysis: if a property or method is only referenced by other
+//! unused members, it is also considered unused. A constant counts as used once anything reads it.
 //!
 //! Members with names starting with underscore (`_`) are considered intentionally unused
 //! and are not reported. This also covers magic methods (`__construct`, `__call`, etc.)
@@ -32,23 +32,37 @@ use mago_word::Word;
 use crate::code::IssueCode;
 use crate::context::Context;
 
-/// Represents a checkable member (property or method) with its metadata.
+#[derive(Clone, Copy)]
+enum CheckableMemberKind {
+    Property,
+    Method,
+    ClassConstant,
+}
+
+impl CheckableMemberKind {
+    const fn is_class_constant(self) -> bool {
+        matches!(self, Self::ClassConstant)
+    }
+}
+
+/// Represents a checkable member (property, method or constant) with its metadata.
 #[derive(Clone)]
 struct CheckableMember {
     symbol_id: SymbolIdentifier,
     display_name: Word,
     span: Span,
-    is_property: bool,
+    kind: CheckableMemberKind,
 }
 
 #[derive(Debug)]
 pub(crate) struct UnusedMemberSpans {
     pub unused_methods: HashSet<Span>,
     pub unused_properties: HashSet<Span>,
+    pub unused_class_constants: HashSet<Span>,
     pub read_properties: HashSet<Span>,
 }
 
-/// Check for unused members (properties and methods) with transitive analysis.
+/// Check for unused members (properties, methods and constants) with transitive analysis.
 ///
 /// This function detects:
 /// 1. Members with no references (directly unused)
@@ -72,10 +86,16 @@ where
 
     for member in &checkable_members {
         if unused_members.contains(&member.symbol_id) {
-            if member.is_property {
-                report_unused_property(context, class_span, member.display_name, member.span);
-            } else {
-                report_unused_method(context, class_span, member.display_name, member.span);
+            match member.kind {
+                CheckableMemberKind::Property => {
+                    report_unused_property(context, class_span, member.display_name, member.span);
+                }
+                CheckableMemberKind::Method => {
+                    report_unused_method(context, class_span, member.display_name, member.span);
+                }
+                CheckableMemberKind::ClassConstant => {
+                    report_unused_class_constant(context, class_span, member.display_name, member.span);
+                }
             }
         }
     }
@@ -145,7 +165,7 @@ fn collect_checkable_members(
                 symbol_id: (class_name, *property_name),
                 display_name: *property_name,
                 span: property_span,
-                is_property: true,
+                kind: CheckableMemberKind::Property,
             });
         }
     }
@@ -199,7 +219,38 @@ fn collect_checkable_members(
             symbol_id: (class_name, *method_name),
             display_name: method_metadata.original_name,
             span: method_span,
-            is_property: false,
+            kind: CheckableMemberKind::Method,
+        });
+    }
+
+    for (constant_name, constant) in &class_like_metadata.constants {
+        if !constant.visibility.is_private() {
+            continue;
+        }
+
+        if constant_name.as_bytes().starts_with(b"_") {
+            continue;
+        }
+
+        if class_like_metadata.trait_constant_ids.contains_key(constant_name) {
+            continue;
+        }
+
+        if class_like_metadata
+            .all_parent_classes
+            .iter()
+            .chain(&class_like_metadata.all_parent_interfaces)
+            .filter_map(|ancestor| codebase.get_class_constant(ancestor.as_bytes(), constant_name.as_bytes()))
+            .any(|ancestor_constant| !ancestor_constant.visibility.is_private())
+        {
+            continue;
+        }
+
+        checkable_members.push(CheckableMember {
+            symbol_id: (class_name, *constant_name),
+            display_name: *constant_name,
+            span: constant.span,
+            kind: CheckableMemberKind::ClassConstant,
         });
     }
 
@@ -222,7 +273,7 @@ fn find_unused_members(
         let mut newly_unused: HashSet<SymbolIdentifier> = HashSet::default();
 
         for member in checkable_members {
-            if unused_members.contains(&member.symbol_id) {
+            if unused_members.contains(&member.symbol_id) || member.kind.is_class_constant() {
                 continue;
             }
 
@@ -271,6 +322,7 @@ pub(crate) fn find_unused_member_spans(
     let mut spans = UnusedMemberSpans {
         unused_methods: HashSet::default(),
         unused_properties: HashSet::default(),
+        unused_class_constants: HashSet::default(),
         read_properties: HashSet::default(),
     };
     for (class_name, class_like_metadata) in &codebase.class_likes {
@@ -279,11 +331,13 @@ pub(crate) fn find_unused_member_spans(
             find_unused_members_from_index(&checkable_members, &referencing_symbols, &externally_referenced);
         for member in checkable_members {
             if unused_members.contains(&member.symbol_id) {
-                if member.is_property {
-                    spans.unused_properties.insert(member.span);
-                } else {
-                    spans.unused_methods.insert(member.span);
-                }
+                let unused_spans = match member.kind {
+                    CheckableMemberKind::Property => &mut spans.unused_properties,
+                    CheckableMemberKind::Method => &mut spans.unused_methods,
+                    CheckableMemberKind::ClassConstant => &mut spans.unused_class_constants,
+                };
+
+                unused_spans.insert(member.span);
             }
         }
 
@@ -317,7 +371,10 @@ fn find_unused_members_from_index(
     loop {
         let mut newly_unused = HashSet::default();
         for member in checkable_members {
-            if unused_members.contains(&member.symbol_id) || externally_referenced.contains(&member.symbol_id) {
+            if unused_members.contains(&member.symbol_id)
+                || externally_referenced.contains(&member.symbol_id)
+                || member.kind.is_class_constant()
+            {
                 continue;
             }
 
@@ -449,7 +506,7 @@ pub fn check_write_only_properties<A>(
     }
 }
 
-/// Checks if a member (property or method) is referenced anywhere in the codebase.
+/// Checks if a member (property, method or constant) is referenced anywhere in the codebase.
 #[inline(always)]
 fn is_member_referenced(
     symbol_references: &SymbolReferences,
@@ -531,5 +588,30 @@ where
 
     context.collector.propose(issue, |edits| {
         edits.push(TextEdit::insert(method_span.start_offset(), "_").with_safety(Safety::PotentiallyUnsafe));
+    });
+}
+
+/// Reports an unused class constant.
+fn report_unused_class_constant<A>(
+    context: &mut Context<'_, '_, A>,
+    class_span: Span,
+    constant_name: Word,
+    constant_span: Span,
+) where
+    A: Arena,
+{
+    let issue = Issue::help(format!("Constant `{constant_name}` is never used."))
+        .with_code(IssueCode::UnusedClassConstant)
+        .with_annotations([
+            Annotation::primary(constant_span).with_message(format!("Constant `{constant_name}` is declared here.")),
+            Annotation::secondary(class_span),
+        ])
+        .with_note("This private constant is declared but never read within the class.")
+        .with_help(
+            "Consider prefixing the constant with an underscore (`_`) to indicate that it is intentionally unused, or remove it if it is not needed.",
+        );
+
+    context.collector.propose(issue, |edits| {
+        edits.push(TextEdit::insert(constant_span.start_offset(), "_").with_safety(Safety::PotentiallyUnsafe));
     });
 }

@@ -129,11 +129,17 @@ final readonly class Issue2127ReadonlyGoodChild extends Issue2127ReadonlyParent
     }
 }
 
+/** @mago-expect analysis:unused-statement */
 new Issue2127BadChild('a', 'b', 'c');
+/** @mago-expect analysis:unused-statement */
 new Issue2127GoodChild('a', 'b', 'c');
+/** @mago-expect analysis:unused-statement */
 new Issue2127AssignedBadChild('a');
+/** @mago-expect analysis:unused-statement */
 new Issue2127InheritedConstructorBadChild('a');
 $privatePropertyChild = new Issue2127PrivatePropertyChild('a');
 echo $privatePropertyChild->parentValue();
+/** @mago-expect analysis:unused-statement */
 new Issue2127ReadonlyBadChild('a', 'b', 'c');
+/** @mago-expect analysis:unused-statement */
 new Issue2127ReadonlyGoodChild('a', 'b', 'c');

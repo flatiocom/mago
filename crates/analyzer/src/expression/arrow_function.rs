@@ -16,6 +16,7 @@ use crate::statement::function_like::FunctionLikeBody;
 use crate::statement::function_like::analyze_function_like;
 use crate::statement::function_like::resolve_closure_like_type;
 use crate::statement::function_like::unused_parameter;
+use crate::statement::function_like::unused_parameter::UnusedParameterScope;
 use crate::utils::expression::variable::get_variables_referenced_in_expression;
 use crate::utils::missing_type_hints;
 
@@ -142,6 +143,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrowFunction<'arena> {
                 function_metadata,
                 self.parameter_list.parameters.as_slice(),
                 FunctionLikeBody::Expression(self.expression),
+                UnusedParameterScope::Trailing,
                 context,
             );
         }

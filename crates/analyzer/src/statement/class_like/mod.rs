@@ -76,6 +76,7 @@ pub mod method_signature;
 pub mod override_attribute;
 pub mod property;
 pub mod unused_members;
+pub mod unused_property_type;
 
 /// Reports a duplicate definition issue for class-like types.
 fn report_duplicate_definition<A>(
@@ -492,6 +493,12 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Class<'arena> {
                 &artifacts.symbol_references,
                 additional_symbol_references,
                 &unused_members,
+                context,
+            );
+
+            unused_property_type::check_unused_property_types(
+                class_like_metadata,
+                &artifacts.assigned_property_types,
                 context,
             );
         }

@@ -11,6 +11,7 @@ class A
  */
 class T
 {
+    // @mago-expect analysis:unused-property-type
     private A|int $x;
 
     public function __construct() {

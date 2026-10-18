@@ -1601,6 +1601,7 @@ fn create_enum_method(
             is_constructor: false,
             visibility: Visibility::Public,
             where_constraints: WordMap::default(),
+            effect_dependencies: None,
         }),
         type_resolution_context: None,
         thrown_types,

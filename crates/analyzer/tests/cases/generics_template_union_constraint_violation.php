@@ -14,4 +14,5 @@ final class GenIntOrStr2
 }
 
 /** @mago-expect analysis:template-constraint-violation,invalid-argument */
+/** @mago-expect analysis:unused-statement */
 new GenIntOrStr2(true);

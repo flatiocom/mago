@@ -4,7 +4,9 @@ use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_span::Span;
+use mago_syntax::cst::ClosureUseClause;
 use mago_syntax::cst::FunctionLikeParameter;
+use mago_syntax::cst::Statement;
 use mago_text_edit::Safety;
 use mago_text_edit::TextEdit;
 
@@ -12,16 +14,27 @@ use crate::code::IssueCode;
 use crate::context::Context;
 use crate::statement::function_like::FunctionLikeBody;
 use crate::statement::function_like::unused_parameter::utils::expression_potentially_contains_function_call;
+use crate::statement::function_like::unused_parameter::utils::get_compacted_names;
 use crate::statement::function_like::unused_parameter::utils::get_foreign_variable_names;
+use crate::statement::function_like::unused_parameter::utils::get_mentioned_variable_names;
 use crate::statement::function_like::unused_parameter::utils::is_variable_used_in_expression;
+use crate::statement::function_like::unused_parameter::utils::potentially_contains_function_call;
 use mago_bytes::BytesDisplay;
 
 const FUNC_GET_ARGS: &[u8] = b"func_get_args";
+const GET_DEFINED_VARS: &[u8] = b"get_defined_vars";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnusedParameterScope {
+    Every,
+    Trailing,
+}
 
 pub fn check_unused_params<'ctx, 'ast, 'arena, A>(
     metadata: &'ctx FunctionLikeMetadata,
     params: &'ast [FunctionLikeParameter<'arena>],
     body: FunctionLikeBody<'ast, 'arena>,
+    scope: UnusedParameterScope,
     ctx: &mut Context<'ctx, 'arena, A>,
 ) where
     A: Arena,
@@ -30,7 +43,7 @@ pub fn check_unused_params<'ctx, 'ast, 'arena, A>(
         return;
     }
 
-    match body {
+    let (is_unused, kind): (Vec<bool>, &'static str) = match body {
         FunctionLikeBody::Statements(statements, _) => {
             if utils::potentially_contains_function_call(statements, FUNC_GET_ARGS, ctx) {
                 // `func_get_args` is used, so we can't determine if the parameters are unused in this case
@@ -38,30 +51,18 @@ pub fn check_unused_params<'ctx, 'ast, 'arena, A>(
             }
 
             let foreign_variables = get_foreign_variable_names(statements, ctx);
+            let is_unused =
+                params.iter().map(|param| !foreign_variables.iter().any(|v| v.name == param.variable.name)).collect();
 
-            for param in params {
-                if param.is_promoted_property() {
-                    // Skip promoted properties
-                    continue;
-                }
+            let kind = if metadata.kind.is_closure() {
+                "closure"
+            } else if metadata.kind.is_method() {
+                "method"
+            } else {
+                "function"
+            };
 
-                if foreign_variables.iter().any(|v| v.name == param.variable.name) {
-                    continue;
-                }
-
-                report_parameter(
-                    param,
-                    metadata.span,
-                    ctx,
-                    if metadata.kind.is_closure() {
-                        "closure"
-                    } else if metadata.kind.is_method() {
-                        "method"
-                    } else {
-                        "function"
-                    },
-                );
-            }
+            (is_unused, kind)
         }
         FunctionLikeBody::Expression(expression) => {
             if expression_potentially_contains_function_call(expression, FUNC_GET_ARGS, ctx) {
@@ -69,12 +70,64 @@ pub fn check_unused_params<'ctx, 'ast, 'arena, A>(
                 return;
             }
 
-            for param in params {
-                if !is_variable_used_in_expression(expression, ctx, param.variable.name) {
-                    report_parameter(param, metadata.span, ctx, "arrow function");
-                }
-            }
+            let is_unused = params
+                .iter()
+                .map(|param| !is_variable_used_in_expression(expression, ctx, param.variable.name))
+                .collect();
+
+            (is_unused, "arrow function")
         }
+    };
+
+    let first_reported = match scope {
+        UnusedParameterScope::Every => 0,
+        UnusedParameterScope::Trailing => {
+            is_unused.iter().rposition(|unused| !unused).map_or(0, |last_used| last_used + 1)
+        }
+    };
+
+    for (param, unused) in params.iter().zip(is_unused).skip(first_reported) {
+        if unused && !param.is_promoted_property() {
+            report_parameter(param, metadata.span, ctx, kind);
+        }
+    }
+}
+
+pub fn check_unused_closure_uses<'ast, 'arena, A>(
+    use_clause: &'ast ClosureUseClause<'arena>,
+    statements: &'ast [Statement<'arena>],
+    closure: Span,
+    context: &mut Context<'_, 'arena, A>,
+) where
+    A: Arena,
+{
+    if potentially_contains_function_call(statements, FUNC_GET_ARGS, context)
+        || potentially_contains_function_call(statements, GET_DEFINED_VARS, context)
+    {
+        return;
+    }
+
+    let mentioned = get_mentioned_variable_names(statements, context);
+    let compacted = get_compacted_names(statements, context);
+
+    for use_variable in &use_clause.variables {
+        let variable_name = use_variable.variable.name;
+        if mentioned.contains(variable_name) || compacted.contains(&variable_name[1..]) {
+            continue;
+        }
+
+        let variable_name = BytesDisplay(variable_name);
+        context.collector.report_with_code(
+            IssueCode::UnusedClosureUseVariable,
+            Issue::help(format!("Closure use variable `{variable_name}` is never used."))
+                .with_annotations([
+                    Annotation::primary(use_variable.variable.span)
+                        .with_message(format!("`{variable_name}` is imported here.")),
+                    Annotation::secondary(closure),
+                ])
+                .with_note("The closure imports this variable but its body never reads or writes it.")
+                .with_help(format!("Remove `{variable_name}` from the `use` clause.")),
+        );
     }
 }
 
@@ -232,6 +285,47 @@ pub mod utils {
         false
     }
 
+    pub fn get_mentioned_variable_names<'arena, A>(
+        stmts: &[Statement<'arena>],
+        context: &Context<'_, 'arena, A>,
+    ) -> HashSet<&'arena [u8]>
+    where
+        A: Arena,
+    {
+        use internal::VariableReference;
+        use internal::VariableWalker;
+
+        let mut walker_context = (Vec::default(), context, 0);
+        for stmt in stmts {
+            VariableWalker.walk_statement(stmt, &mut walker_context);
+        }
+
+        walker_context
+            .0
+            .into_iter()
+            .map(|reference| match reference {
+                VariableReference::Use(name) | VariableReference::Assign(name, _) | VariableReference::Unset(name) => {
+                    name
+                }
+            })
+            .collect()
+    }
+
+    pub fn get_compacted_names<'arena, A>(
+        stmts: &[Statement<'arena>],
+        context: &Context<'_, 'arena, A>,
+    ) -> HashSet<&'arena [u8]>
+    where
+        A: Arena,
+    {
+        let mut walker_context = (HashSet::default(), context);
+        for stmt in stmts {
+            internal::CompactWalker.walk_statement(stmt, &mut walker_context);
+        }
+
+        walker_context.0
+    }
+
     pub fn get_foreign_variable_names<'arena, A>(
         stmts: &[Statement<'arena>],
         context: &Context<'_, 'arena, A>,
@@ -283,6 +377,7 @@ pub mod utils {
 
     pub(super) mod internal {
         use super::is_predefined_variable;
+        use foldhash::HashSet;
         use mago_allocator::Arena;
 
         use mago_syntax::cst::AnonymousClass;
@@ -306,6 +401,8 @@ pub mod utils {
         use mago_syntax::cst::Global;
         use mago_syntax::cst::If;
         use mago_syntax::cst::Interface;
+        use mago_syntax::cst::Literal;
+        use mago_syntax::cst::LiteralString;
         use mago_syntax::cst::MatchDefaultArm;
         use mago_syntax::cst::MatchExpressionArm;
         use mago_syntax::cst::Namespace;
@@ -336,6 +433,40 @@ pub mod utils {
 
         #[derive(Debug)]
         pub(super) struct FunctionCallWalker(pub &'static [u8]);
+
+        #[derive(Debug)]
+        pub(super) struct CompactWalker;
+
+        impl<'ast, 'arena, A> Walker<'ast, 'arena, (HashSet<&'arena [u8]>, &Context<'_, 'arena, A>)> for CompactWalker
+        where
+            A: Arena,
+        {
+            fn walk_in_function_call(
+                &self,
+                function_call: &'ast FunctionCall<'arena>,
+                context: &mut (HashSet<&'arena [u8]>, &Context<'_, 'arena, A>),
+            ) {
+                let Expression::Identifier(function) = function_call.function else {
+                    return;
+                };
+
+                if !context.1.resolve_function_name(function).eq_ignore_ascii_case(b"compact") {
+                    return;
+                }
+
+                for argument in &function_call.argument_list.arguments {
+                    if let Expression::Literal(Literal::String(LiteralString { value: Some(name), .. })) =
+                        argument.value()
+                    {
+                        context.0.insert(name);
+                    }
+                }
+            }
+
+            #[inline]
+            fn walk_closure(&self, _: &'ast Closure<'arena>, _: &mut (HashSet<&'arena [u8]>, &Context<'_, 'arena, A>)) {
+            }
+        }
 
         impl<'ast, 'arena, A> Walker<'ast, 'arena, VariableWalkerState<'_, '_, 'arena, A>> for VariableWalker
         where

@@ -41,6 +41,10 @@ pub struct Settings {
     /// (e.g. `: string|false` on a function that always returns a string). Defaults to `false`.
     pub find_overly_wide_return_types: bool,
 
+    /// Warn when a private `bool` property is only ever given `true`, or only ever `false`, so its type
+    /// could be narrowed to that literal. Defaults to `false`.
+    pub find_overly_wide_bool_property_types: bool,
+
     /// Analyze code that appears to be unreachable. Defaults to `false`.
     pub analyze_dead_code: bool,
 
@@ -455,6 +459,7 @@ impl Settings {
             find_unused_expressions: true,
             find_unused_definitions: true,
             find_overly_wide_return_types: false,
+            find_overly_wide_bool_property_types: false,
             analyze_dead_code: false,
             memoize_properties: true,
             allow_possibly_undefined_array_keys: true,

@@ -17,4 +17,5 @@ class InhCtorSigChild extends InhCtorSigParent
     }
 }
 
+/** @mago-expect analysis:unused-statement */
 new InhCtorSigChild('hello');

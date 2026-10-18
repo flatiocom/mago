@@ -9,6 +9,7 @@ final class Row
 
 final class Form
 {
+    // @mago-expect analysis:unused-property-type
     private null|Row $row = null;
     private int $hours = 0;
 

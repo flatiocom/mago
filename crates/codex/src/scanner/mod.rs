@@ -73,6 +73,7 @@ mod class_like;
 mod class_like_constant;
 mod constant;
 mod docblock;
+pub mod effect;
 mod enum_case;
 mod function_like;
 

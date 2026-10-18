@@ -96,9 +96,13 @@ final class NamedArgumentReproduction {}
 #[ParameterAttribute('page', new Schema(new Items('string', 'enum'), 'array', 'example', ['draft']))]
 final class PositionalArgumentReproduction {}
 
+/** @mago-expect analysis:unused-statement */
 new Schema(field52: 52, field57: 'last', field56: 'before');
+/** @mago-expect analysis:unused-statement */
 new Schema(field52: 'wrong'); // @mago-expect analysis:invalid-argument
+/** @mago-expect analysis:unused-statement */
 new Schema(...['field57' => 'last', 'field56' => 'before']);
+/** @mago-expect analysis:unused-statement */
 new Schema(
     field58: '58',
     field57: '57',
@@ -162,6 +166,7 @@ new Schema(
 );
 
 /** @mago-expect analysis:invalid-argument,duplicate-named-argument,invalid-named-argument */
+/** @mago-expect analysis:unused-statement */
 new Schema(
     field00: null,
     field01: null,

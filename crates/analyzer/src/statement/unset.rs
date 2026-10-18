@@ -11,6 +11,7 @@ use mago_codex::ttype::atomic::array::key::ArrayKey;
 use mago_codex::ttype::atomic::array::keyed::TKeyedArray;
 use mago_codex::ttype::atomic::array::list::TList;
 use mago_codex::ttype::get_int;
+use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
@@ -60,6 +61,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Unset<'arena> {
             }
 
             check_property_unset(context, artifacts, self.unset.span, value);
+            record_property_offset_unset(context, block_context, artifacts, value);
 
             'array_access: {
                 let Expression::ArrayAccess(array_access) = value else {
@@ -331,6 +333,69 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Unset<'arena> {
         block_context.flags.set_inside_unset(was_inside_unset);
 
         Ok(())
+    }
+}
+
+fn record_property_offset_unset<'arena, A>(
+    context: &Context<'_, 'arena, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &mut AnalysisArtifacts,
+    value: &Expression<'arena>,
+) where
+    A: Arena,
+{
+    let Expression::ArrayAccess(array_access) = value else {
+        return;
+    };
+
+    let mut root = array_access.array;
+    while let Expression::ArrayAccess(inner_access) = root {
+        root = inner_access.array;
+    }
+
+    let Expression::Access(Access::Property(property_access)) = root else {
+        return;
+    };
+
+    let ClassLikeMemberSelector::Identifier(property_name) = &property_access.property else {
+        return;
+    };
+
+    let known_type = |expression: &Expression<'arena>| {
+        artifacts.get_expression_type(expression).cloned().or_else(|| {
+            get_block_expression_id(expression, context, block_context)
+                .and_then(|expression_id| block_context.locals.get(&expression_id))
+                .map(|local_type| local_type.as_ref().clone())
+        })
+    };
+
+    let Some(object_type) = known_type(property_access.object) else {
+        return;
+    };
+
+    let property_name = concat_word!(b"$", property_name.value);
+    let root_type = known_type(root);
+    for class_name in object_type.types.iter().filter_map(|atomic| match atomic {
+        TAtomic::Object(object) => object.get_name(),
+        _ => None,
+    }) {
+        let Some(declaring_class) = context
+            .codebase
+            .get_class_like(class_name.as_bytes())
+            .and_then(|class_like| class_like.declaring_property_ids.get(&property_name).copied())
+        else {
+            continue;
+        };
+
+        let property_type = root_type.clone().unwrap_or_else(|| {
+            context
+                .codebase
+                .get_declaring_property(class_name.as_bytes(), property_name.as_bytes())
+                .and_then(|property| property.type_metadata.as_ref())
+                .map_or_else(get_mixed, |type_metadata| type_metadata.type_union.clone())
+        });
+
+        artifacts.assigned_property_types.record(declaring_class, property_name, &property_type, context.codebase);
     }
 }
 

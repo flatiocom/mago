@@ -62,4 +62,5 @@ final class Issue2125PrivatePropertyKid extends Issue2125PropertyDad
 }
 
 new Issue2125Kid();
+/** @mago-expect analysis:unused-statement */
 new Issue2125PropertyKid();

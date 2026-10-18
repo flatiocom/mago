@@ -18,4 +18,5 @@ final class GenIntOnlyV
 }
 
 /** @mago-expect analysis:invalid-argument,template-constraint-violation */
+/** @mago-expect analysis:unused-statement */
 new GenIntOnlyV('not an int');

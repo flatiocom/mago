@@ -4,6 +4,7 @@ use std::rc::Rc;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::add_optional_union_type;
 use mago_codex::ttype::add_union_type;
+use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
@@ -71,6 +72,13 @@ where
     let mut has_read_clamp = false;
     let mut matched_all_properties = true;
     let mut widened_assigned_type: Option<TUnion> = None;
+    let receiver_is_plain_mixed = artifacts
+        .get_expression_type(property_access.object)
+        .is_some_and(|receiver| matches!(receiver.types.as_ref(), [TAtomic::Mixed(mixed)] if mixed.is_vanilla()));
+    if resolution_result.properties.is_empty() && !receiver_is_plain_mixed {
+        artifacts.assigned_property_types.record_unresolved_write(block_context.scope.get_class_like_name());
+    }
+
     for resolved_property in resolution_result.properties {
         has_read_clamp |= resolved_property.read_type.is_some();
 
@@ -79,6 +87,13 @@ where
         if !resolved_property.is_magic
             && let Some(declaring_class_id) = resolved_property.declaring_class_id
         {
+            artifacts.assigned_property_types.record(
+                declaring_class_id,
+                resolved_property.property_name,
+                assigned_value_type,
+                context.codebase,
+            );
+
             crate::readonly::check_property_write(
                 context,
                 block_context,

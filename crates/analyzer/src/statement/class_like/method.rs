@@ -4,6 +4,8 @@ use mago_word::ascii_lowercase_word;
 use mago_word::concat_word;
 
 use mago_codex::identifier::method::MethodIdentifier;
+use mago_codex::metadata::class_like::ClassLikeMetadata;
+use mago_codex::metadata::function_like::FunctionLikeMetadata;
 use mago_codex::reference::ReferenceOrigin;
 
 use mago_span::HasSpan;
@@ -23,6 +25,7 @@ use crate::statement::function_like::analyze_function_like;
 use crate::statement::function_like::check_unused_function_template_parameters;
 use crate::statement::function_like::report_parameter_template_bound_violations;
 use crate::statement::function_like::unused_parameter;
+use crate::statement::function_like::unused_parameter::UnusedParameterScope;
 use crate::utils::missing_type_hints;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
@@ -116,12 +119,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
             }
 
             if context.settings.find_unused_parameters
-                && !context.codebase.method_is_overriding(class_like_metadata.name.as_bytes(), self.name.value)
+                && is_constructor_checked_for_unused_parameters(context, class_like_metadata, method_metadata)
             {
                 unused_parameter::check_unused_params(
                     method_metadata,
                     self.parameter_list.parameters.as_slice(),
                     FunctionLikeBody::Statements(concrete_body.statements.as_slice(), concrete_body.span()),
+                    UnusedParameterScope::Every,
                     context,
                 );
             }
@@ -185,4 +189,20 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
 
         Ok(())
     }
+}
+
+fn is_constructor_checked_for_unused_parameters<A>(
+    context: &Context<'_, '_, A>,
+    class_like_metadata: &ClassLikeMetadata,
+    method_metadata: &FunctionLikeMetadata,
+) -> bool
+where
+    A: Arena,
+{
+    method_metadata.method_metadata.as_ref().is_some_and(|method| method.is_constructor)
+        && class_like_metadata.attribute_flags.is_none()
+        && !class_like_metadata
+            .all_parent_interfaces
+            .iter()
+            .any(|interface| context.codebase.method_exists(interface.as_bytes(), b"__construct"))
 }

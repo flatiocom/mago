@@ -353,7 +353,11 @@ final class AnalyzerCodeModuleGenerator
         'unavailable-class-constant',
         'unavailable-enum-case',
         'missing-callable-signature',
+        'unused-property-type',
+        'overly-wide-bool-property-type',
+        'unused-class-constant',
         'incorrect-method-casing',
+        'unused-closure-use-variable',
     ];
 
     /**

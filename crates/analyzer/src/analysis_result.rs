@@ -75,6 +75,9 @@ impl LateSymbolReferenceIssueReconciler {
                 code if code == IssueCode::UnusedProperty.as_str() => {
                     self.spans.unused_properties.contains(&primary.span)
                 }
+                code if code == IssueCode::UnusedClassConstant.as_str() => {
+                    self.spans.unused_class_constants.contains(&primary.span)
+                }
                 code if code == IssueCode::WriteOnlyProperty.as_str() => {
                     !self.spans.read_properties.contains(&primary.span)
                 }

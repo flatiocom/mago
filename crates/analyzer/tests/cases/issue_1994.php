@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 final class Repro
 {
+    // @mago-expect analysis:unused-property-type
     private ?string $a = null;
+    // @mago-expect analysis:unused-property-type
     private ?string $b = null;
 
     public function noop(): void {}

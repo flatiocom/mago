@@ -50,6 +50,7 @@ use crate::scanner::docblock::assertion_subject_word;
 use crate::scanner::docblock::find_most_trusted_tag;
 use crate::scanner::docblock::for_each_tag_by_ascending_trust;
 use crate::scanner::docblock::parse_docblock;
+use crate::scanner::effect::scan_constructor_effect_dependencies;
 use crate::scanner::parameter::scan_function_like_parameter;
 use crate::scanner::parameter::scan_function_like_parameter_with_constants;
 use crate::scanner::ttype::get_type_metadata_from_hint;
@@ -124,9 +125,15 @@ where
             Visibility::Public
         },
         where_constraints: WordMap::default(),
+        effect_dependencies: None,
     };
 
     if let MethodBody::Concrete(block) = &method.body {
+        if method_metadata.is_constructor {
+            method_metadata.effect_dependencies =
+                scan_constructor_effect_dependencies(block, class_like_metadata, context.resolved_names);
+        }
+
         if utils::block_has_yield(block) {
             metadata.flags |= MetadataFlags::HAS_YIELD;
         }

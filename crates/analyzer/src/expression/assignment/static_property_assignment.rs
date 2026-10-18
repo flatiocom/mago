@@ -47,8 +47,19 @@ where
     let mut resolved_property_type = None;
     let mut matched_all_properties = true;
     let mut widened_assigned_type: Option<TUnion> = None;
+    if property_resolution.properties.is_empty() {
+        artifacts.assigned_property_types.record_unresolved_write(block_context.scope.get_class_like_name());
+    }
+
     for resolved_property in property_resolution.properties {
         if let Some(declaring_class_id) = resolved_property.declaring_class_id {
+            artifacts.assigned_property_types.record(
+                declaring_class_id,
+                resolved_property.property_name,
+                assigned_value_type,
+                context.codebase,
+            );
+
             artifacts.symbol_references.add_reference_for_property_write(
                 &block_context.scope,
                 declaring_class_id,

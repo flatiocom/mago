@@ -21,6 +21,7 @@ trait ExperimentalTrait {}
 const EXPERIMENTAL_CONST = 42;
 
 /** @mago-expect analysis:experimental-usage */
+/** @mago-expect analysis:unused-statement */
 new ExperimentalClass();
 
 /** @mago-expect analysis:experimental-usage */
@@ -49,6 +50,7 @@ class StableChild extends ExperimentalClass {}
 /** @experimental */
 function uses_experimental_ok(): void
 {
+    /** @mago-expect analysis:unused-statement */
     new ExperimentalClass();
     experimental_function();
 }
@@ -58,6 +60,7 @@ class ExperimentalConsumer
 {
     public function method(): void
     {
+        /** @mago-expect analysis:unused-statement */
         new ExperimentalClass();
         experimental_function();
     }
@@ -74,13 +77,15 @@ class StableClassWithExperimentalUsage
     public function stableMethod(): void
     {
         /** @mago-expect analysis:experimental-usage */
+        /** @mago-expect analysis:unused-statement */
         new ExperimentalClass();
     }
 
     /** @experimental */
     public function experimentalMethod(): void
     {
-        // OK — method is experimental
+        // No experimental-usage — method is experimental
+        /** @mago-expect analysis:unused-statement */
         new ExperimentalClass();
     }
 }

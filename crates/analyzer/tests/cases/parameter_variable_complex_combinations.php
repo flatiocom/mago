@@ -376,8 +376,10 @@ function exercise_parameter_variable_templates_and_parameters(ParameterVariableC
     // @mago-expect analysis:invalid-argument
     $types->withFactory('foo', static fn(): ComplexBar => new ComplexBar());
 
+    /** @mago-expect analysis:unused-statement */
     new ParameterVariableComplexConstructor('foo', new ComplexFoo());
     // @mago-expect analysis:invalid-argument
+    /** @mago-expect analysis:unused-statement */
     new ParameterVariableComplexConstructor('foo', new ComplexBar());
 }
 

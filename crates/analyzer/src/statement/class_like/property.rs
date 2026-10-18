@@ -113,6 +113,17 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for PropertyConcreteItem<'arena> {
         self.value.analyze(context, block_context, artifacts)?;
 
         if let Some(class_metadata) = block_context.scope.get_class_like()
+            && let Some(value_type) = artifacts.get_expression_type(&self.value).cloned()
+        {
+            artifacts.assigned_property_types.record(
+                class_metadata.name,
+                word(self.variable.name),
+                &value_type,
+                context.codebase,
+            );
+        }
+
+        if let Some(class_metadata) = block_context.scope.get_class_like()
             && let Some(property_metadata) = class_metadata.properties.get(&word(self.variable.name))
             && let Some(declared_type_metadata) = property_metadata.type_metadata.as_ref()
             && !declared_type_metadata.type_union.is_mixed()

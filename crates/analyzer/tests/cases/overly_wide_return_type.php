@@ -11,7 +11,7 @@ class Bar
 {
 }
 
-class BarHolder
+final class BarHolder
 {
     public function __construct(
         public Bar $bar,
@@ -41,7 +41,7 @@ function int_or_false_always_int(): int|false // @mago-expect analysis:overly-wi
     return 2;
 }
 
-class Widget
+final class Widget
 {
     public function find(int $id): ?Widget // @mago-expect analysis:overly-wide-return-type
     {
@@ -141,7 +141,7 @@ interface LookupContract
 
 class AlwaysFoundLookup implements LookupContract
 {
-    public function find(int $id): ?Widget
+    public function find(int $id): ?Widget // @mago-expect analysis:overly-wide-return-type
     {
         return new Widget();
     }
