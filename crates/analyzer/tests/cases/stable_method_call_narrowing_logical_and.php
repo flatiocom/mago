@@ -79,7 +79,6 @@ function with_or(Holder $holder): bool
 
 function with_impure_call_in_between(Holder $holder): bool
 {
-    // @mago-expect analysis:possible-method-access-on-null
     return $holder->get() !== null && $holder->reset() && $holder->get()->name() !== '';
 }
 
@@ -95,7 +94,6 @@ function with_or_guard(Holder $holder): string
 function with_impure_call_on_right(Holder $holder): bool
 {
     if ($holder->get() !== null && $holder->reset()) {
-        // @mago-expect analysis:possible-method-access-on-null
         return $holder->get()->name() !== '';
     }
 

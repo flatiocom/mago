@@ -60,7 +60,7 @@ function some_test(EntityManager $manager): void
     $entity = $manager->getEntity(1);
     assert($entity->flag === false, 'expected false flag');
     update_flag($manager, 1);
-    assert($entity->flag === true, 'expected true flag');
+    assert($entity->flag === true, 'expected true flag'); // @mago-expect analysis:redundant-comparison
 }
 
 /**
@@ -71,7 +71,7 @@ function some_test2(EntityManager $manager): void
     $entity = $manager->getEntity(1);
     assert_false($entity->flag);
     update_flag($manager, 1);
-    assert_true($entity->flag);
+    assert_true($entity->flag); // @mago-expect analysis:impossible-type-comparison
 }
 
 some_test(new EntityManager());

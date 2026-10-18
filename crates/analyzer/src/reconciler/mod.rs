@@ -49,6 +49,8 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::scope::var_has_root;
 use crate::resolver::class_name::get_class_name_from_atomic;
+use crate::external::PropertyAccessKind;
+use crate::resolver::property::is_declared_untyped_property;
 use crate::resolver::property::resolve_declared_property;
 use crate::utils::expression::is_dynamic_index_id;
 
@@ -210,6 +212,7 @@ pub fn reconcile_keyed_types<'ctx, A>(
                 false,
                 inside_loop,
                 &mut has_object_array_access,
+                *span,
             )
             .map(Rc::new)
         });
@@ -222,7 +225,8 @@ pub fn reconcile_keyed_types<'ctx, A>(
                 let mut report_this_assertion = can_report_issues
                     && new_type_part_parts.len() == 1
                     && referenced_var_ids.contains(key)
-                    && active_new_types.get(key).is_some_and(|active_new_type| active_new_type.contains(&i));
+                    && active_new_types.get(key).is_some_and(|active_new_type| active_new_type.contains(&i))
+                    && !(is_null_assertion(assertion) && is_untyped_property_id(context, block_context, key_str));
 
                 if report_this_assertion
                     && let Some(original) = original_types
@@ -1198,6 +1202,7 @@ fn get_value_for_key<A>(
     has_empty: bool,
     inside_loop: bool,
     has_object_array_access: &mut bool,
+    span: Span,
 ) -> Option<TUnion>
 where
     A: Arena,
@@ -1458,14 +1463,19 @@ where
                             || !context.codebase.class_or_interface_exists(fq_class_name.as_bytes())
                         {
                             class_property_type = get_mixed();
+                        } else if let Some(declared_property_type) = get_property_type(
+                            context,
+                            fq_class_name,
+                            property_name,
+                            divider == b"->",
+                            block_context.scope.get_class_like_name(),
+                        ) {
+                            class_property_type = declared_property_type;
+                        } else if divider == b"->" {
+                            class_property_type =
+                                get_provided_property_type(context, existing_key_type_part, property_name, span)?;
                         } else {
-                            class_property_type = get_property_type(
-                                context,
-                                fq_class_name,
-                                property_name,
-                                divider == b"->",
-                                block_context.scope.get_class_like_name(),
-                            )?;
+                            return None;
                         }
                     } else {
                         class_property_type = get_mixed();
@@ -1490,6 +1500,33 @@ where
     }
 
     block_context.locals.get(&base_key_atom).map(|t| (**t).clone())
+}
+
+fn get_provided_property_type<A>(
+    context: &Context<'_, '_, A>,
+    object: &TAtomic,
+    property_name: &[u8],
+    span: Span,
+) -> Option<TUnion>
+where
+    A: Arena,
+{
+    let TAtomic::Object(TObject::Named(named_object)) = object else {
+        return None;
+    };
+
+    context
+        .plugin_registry
+        .get_property_type(
+            context.codebase,
+            named_object.get_name().as_bytes(),
+            property_name,
+            PropertyAccessKind::Read,
+            &TUnion::from_atomic(object.clone()),
+            span,
+            context.external_analysis_session,
+        )?
+        .read_type
 }
 
 fn get_property_type<A>(
@@ -1522,6 +1559,34 @@ where
     );
 
     Some(property_type)
+}
+
+fn is_null_assertion(assertion: &Assertion) -> bool {
+    matches!(
+        assertion,
+        Assertion::IsType(TAtomic::Null)
+            | Assertion::IsNotType(TAtomic::Null)
+            | Assertion::IsIdentical(TAtomic::Null)
+            | Assertion::IsNotIdentical(TAtomic::Null)
+    )
+}
+
+fn is_untyped_property_id<A>(context: &Context<'_, '_, A>, block_context: &BlockContext<'_>, id: &[u8]) -> bool
+where
+    A: Arena,
+{
+    let Some(arrow) = memchr::memmem::rfind(id, b"->") else {
+        return false;
+    };
+    let (object_id, property_name) = (&id[..arrow], &id[arrow + 2..]);
+    if object_id.ends_with(b"?") || !property_name.iter().all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_') {
+        return false;
+    }
+
+    block_context
+        .locals
+        .get(&Word::new(object_id))
+        .is_some_and(|object_type| is_declared_untyped_property(context.codebase, object_type, property_name))
 }
 
 pub(crate) fn trigger_issue_for_impossible<A>(

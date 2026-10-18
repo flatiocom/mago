@@ -30,6 +30,7 @@ use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::scope::if_scope::IfScope;
+use crate::context::scope::is_access_path;
 use crate::context::utils::inherit_branch_context_properties;
 use crate::error::AnalysisError;
 use crate::formula::get_formula;
@@ -277,17 +278,38 @@ where
         );
     }
 
+    let mut if_removed_variables = WordSet::default();
     let if_redefined_variables = if_block_context
-        .get_redefined_locals(&block_context.locals, false, &mut WordSet::default())
+        .get_redefined_locals(&block_context.locals, false, &mut if_removed_variables)
         .keys()
         .copied()
         .collect::<WordSet>();
 
+    let mut else_removed_variables = WordSet::default();
     let else_redefined_variables = else_block_context
-        .get_redefined_locals(&block_context.locals, false, &mut WordSet::default())
+        .get_redefined_locals(&block_context.locals, false, &mut else_removed_variables)
         .keys()
         .copied()
         .collect::<WordSet>();
+
+    let removed_access_paths =
+        [(&if_block_context, if_removed_variables), (&else_block_context, else_removed_variables)]
+            .into_iter()
+            .filter(|(branch_context, _)| !branch_context.flags.has_returned())
+            .flat_map(|(_, removed_variables)| removed_variables)
+            .filter(|variable_id| is_access_path(variable_id.as_bytes()))
+            .chain(
+                [&if_block_context, &else_block_context]
+                    .into_iter()
+                    .filter(|branch_context| !branch_context.flags.has_returned())
+                    .flat_map(|branch_context| {
+                        block_context.stable_method_call_assertions.keys().filter(|method_call| {
+                            !branch_context.stable_method_call_assertions.contains_key(*method_call)
+                        })
+                    })
+                    .copied(),
+            )
+            .collect::<WordSet>();
 
     let redefined_variable_ids =
         if_redefined_variables.intersection(&else_redefined_variables).copied().collect::<WordSet>();
@@ -336,6 +358,12 @@ where
             combine_optional_union_types(Some(else_type.as_ref()), Some(previous_type.as_ref()), context.codebase);
 
         block_context.locals.insert(else_redefined_variable, Rc::new(combined_type));
+    }
+
+    for variable_id in removed_access_paths {
+        block_context.locals.remove(&variable_id);
+        block_context.stable_method_call_assertions.remove(&variable_id);
+        block_context.clauses.retain(|clause| clause.wedge || !clause.possibilities.contains_key(&variable_id));
     }
 
     block_context.variables_possibly_in_scope.extend(if_block_context.variables_possibly_in_scope);

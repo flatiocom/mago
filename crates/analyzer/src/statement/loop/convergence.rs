@@ -116,6 +116,9 @@ impl<'ctx> Snapshot<'ctx> {
         saved.fully_matched_switch_offsets.clone_from(&artifacts.fully_matched_switch_offsets);
         saved.reported_array_index_offsets.clone_from(&artifacts.reported_array_index_offsets);
         saved.read_memoized_array_accesses.clone_from(&artifacts.read_memoized_array_accesses);
+        saved.read_memoized_undeclared_properties.clone_from(&artifacts.read_memoized_undeclared_properties);
+        saved.read_memoized_property_receivers.clone_from(&artifacts.read_memoized_property_receivers);
+        saved.reported_receiver_offsets.clone_from(&artifacts.reported_receiver_offsets);
         saved.inferred_parameter_types.clone_from(&artifacts.inferred_parameter_types);
         saved.method_initialized_properties.clone_from(&artifacts.method_initialized_properties);
         saved.method_calls_this_methods.clone_from(&artifacts.method_calls_this_methods);

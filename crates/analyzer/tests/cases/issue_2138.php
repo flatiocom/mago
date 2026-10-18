@@ -29,7 +29,6 @@ interface UnstableEntity
 
 function convertUnstableId(UnstableEntity $entity): string|null
 {
-    /** @mago-expect analysis:possibly-null-argument */
     return $entity->getId() !== null ? intToStr($entity->getId()) : null;
 }
 
@@ -71,7 +70,6 @@ function clearIdAndReturnTrue(MutableEntity $entity): bool
 function convertIdClearedInCondition(MutableEntity $entity): string|null
 {
     if ($entity->getId() !== null && clearIdAndReturnTrue($entity)) {
-        /** @mago-expect analysis:possibly-null-argument */
         return intToStr($entity->getId());
     }
 

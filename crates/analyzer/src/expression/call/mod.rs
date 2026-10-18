@@ -38,6 +38,7 @@ use crate::invocation::InvocationTarget;
 use crate::invocation::MethodInvocationKind;
 use crate::invocation::MethodTargetContext;
 use crate::invocation::analyzer::analyze_invocation;
+use crate::invocation::post_process::has_side_effects;
 use crate::invocation::post_process::post_invocation_process;
 use crate::invocation::return_type_fetcher::fetch_invocation_return_type;
 use crate::reconciler::assertion_reconciler;
@@ -159,7 +160,7 @@ where
                 return false;
             };
 
-            (metadata.flags.is_pure() || metadata.flags.is_mutation_free()) && !metadata.flags.suspends_fiber()
+            !has_side_effects(metadata) && !metadata.flags.suspends_fiber()
         });
 
     let class_related_argument_variables = this_variable

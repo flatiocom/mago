@@ -793,6 +793,8 @@ where
             }
 
             continue_context.clauses.clone_from(&pre_loop_context.clauses);
+            continue_context.stable_method_calls.clone_from(&pre_loop_context.stable_method_calls);
+            continue_context.stable_method_call_assertions.clone_from(&pre_loop_context.stable_method_call_assertions);
             continue_context.by_reference_constraints.clone_from(&pre_loop_context.by_reference_constraints);
 
             // Only compare later passes: the first body visit records extra break-path state.
@@ -904,6 +906,10 @@ where
                 }
 
                 continue_context.clauses.clone_from(&pre_loop_context.clauses);
+                continue_context.stable_method_calls.clone_from(&pre_loop_context.stable_method_calls);
+                continue_context
+                    .stable_method_call_assertions
+                    .clone_from(&pre_loop_context.stable_method_call_assertions);
 
                 clean_nodes(statements, artifacts);
 

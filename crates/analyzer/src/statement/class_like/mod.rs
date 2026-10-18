@@ -3505,7 +3505,11 @@ fn check_class_like_properties<'ctx, A>(
                             "Property `{class_name}::{property_name}` has an incompatible type declaration from docblock."
                         ))
                         .with_annotation(
-                            Annotation::primary(declaring_type.span)
+                            Annotation::primary(property_metadata.name_span.unwrap_or(declaring_type.span))
+                                .with_message("This property's docblock type is incompatible with the parent's type."),
+                        )
+                        .with_annotation(
+                            Annotation::secondary(declaring_type.span)
                                 .with_message(format!("This type `{declaring_type_id}` is incompatible with the parent's type.")),
                         )
                         .with_annotation(

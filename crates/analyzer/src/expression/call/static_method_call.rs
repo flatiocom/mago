@@ -178,6 +178,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for StaticMethodCall<'arena> {
                 self.span(),
                 MethodInvocationKind::Static,
                 !has_resolved_methods,
+                None,
             )?;
         }
 

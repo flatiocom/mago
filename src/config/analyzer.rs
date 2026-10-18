@@ -305,6 +305,9 @@ pub struct AnalyzerConfiguration {
     /// Whether the variables a bare `{ ... }` block defines stay defined after it.
     pub pollute_scope_with_block: bool,
 
+    /// Classes, with their descendants, whose instances take any property, besides `stdClass` and `SimpleXMLElement`.
+    pub universal_object_crate_classes: Vec<String>,
+
     /// Check for non-existent symbols in use statements.
     ///
     /// When enabled, the analyzer will report use statements that import symbols
@@ -564,6 +567,11 @@ impl AnalyzerConfiguration {
             pollute_scope_with_loop_initial_assignments: self.pollute_scope_with_loop_initial_assignments,
             pollute_scope_with_always_iterable_foreach: self.pollute_scope_with_always_iterable_foreach,
             pollute_scope_with_block: self.pollute_scope_with_block,
+            universal_object_crate_classes: self
+                .universal_object_crate_classes
+                .iter()
+                .map(|class| mago_word::word(class.trim_start_matches('\\').as_bytes()))
+                .collect(),
             check_use_statements: self.check_use_statements,
             check_experimental: self.check_experimental,
             check_name_casing: self.check_name_casing,
@@ -632,6 +640,7 @@ impl Default for AnalyzerConfiguration {
             pollute_scope_with_loop_initial_assignments: defaults.pollute_scope_with_loop_initial_assignments,
             pollute_scope_with_always_iterable_foreach: defaults.pollute_scope_with_always_iterable_foreach,
             pollute_scope_with_block: defaults.pollute_scope_with_block,
+            universal_object_crate_classes: vec![],
             check_use_statements: defaults.check_use_statements,
             check_experimental: defaults.check_experimental,
             check_name_casing: defaults.check_name_casing,

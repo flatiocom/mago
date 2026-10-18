@@ -40,6 +40,7 @@ use crate::invocation::MethodInvocationKind;
 use crate::invocation::MethodTargetContext;
 use crate::invocation::analyzer::analyze_invocation;
 use crate::invocation::analyzer::apply_callable_signature;
+use crate::invocation::post_process::clear_this_property_narrowings_after_magic_call;
 use crate::invocation::post_process::post_invocation_process;
 use crate::invocation::return_type_fetcher::fetch_declared_invocation_return_type;
 use crate::invocation::return_type_fetcher::fetch_function_like_provider_return_type;
@@ -425,6 +426,7 @@ where
             span,
             MethodInvocationKind::Instance,
             !has_resolved_methods,
+            this_variable.as_ref().map(|variable| variable.as_bytes()),
         )?;
     }
 
@@ -510,6 +512,7 @@ pub(super) fn analyze_undocumented_method_return_type<'ctx, 'arena, A>(
     span: Span,
     invocation_kind: MethodInvocationKind,
     analyze_arguments: bool,
+    receiver_variable: Option<&[u8]>,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
@@ -611,6 +614,10 @@ where
     }
 
     let mut resulting_type = resulting_type.unwrap_or_else(get_mixed);
+    if receiver_variable == Some(b"$this".as_slice()) && resulting_type.is_void() {
+        clear_this_property_narrowings_after_magic_call(block_context);
+    }
+
     if let Some(existing_type) = artifacts.get_expression_type(&span) {
         resulting_type = add_optional_union_type(resulting_type, Some(existing_type), context.codebase);
     }

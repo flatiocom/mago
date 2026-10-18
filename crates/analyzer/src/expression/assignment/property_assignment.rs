@@ -64,6 +64,7 @@ where
         property_access.arrow.span(),
         false, // `null_safe`
         true,  // `for_assignment`
+        matches!(write_kind, PropertyWriteKind::OffsetWrite | PropertyWriteKind::ArrayAccessMutation),
     )?;
     block_context.flags.set_inside_assignment(was_inside_assignment);
 
@@ -78,6 +79,24 @@ where
     if resolution_result.properties.is_empty() && !receiver_is_plain_mixed {
         artifacts.assigned_property_types.record_unresolved_write(block_context.scope.get_class_like_name());
     }
+
+    let assigned_value_reads_every_receiver = matches!(
+        write_kind,
+        PropertyWriteKind::OffsetWrite | PropertyWriteKind::Mutation | PropertyWriteKind::ArrayAccessMutation
+    );
+    let accepted_by_receiver_union = assigned_value_reads_every_receiver
+        && resolution_result.properties.len() > 1
+        && union_comparator::is_contained_by(
+            context.codebase,
+            assigned_value_type,
+            &resolution_result.properties.iter().fold(get_never(), |union, property| {
+                add_union_type(union, &property.property_type, context.codebase, CombinerOptions::default())
+            }),
+            assigned_value_type.ignore_nullable_issues(),
+            assigned_value_type.ignore_falsable_issues(),
+            false,
+            &mut ComparisonResult::ignoring_shape_tails(),
+        );
 
     for resolved_property in resolution_result.properties {
         has_read_clamp |= resolved_property.read_type.is_some();
@@ -109,15 +128,16 @@ where
 
         let mut union_comparison_result = ComparisonResult::ignoring_shape_tails();
 
-        let type_match_found = union_comparator::is_contained_by(
-            context.codebase,
-            assigned_value_type,
-            &resolved_property.property_type,
-            assigned_value_type.ignore_nullable_issues(),
-            assigned_value_type.ignore_falsable_issues(),
-            false,
-            &mut union_comparison_result,
-        );
+        let type_match_found = accepted_by_receiver_union
+            || union_comparator::is_contained_by(
+                context.codebase,
+                assigned_value_type,
+                &resolved_property.property_type,
+                assigned_value_type.ignore_nullable_issues(),
+                assigned_value_type.ignore_falsable_issues(),
+                false,
+                &mut union_comparison_result,
+            );
 
         if type_match_found && let Some(replacement) = union_comparison_result.replacement_union_type {
             widened_assigned_type = Some(match widened_assigned_type {

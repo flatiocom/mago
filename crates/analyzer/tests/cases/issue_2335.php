@@ -96,7 +96,6 @@ function fromUnstableAssertion(UnstableOuter $outer): Inner
 {
     assertValidatedUnstableMethod($outer);
 
-    // @mago-expect analysis:nullable-return-statement,invalid-return-statement
     return $outer->inner();
 }
 

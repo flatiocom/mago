@@ -24,6 +24,7 @@ use crate::context::block::ReferenceConstraintSource;
 use crate::context::scope::case_scope::CaseScope;
 use crate::context::scope::loop_scope::LoopScope;
 use crate::readonly::PendingReadonlyPropertyWrite;
+use crate::resolver::property::UndeclaredProperty;
 use crate::statement::class_like::unused_property_type::AssignedPropertyTypes;
 
 pub(crate) use self::expression_types::CheckpointAction;
@@ -101,6 +102,9 @@ pub struct AnalysisArtifacts {
     pub fully_matched_switch_offsets: HashSet<u32>,
     pub reported_array_index_offsets: HashSet<u32>,
     pub read_memoized_array_accesses: WordMap<Rc<TUnion>>,
+    pub read_memoized_undeclared_properties: WordMap<(Rc<TUnion>, Vec<UndeclaredProperty>)>,
+    pub read_memoized_property_receivers: WordMap<Rc<TUnion>>,
+    pub reported_receiver_offsets: HashSet<u32>,
     pub inferred_parameter_types: Option<HashMap<usize, TUnion>>,
     pub method_initialized_properties: HashMap<(Word, Word), WordSet>,
     pub method_calls_this_methods: HashMap<(Word, Word), HashSet<Word>>,
@@ -145,6 +149,9 @@ impl AnalysisArtifacts {
             fully_matched_switch_offsets: HashSet::default(),
             reported_array_index_offsets: HashSet::default(),
             read_memoized_array_accesses: WordMap::default(),
+            read_memoized_undeclared_properties: WordMap::default(),
+            read_memoized_property_receivers: WordMap::default(),
+            reported_receiver_offsets: HashSet::default(),
             inferred_parameter_types: None,
             method_initialized_properties: HashMap::default(),
             method_calls_this_methods: HashMap::default(),

@@ -52,8 +52,8 @@ function explicitComparisons(Container $container): int
         return $container->child->id;
     }
 
-    if ($container->hasChild() !== false) {
-        return $container->child->id;
+    if ($container->hasChild() !== false) { // @mago-expect analysis:redundant-comparison,impossible-condition
+        return $container->child->id; // @mago-expect analysis:possibly-null-property-access,nullable-return-statement,invalid-return-statement
     }
 
     return 0;

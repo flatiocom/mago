@@ -17,9 +17,11 @@ use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
+use mago_syntax::cst::Access;
 use mago_syntax::cst::ArrayElement;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
+use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::Literal;
 use mago_syntax::cst::Parenthesized;
@@ -41,6 +43,8 @@ use crate::expression::binary::utils::is_always_greater_than_or_equal;
 use crate::expression::binary::utils::is_always_identical_to;
 use crate::expression::binary::utils::is_always_less_than;
 use crate::expression::binary::utils::is_always_less_than_or_equal;
+use crate::resolver::property::is_declared_untyped_property;
+use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_literal_array_key;
 use crate::utils::misc::unwrap_expression;
 
@@ -373,7 +377,15 @@ where
             }
             BinaryOperator::Identical(_) => {
                 let should_be_specific =
-                    should_use_specific_equality_inference(block_context, binary.lhs, binary.rhs, true);
+                    should_use_specific_equality_inference(block_context, binary.lhs, binary.rhs, true)
+                        && !compares_untyped_property_with_null(
+                            context,
+                            block_context,
+                            artifacts,
+                            binary,
+                            lhs_type,
+                            rhs_type,
+                        );
 
                 if !should_be_specific {
                     get_bool()
@@ -395,7 +407,15 @@ where
             }
             BinaryOperator::NotIdentical(_) => {
                 let should_be_specific =
-                    should_use_specific_equality_inference(block_context, binary.lhs, binary.rhs, true);
+                    should_use_specific_equality_inference(block_context, binary.lhs, binary.rhs, true)
+                        && !compares_untyped_property_with_null(
+                            context,
+                            block_context,
+                            artifacts,
+                            binary,
+                            lhs_type,
+                            rhs_type,
+                        );
 
                 if !should_be_specific {
                     get_bool()
@@ -523,6 +543,37 @@ fn should_use_specific_equality_inference(
             && !involves_static_variable(lhs, block_context)
             && !involves_static_variable(rhs, block_context)
     }
+}
+
+fn compares_untyped_property_with_null<A>(
+    context: &Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &AnalysisArtifacts,
+    binary: &Binary<'_>,
+    lhs_type: &TUnion,
+    rhs_type: &TUnion,
+) -> bool
+where
+    A: Arena,
+{
+    let is_untyped_property = |expression: &Expression<'_>| {
+        let Expression::Access(Access::Property(property_access)) = unwrap_expression(expression) else {
+            return false;
+        };
+        let ClassLikeMemberSelector::Identifier(property_name) = &property_access.property else {
+            return false;
+        };
+
+        artifacts
+            .get_expression_type(property_access.object)
+            .or_else(|| {
+                get_block_expression_id(property_access.object, context, block_context)
+                    .and_then(|object_id| block_context.locals.get(&object_id).map(|object_type| &**object_type))
+            })
+            .is_some_and(|object_type| is_declared_untyped_property(context.codebase, object_type, property_name.value))
+    };
+
+    (rhs_type.is_null() && is_untyped_property(binary.lhs)) || (lhs_type.is_null() && is_untyped_property(binary.rhs))
 }
 
 /// Checks if an expression involves a static variable.

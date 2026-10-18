@@ -94,6 +94,69 @@ pub struct PropertyResolutionResult {
     /// When combined with `encountered_null` and nullsafe access, indicates
     /// the null in the result type came ONLY from nullsafe short-circuit.
     pub all_properties_non_nullable: bool,
+    /// Properties reported as non-documented or non-existent on a class, which a memoized
+    /// re-read reports again.
+    pub undeclared_properties: Vec<UndeclaredProperty>,
+    pub has_literal_name: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct UndeclaredProperty {
+    pub class_id: Word,
+    pub property_name: Word,
+    pub has_magic_method: bool,
+}
+
+pub(crate) fn report_undeclared_property<A>(
+    context: &mut Context<'_, '_, A>,
+    undeclared: UndeclaredProperty,
+    selector_span: Span,
+    object_span: Span,
+) where
+    A: Arena,
+{
+    if undeclared.has_magic_method {
+        report_non_documented_property(
+            context,
+            object_span,
+            selector_span,
+            undeclared.class_id,
+            undeclared.property_name,
+            false,
+        );
+    } else {
+        report_non_existent_property(
+            context,
+            undeclared.class_id,
+            undeclared.property_name,
+            selector_span,
+            object_span,
+            false,
+        );
+    }
+}
+
+fn is_universal_object_crate<A>(context: &Context<'_, '_, A>, object_type: &TUnion) -> bool
+where
+    A: Arena,
+{
+    let classes = object_type
+        .types
+        .iter()
+        .map(|atomic| match atomic {
+            TAtomic::Object(TObject::Named(named_object)) => Some(named_object.get_name()),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>();
+
+    classes.is_some_and(|classes| {
+        classes.into_iter().any(|class| {
+            [b"stdClass".as_slice(), b"SimpleXMLElement".as_slice()]
+                .into_iter()
+                .chain(context.settings.universal_object_crate_classes.iter().map(Word::as_bytes))
+                .any(|crate_class| context.codebase.is_instance_of(class.as_bytes(), crate_class))
+        })
+    })
 }
 
 /// Resolves all possible instance properties from an object expression and a member selector.
@@ -106,6 +169,7 @@ pub fn resolve_instance_properties<'ctx, 'ast, 'arena, A>(
     operator_span: Span,
     is_null_safe: bool,
     for_assignment: bool,
+    receiver_already_checked: bool,
 ) -> Result<PropertyResolutionResult, AnalysisError>
 where
     A: Arena,
@@ -117,7 +181,12 @@ where
     object_expression.analyze(context, block_context, artifacts)?;
     block_context.flags.set_inside_general_use(was_inside_general_use);
 
-    let selectors = resolve_member_selector(context, block_context, artifacts, property_selector, true)?;
+    let reports_string_selector = !is_null_safe
+        && !artifacts
+            .get_rc_expression_type(object_expression)
+            .is_some_and(|object_type| is_universal_object_crate(context, object_type));
+    let selectors =
+        resolve_member_selector(context, block_context, artifacts, property_selector, true, reports_string_selector)?;
 
     let Some(object_type) = artifacts.get_rc_expression_type(object_expression).cloned() else {
         return Ok(result);
@@ -142,6 +211,8 @@ where
             result.has_invalid_path = true;
         }
     }
+    result.has_literal_name = !property_names.is_empty();
+    let checks_receiver = result.has_literal_name && !receiver_already_checked;
 
     let mut object_atomics = object_type.types.iter().collect::<Vec<_>>();
     while let Some(object_atomic) = object_atomics.pop() {
@@ -154,7 +225,7 @@ where
         if object_atomic.is_null() || object_atomic.is_void() {
             result.encountered_null = true;
 
-            if !is_null_safe && !object_type.has_nullsafe_null() {
+            if checks_receiver && !is_null_safe && !object_type.has_nullsafe_null() {
                 report_access_on_null(
                     context,
                     block_context,
@@ -181,7 +252,9 @@ where
                     result.encountered_mixed = true;
                 }
 
-                report_access_on_non_object(context, object_atomic, property_selector, object_expression.span());
+                if checks_receiver {
+                    report_access_on_non_object(context, object_atomic, property_selector, object_expression.span());
+                }
 
                 continue;
             }
@@ -191,7 +264,7 @@ where
             TObject::Any => {
                 result.has_ambiguous_path = true;
 
-                if !block_context.flags.inside_isset() {
+                if checks_receiver && !block_context.flags.inside_isset() {
                     report_ambiguous_access(context, property_selector, object_expression.span(), word("object"));
                 }
 
@@ -442,6 +515,38 @@ where
     }
 
     Ok(result)
+}
+
+pub(crate) fn is_declared_untyped_property(
+    codebase: &CodebaseMetadata,
+    object_type: &TUnion,
+    property_name: &[u8],
+) -> bool {
+    declared_properties(codebase, object_type, property_name)
+        .iter()
+        .any(|property| property.type_declaration_metadata.is_none())
+}
+
+pub(crate) fn declares_property(codebase: &CodebaseMetadata, object_type: &TUnion, property_name: &[u8]) -> bool {
+    !declared_properties(codebase, object_type, property_name).is_empty()
+}
+
+fn declared_properties<'codebase>(
+    codebase: &'codebase CodebaseMetadata,
+    object_type: &TUnion,
+    property_name: &[u8],
+) -> Vec<&'codebase PropertyMetadata> {
+    let property_name = concat_word!("$", property_name);
+    object_type
+        .types
+        .iter()
+        .filter_map(|atomic| match atomic {
+            TAtomic::Object(TObject::Named(named_object)) => {
+                codebase.get_declaring_property(named_object.get_name().as_bytes(), property_name.as_bytes())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The type PHPStan's native scope reads: the property's declaration, `mixed` for an untyped or magic property.
@@ -706,7 +811,7 @@ impl DeclaredProperty<'_> {
         if let DeclaredPropertyKind::Real { annotation: Some(annotation) } = self.kind
             && let Some(annotation_type) = annotation_type_metadata(annotation, for_write).map(|tm| &tm.type_union)
         {
-            let narrows = match self.property.type_metadata.as_ref().map(|tm| &tm.type_union) {
+            let narrows = match self.property.type_declaration_metadata.as_ref().map(|tm| &tm.type_union) {
                 None => true,
                 Some(real_type) => {
                     real_type.is_mixed()
@@ -821,10 +926,16 @@ pub(crate) fn resolve_declared_property<'ctx>(
         });
     }
 
+    let accessed_inside_declaring_class =
+        scope.is_some_and(|scope| scope.as_bytes().eq_ignore_ascii_case(declaring_metadata.name.as_bytes()));
+    let annotation = annotation
+        .filter(|_| real_property.read_visibility.is_public() || !accessed_inside_declaring_class)
+        .map(|(_, annotation)| annotation);
+
     Some(DeclaredProperty {
         declaring_class: declaring_metadata,
         property: real_property,
-        kind: DeclaredPropertyKind::Real { annotation: annotation.map(|(_, annotation)| annotation) },
+        kind: DeclaredPropertyKind::Real { annotation },
     })
 }
 
@@ -1087,6 +1198,11 @@ where
                 prop_name,
                 for_assignment,
             );
+            result.undeclared_properties.push(UndeclaredProperty {
+                class_id,
+                property_name: prop_name,
+                has_magic_method: true,
+            });
 
             return Some(ResolvedProperty {
                 lookup_class: None,
@@ -1137,6 +1253,11 @@ where
         }
 
         report_non_existent_property(context, class_id, prop_name, selector.span(), object_expr.span(), false);
+        result.undeclared_properties.push(UndeclaredProperty {
+            class_id,
+            property_name: prop_name,
+            has_magic_method: false,
+        });
         return None;
     };
 
@@ -1495,7 +1616,7 @@ fn update_template_types<A>(
 }
 
 /// Reports an error for a property access on a `null` or `void` value.
-fn report_access_on_null<'ctx, A>(
+pub(crate) fn report_access_on_null<'ctx, A>(
     context: &mut Context<'ctx, '_, A>,
     block_context: &BlockContext<'ctx>,
     object_span: Span,
@@ -1608,7 +1729,7 @@ pub(crate) fn report_redundant_nullsafe<'arena, A>(
     );
 }
 
-fn report_access_on_non_object<A>(
+pub(crate) fn report_access_on_non_object<A>(
     context: &mut Context<'_, '_, A>,
     atomic_type: &TAtomic,
     selector: &ClassLikeMemberSelector,

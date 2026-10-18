@@ -51,7 +51,6 @@ final class Holder
     {
         $d = [];
         if ($this->p) {
-            /** @mago-expect analysis:possibly-null-array-index */
             [$d[$this->p]] = [$this->reset()];
         }
 

@@ -268,6 +268,13 @@ impl FunctionLikeMetadata {
         self.version_constraint.allows_version_range(range)
     }
 
+    /// Returns `true` when an `@impure` docblock tag marks this function-like.
+    #[inline]
+    #[must_use]
+    pub fn is_explicitly_impure(&self) -> bool {
+        self.explicit_docblock_flags.contains(MetadataFlags::PURE) && !self.flags.is_pure()
+    }
+
     /// Returns the kind of function-like (Function, Method, Closure, `ArrowFunction`).
     #[inline]
     #[must_use]

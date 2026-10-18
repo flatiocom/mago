@@ -71,7 +71,8 @@ where
     {
         result.encountered_null = true;
     }
-    let selector_resolutions = resolve_member_selector(context, block_context, artifacts, method_selector, false)?;
+    let selector_resolutions =
+        resolve_member_selector(context, block_context, artifacts, method_selector, false, true)?;
 
     let mut method_names = vec![];
     for selector in &selector_resolutions {

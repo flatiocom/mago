@@ -80,6 +80,7 @@ pub fn resolve_member_selector<'ctx, 'arena, A>(
     artifacts: &mut AnalysisArtifacts,
     selector: &ClassLikeMemberSelector<'arena>,
     coerce_to_string: bool,
+    report_string_selector: bool,
 ) -> Result<Vec<ResolvedSelector>, AnalysisError>
 where
     A: Arena,
@@ -131,6 +132,7 @@ where
         coerced_type.as_ref().or(selector_type.as_deref()),
         selector.span(),
         SelectorKind::Member,
+        report_string_selector,
     ))
 }
 
@@ -156,7 +158,7 @@ where
 
             let selector_type = artifacts.get_expression_type(&expr.expression);
 
-            Ok(resolve_selector_from_type(context, selector_type, expr.span(), SelectorKind::Constant))
+            Ok(resolve_selector_from_type(context, selector_type, expr.span(), SelectorKind::Constant, true))
         }
         ClassLikeConstantSelector::Missing(_) => Ok(vec![]),
     }
@@ -168,6 +170,7 @@ fn resolve_selector_from_type<A>(
     selector_type: Option<&TUnion>,
     selector_span: Span,
     kind: SelectorKind,
+    report_string_selector: bool,
 ) -> Vec<ResolvedSelector>
 where
     A: Arena,
@@ -202,6 +205,7 @@ where
                 Some(parameter.get_constraint()),
                 selector_span,
                 kind,
+                report_string_selector,
             ));
 
             continue;
@@ -215,17 +219,19 @@ where
         let atomic_type_id = atomic.get_id();
 
         if atomic.is_any_string() {
-            let issue_kind = match kind {
-                SelectorKind::Constant => IssueCode::StringConstantSelector,
-                SelectorKind::Member => IssueCode::StringMemberSelector,
-            };
+            if report_string_selector {
+                let issue_kind = match kind {
+                    SelectorKind::Constant => IssueCode::StringConstantSelector,
+                    SelectorKind::Member => IssueCode::StringMemberSelector,
+                };
 
-            context.collector.report_with_code(
-                issue_kind,
-                Issue::warning(format!("This {kind_str} selector uses a non-literal string type (`{atomic_type_id}`); its specific value cannot be statically determined."))
-                    .with_annotation(Annotation::primary(selector_span).with_message(format!("This expression (type `{atomic_type_id}`) provides the {kind_str} name")))
-                    .with_note("While this may work at runtime, its existence and type cannot be checked statically.")
-            );
+                context.collector.report_with_code(
+                    issue_kind,
+                    Issue::warning(format!("This {kind_str} selector uses a non-literal string type (`{atomic_type_id}`); its specific value cannot be statically determined."))
+                        .with_annotation(Annotation::primary(selector_span).with_message(format!("This expression (type `{atomic_type_id}`) provides the {kind_str} name")))
+                        .with_note("While this may work at runtime, its existence and type cannot be checked statically.")
+                );
+            }
 
             resolved_selectors.push(ResolvedSelector::GenericString);
         } else {

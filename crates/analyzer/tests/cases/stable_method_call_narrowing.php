@@ -103,7 +103,7 @@ final readonly class Lexer
 
         $this->input->read();
 
-        if (!$this->hasReachedEnd()) {
+        if (!$this->hasReachedEnd()) { // @mago-expect analysis:redundant-condition(2)
             echo 'more input';
         }
     }

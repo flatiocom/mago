@@ -488,6 +488,12 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             block_context.locals.insert(variable_id, Rc::new(new_type));
         }
 
+        for variable_id in if_scope.removed_access_paths {
+            block_context.locals.remove(&variable_id);
+            block_context.stable_method_call_assertions.remove(&variable_id);
+            block_context.clauses.retain(|clause| clause.wedge || !clause.possibilities.contains_key(&variable_id));
+        }
+
         block_context.clauses.extend(discriminator_clauses);
         if has_returned {
             block_context.flags.set_has_returned(true);
@@ -1376,8 +1382,18 @@ fn update_if_scope<'ctx, A>(
 
         outer_block_context.called_methods.extend(if_block_context.called_methods.iter().copied());
     }
+    let mut removed_variables = WordSet::default();
     let mut redefined_variables =
-        if_block_context.get_redefined_locals(&outer_block_context.locals, false, &mut WordSet::default());
+        if_block_context.get_redefined_locals(&outer_block_context.locals, false, &mut removed_variables);
+    if_scope
+        .removed_access_paths
+        .extend(removed_variables.into_iter().filter(|variable_id| is_access_path(variable_id.as_bytes())));
+    if_scope.removed_access_paths.extend(
+        outer_block_context
+            .stable_method_call_assertions
+            .keys()
+            .filter(|method_call| !if_block_context.stable_method_call_assertions.contains_key(*method_call)),
+    );
 
     for (variable_id, variable_type) in &if_block_context.locals {
         if outer_block_context.locals.contains_key(variable_id) {

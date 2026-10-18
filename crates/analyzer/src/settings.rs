@@ -310,6 +310,8 @@ pub struct Settings {
     /// Defaults to `true`.
     pub pollute_scope_with_block: bool,
 
+    pub universal_object_crate_classes: WordSet,
+
     /// Check for non-existent symbols in use statements.
     ///
     /// When enabled, the analyzer will report use statements that import symbols
@@ -511,6 +513,7 @@ impl Settings {
             pollute_scope_with_loop_initial_assignments: true,
             pollute_scope_with_always_iterable_foreach: true,
             pollute_scope_with_block: true,
+            universal_object_crate_classes: WordSet::default(),
             check_use_statements: false,
             check_experimental: false,
             check_name_casing: false,

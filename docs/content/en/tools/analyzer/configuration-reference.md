@@ -118,6 +118,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `pollute-scope-with-loop-initial-assignments` | `true` | When `false`, the variables a `for` loop defines, in its initialization, condition or body, are possibly undefined after the loop, like PHPStan's `polluteScopeWithLoopInitialAssignments: false`. |
 | `pollute-scope-with-always-iterable-foreach` | `true` | When `false`, the variables a `foreach` over a non-empty iterable defines are possibly undefined after the loop, like PHPStan's `polluteScopeWithAlwaysIterableForeach: false`. |
 | `pollute-scope-with-block` | `true` | When `false`, the variables a bare `{ ... }` block defines are possibly undefined after it, like PHPStan's `polluteScopeWithBlock: false`. |
+| `universal-object-crate-classes` | `[]` | Classes whose instances, and instances of their descendants, take any property, like PHPStan's `universalObjectCratesClasses`. `stdClass` and `SimpleXMLElement` always do. A property read by a dynamic name on them is not reported as `string-member-selector`. |
 | `check-property-initialization` | `false` | Verify that typed properties are initialised in a constructor or class initialiser. |
 | `check-property-initialization-in-declaring-class` | `false` | Check each typed property once, in the class that declares it, like PHPStan. See [Property initialization](#property-initialization). |
 | `check-use-statements` | `false` | Report use statements that import non-existent classes, functions, or constants. |

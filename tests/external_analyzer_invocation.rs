@@ -435,6 +435,31 @@ function title(PropertyBag $bag): string
 }
 ";
 
+const NULLSAFE_PROPERTY_BAG_SOURCE: &str = r"<?php
+
+declare(strict_types=1);
+
+interface PropertyBag {}
+
+function narrowed_title(?PropertyBag $bag): string
+{
+    if ($bag?->title !== null) {
+        return $bag->title;
+    }
+
+    return '';
+}
+
+function narrowed_title_as_int(?PropertyBag $bag): int
+{
+    if ($bag?->title !== null) {
+        return $bag->title;
+    }
+
+    return 0;
+}
+";
+
 const ISSUE_FILTER_SOURCE: &str = r"<?php
 
 declare(strict_types=1);
@@ -636,6 +661,19 @@ fn provider_typed_properties_need_no_magic_methods() -> Result<(), Box<dyn std::
         observation.issues
     );
     assert_eq!(observation.invocations, ["property-bag-title-write", "property-bag-title-read"]);
+
+    Ok(())
+}
+
+#[test]
+fn provider_typed_properties_keep_their_type_after_nullsafe_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+    if !php_sdk_is_available() {
+        return Ok(());
+    }
+
+    let observation = analyze_with_fixture(NULLSAFE_PROPERTY_BAG_SOURCE, true, false, false)?;
+    let codes = observation.issues.iter().map(|(code, _)| code.as_deref()).collect::<Vec<_>>();
+    assert_eq!(codes, [Some("invalid-return-statement")], "{:#?}", observation.issues);
 
     Ok(())
 }

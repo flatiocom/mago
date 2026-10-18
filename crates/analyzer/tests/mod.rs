@@ -3053,11 +3053,18 @@ test_case!(mixed_operand_reported_once_per_operation);
 test_case!(possibly_invalid_array_index);
 test_case!(mixed_access_inside_isset);
 test_case!(concat_operand_reported_at_operation_start);
+test_case!(docblock_property_type_reported_at_property);
 test_case!(imprecise_var_tag_type, {
     let mut s = crate::framework::default_test_settings();
     s.check_missing_type_hints = true;
     s
 });
+test_case!(undeclared_property_repeat_read);
+test_case!(magic_void_call_clears_this_narrowing);
+test_case!(narrowing_survives_calls_like_phpstan);
+test_case!(memoized_property_read_reports_receiver);
+test_case!(coalesce_throw_narrows_property_bases);
+test_case!(branch_invalidation_reaches_merged_scope);
 test_case!(literal_union_key_never_exists_in_isset);
 test_case!(literal_union_key_all_defined_read, {
     let mut s = crate::framework::default_test_settings();
@@ -3119,6 +3126,11 @@ test_case!(map_key_narrowing_like_phpstan, {
     s
 });
 test_case!(array_plus_shape_accepted_like_phpstan);
+test_case!(dynamic_property_name_on_universal_object_crate, {
+    let mut s = crate::framework::default_test_settings();
+    s.universal_object_crate_classes = std::iter::once(mago_word::word("Row")).collect();
+    s
+});
 test_case!(class_constant_keys_of_constant_array);
 test_case!(generic_first_class_callable_argument);
 test_case!(for_without_condition_never_exits);
@@ -3138,14 +3150,21 @@ test_case!(array_key_first_last_key_exists_when_not_null, {
 test_case!(trait_this_is_the_class_its_users_share);
 test_case!(trait_method_inherits_host_docblock);
 test_case!(imprecise_signature_type_on_declaration_line, crate::framework::check_missing_type_hints_settings());
+test_case!(property_offset_write_on_union_receiver);
+test_case!(magic_property_declaring_class_keeps_declared_type);
+test_case!(magic_property_narrows_native_type);
 test_case!(trait_reads_properties_every_user_declares);
 test_case!(trait_calls_methods_every_user_declares);
+test_case!(receiver_checks_like_phpstan);
 test_case!(offset_write_drops_scalar_members);
+test_case!(untyped_property_null_comparison);
 test_case!(docblock_types_uncertain_null_comparison, {
     let mut s = crate::framework::default_test_settings();
     s.treat_docblock_types_as_certain = false;
     s
 });
+test_case!(null_coalesce_on_magic_property);
+test_case!(narrowed_mixed_receiver_reported_on_every_read);
 test_case!(offset_write_into_mixed_forgets_narrowed_keys);
 test_case!(foreach_entry_link_needs_array_iteratee);
 test_case!(variable_type_overwrite_list_drops_known_elements, {
@@ -3162,6 +3181,7 @@ test_case!(list_index_outside_known_elements, {
 test_case!(key_of_non_empty_array_like_phpstan);
 test_case!(clone_drops_non_object_like_phpstan);
 test_case!(debug_backtrace_shape_like_phpstan);
+test_case!(memoized_property_read_checks_the_receiver_like_phpstan);
 
 #[test]
 fn issue_2478_without_property_memoization() {

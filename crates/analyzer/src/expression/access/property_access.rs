@@ -14,6 +14,7 @@ use mago_codex::ttype::get_never;
 use mago_codex::ttype::get_null;
 use mago_span::HasSpan;
 use mago_span::Span;
+use mago_syntax::cst::Access;
 use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::NullSafePropertyAccess;
@@ -30,7 +31,10 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::expression::array_access::report_index_types_of_array_access;
+use crate::resolver::property::report_access_on_non_object;
+use crate::resolver::property::report_access_on_null;
 use crate::resolver::property::report_deprecated_property;
+use crate::resolver::property::report_undeclared_property;
 use crate::resolver::property::resolve_declared_property;
 use crate::resolver::property::resolve_instance_properties;
 use crate::statement::class_like::initialization::report_read_before_initialization;
@@ -124,11 +128,36 @@ where
         Some(context.codebase),
     );
 
-    if context.settings.memoize_properties
+    let memoized_type = property_access_id
+        .filter(|_| context.settings.memoize_properties)
+        .and_then(|property_access_id| block_context.locals.get(&property_access_id).cloned());
+    let reads_through_call = property_access_id
+        .is_some_and(|property_access_id| memchr::memmem::find(property_access_id.as_bytes(), b"()").is_some());
+
+    if !reads_through_call
         && let Some(property_access_id) = &property_access_id
-        && let Some(existing_type) = block_context.locals.get(property_access_id).cloned()
+        && let Some(existing_type) = memoized_type.clone()
     {
         add_memoized_property_reference(context, block_context, artifacts, object, property_selector, is_null_safe)?;
+        report_memoized_receiver(
+            context,
+            block_context,
+            artifacts,
+            *property_access_id,
+            object,
+            arrow_span,
+            property_selector,
+            is_null_safe,
+        );
+
+        if let Some((read_type, undeclared_properties)) =
+            artifacts.read_memoized_undeclared_properties.get(property_access_id)
+            && Rc::ptr_eq(read_type, &existing_type)
+        {
+            for undeclared in undeclared_properties.clone() {
+                report_undeclared_property(context, undeclared, property_selector.span(), object.span());
+            }
+        }
 
         if let Expression::ArrayAccess(array_access) = object {
             report_index_types_of_array_access(context, block_context, artifacts, array_access)?;
@@ -148,6 +177,7 @@ where
         arrow_span,
         is_null_safe,
         false, // `for_assignment`
+        false, // `receiver_already_checked`
     )?;
 
     let object_has_nullsafe_null = artifacts.get_expression_type(object).is_some_and(|t| t.has_nullsafe_null());
@@ -234,14 +264,128 @@ where
         },
     );
 
-    let resulting_type = Rc::new(resulting_type);
+    let resulting_type = memoized_type
+        .filter(|memoized_type| reads_through_call && (!memoized_type.has_mixed() || resulting_type.has_mixed()))
+        .unwrap_or_else(|| Rc::new(resulting_type));
     if let Some(property_access_id) = property_access_id {
+        record_memoized_receiver(
+            context,
+            block_context,
+            artifacts,
+            property_access_id,
+            object,
+            arrow_span,
+            is_null_safe || !resolution_result.has_literal_name,
+        );
         block_context.locals.insert(property_access_id, Rc::clone(&resulting_type));
+        if !resolution_result.undeclared_properties.is_empty() {
+            artifacts
+                .read_memoized_undeclared_properties
+                .insert(property_access_id, (Rc::clone(&resulting_type), resolution_result.undeclared_properties));
+        }
     }
 
     artifacts.set_rc_expression_type(&span, resulting_type);
 
     Ok(())
+}
+
+fn record_memoized_receiver<A>(
+    context: &Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &mut AnalysisArtifacts,
+    property_access_id: Word,
+    object: &Expression<'_>,
+    arrow_span: Span,
+    skips_receiver: bool,
+) where
+    A: Arena,
+{
+    if !context.collector.is_recording() {
+        artifacts.reported_receiver_offsets.insert(arrow_span.start.offset);
+    }
+
+    let receiver_type = get_block_expression_id(object, context, block_context)
+        .filter(|_| !skips_receiver && !block_context.flags.inside_isset())
+        .and_then(|object_id| block_context.locals.get(&object_id).cloned());
+
+    match receiver_type {
+        Some(receiver_type) => artifacts.read_memoized_property_receivers.insert(property_access_id, receiver_type),
+        None => artifacts.read_memoized_property_receivers.remove(&property_access_id),
+    };
+}
+
+fn report_memoized_receiver<'ctx, 'ast, 'arena, A>(
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+    property_access_id: Word,
+    object: &'ast Expression<'arena>,
+    arrow_span: Span,
+    property_selector: &'ast ClassLikeMemberSelector<'arena>,
+    is_null_safe: bool,
+) where
+    A: Arena,
+{
+    let Some(object_id) = get_block_expression_id(object, context, block_context) else {
+        return;
+    };
+
+    if let Expression::Access(Access::Property(object_access)) = object {
+        report_memoized_receiver(
+            context,
+            block_context,
+            artifacts,
+            object_id,
+            object_access.object,
+            object_access.arrow,
+            &object_access.property,
+            false,
+        );
+    }
+
+    let current_receiver_type = block_context.locals.get(&object_id);
+    let receiver_type = match artifacts.read_memoized_property_receivers.get(&property_access_id) {
+        Some(recorded_type) if !block_context.flags.inside_isset() => Rc::clone(recorded_type),
+        Some(_) => return,
+        None if !is_null_safe && matches!(property_selector, ClassLikeMemberSelector::Identifier(_)) => {
+            let Some(current_type) = current_receiver_type else {
+                return;
+            };
+
+            Rc::clone(current_type)
+        }
+        None => return,
+    };
+
+    if current_receiver_type.is_none_or(|current_type| *current_type != receiver_type)
+        || (!context.collector.is_recording() && !artifacts.reported_receiver_offsets.insert(arrow_span.start.offset))
+    {
+        return;
+    }
+
+    let is_all_null = receiver_type.is_null() || receiver_type.is_void();
+    for atomic in receiver_type.types.iter() {
+        match atomic {
+            TAtomic::Null | TAtomic::Void => {
+                if !block_context.flags.inside_isset()
+                    && !receiver_type.has_nullsafe_null()
+                    && !receiver_type.has_error_path_null()
+                {
+                    report_access_on_null(
+                        context,
+                        block_context,
+                        object.span(),
+                        arrow_span,
+                        is_all_null,
+                        atomic.is_void(),
+                    );
+                }
+            }
+            TAtomic::Object(_) | TAtomic::GenericParameter(_) | TAtomic::Callable(_) => {}
+            _ => report_access_on_non_object(context, atomic, property_selector, object.span()),
+        }
+    }
 }
 
 /// Adds symbol reference for a memoized property access.

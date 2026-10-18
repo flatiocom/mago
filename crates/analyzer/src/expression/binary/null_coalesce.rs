@@ -12,12 +12,15 @@ use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
+use mago_syntax::cst::Access;
 use mago_syntax::cst::Binary;
+use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::Variable;
 use mago_text_edit::Safety;
 use mago_text_edit::TextEdit;
 use mago_word::Word;
+use mago_word::WordMap;
 use mago_word::WordSet;
 use mago_word::word;
 
@@ -27,10 +30,13 @@ use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::scope::if_scope::IfScope;
+use crate::context::scope::is_access_path;
 use crate::error::AnalysisError;
 use crate::formula::get_formula;
 use crate::reconciler::reconcile_keyed_types;
+use crate::resolver::property::declares_property;
 use crate::utils::conditional;
+use crate::utils::expression::get_block_expression_id;
 use crate::utils::misc::unwrap_expression;
 
 /// Analyzes the null coalescing operator (`??`).
@@ -102,28 +108,30 @@ where
         && !lhs_type.possibly_undefined_from_try()
         && !is_static_var
     {
-        context.collector.propose_with_code(
-            IssueCode::RedundantNullCoalesce,
-            Issue::help(
-                "Redundant null coalesce: left-hand side can never be `null` or undefined."
-            )
-            .with_annotation(Annotation::primary(binary.lhs.span()).with_message(format!(
-                "This expression (type `{}`) is never `null` or undefined",
-                lhs_type.get_id()
-            )))
-            .with_annotation(
-                Annotation::secondary(binary.rhs.span()).with_message("This right-hand side will never be evaluated"),
-            )
-            .with_note(
-                "The null coalesce operator `??` only evaluates the right-hand side if the left-hand side is `null` or not set.",
-            )
-            .with_help("Consider removing the `??` operator and the right-hand side expression."),
-            |edits| {
-                edits.push(TextEdit::delete(
-                    binary.operator.span().join(binary.rhs.span())
-                ).with_safety(Safety::PotentiallyUnsafe));
-            },
-        );
+        if !reads_undeclared_property(context, block_context, artifacts, binary.lhs) {
+            context.collector.propose_with_code(
+                IssueCode::RedundantNullCoalesce,
+                Issue::help(
+                    "Redundant null coalesce: left-hand side can never be `null` or undefined."
+                )
+                .with_annotation(Annotation::primary(binary.lhs.span()).with_message(format!(
+                    "This expression (type `{}`) is never `null` or undefined",
+                    lhs_type.get_id()
+                )))
+                .with_annotation(
+                    Annotation::secondary(binary.rhs.span()).with_message("This right-hand side will never be evaluated"),
+                )
+                .with_note(
+                    "The null coalesce operator `??` only evaluates the right-hand side if the left-hand side is `null` or not set.",
+                )
+                .with_help("Consider removing the `??` operator and the right-hand side expression."),
+                |edits| {
+                    edits.push(TextEdit::delete(
+                        binary.operator.span().join(binary.rhs.span())
+                    ).with_safety(Safety::PotentiallyUnsafe));
+                },
+            );
+        }
 
         result_type = (**lhs_type).clone();
 
@@ -136,7 +144,33 @@ where
         let non_null_lhs_type = lhs_type.to_non_nullable();
         let has_returned = block_context.flags.has_returned();
         block_context.flags.set_has_returned(false);
+        let access_paths_before: WordMap<Rc<TUnion>> = block_context
+            .locals
+            .iter()
+            .filter(|(variable_id, _)| is_access_path(variable_id.as_bytes()))
+            .map(|(variable_id, variable_type)| (*variable_id, Rc::clone(variable_type)))
+            .collect();
         binary.rhs.analyze(context, block_context, artifacts)?;
+        block_context.locals.retain(|variable_id, type_after| {
+            if !is_access_path(variable_id.as_bytes()) {
+                return true;
+            }
+
+            let Some(type_before) = access_paths_before.get(variable_id) else {
+                return false;
+            };
+
+            if **type_after != **type_before {
+                *type_after = Rc::new(combine_union_types(
+                    type_before,
+                    type_after,
+                    context.codebase,
+                    context.settings.combiner_options(),
+                ));
+            }
+
+            true
+        });
         block_context.flags.set_has_returned(block_context.flags.has_returned() && has_returned);
 
         let rhs_type =
@@ -219,9 +253,56 @@ where
             false,
             false,
         );
+
+        if let Some(lhs_id) = get_block_expression_id(binary.lhs, context, block_context) {
+            narrow_property_bases_to_non_null(block_context, lhs_id);
+        }
     }
 
     Ok(())
+}
+
+fn narrow_property_bases_to_non_null(block_context: &mut BlockContext<'_>, expression_id: Word) {
+    let mut base = expression_id.as_bytes();
+    while let Some(arrow) = memchr::memmem::rfind(base, b"->") {
+        if base.ends_with(b"()") {
+            return;
+        }
+
+        base = base[..arrow].strip_suffix(b"?").unwrap_or(&base[..arrow]);
+        let base_id = Word::new(base);
+        if let Some(base_type) = block_context.locals.get(&base_id)
+            && base_type.is_nullable()
+        {
+            let non_null_type = Rc::new(base_type.to_non_nullable());
+            block_context.locals.insert(base_id, non_null_type);
+        }
+    }
+}
+
+fn reads_undeclared_property<A>(
+    context: &Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &AnalysisArtifacts,
+    expression: &Expression<'_>,
+) -> bool
+where
+    A: Arena,
+{
+    let Expression::Access(Access::Property(property_access)) = unwrap_expression(expression) else {
+        return false;
+    };
+    let ClassLikeMemberSelector::Identifier(property_name) = &property_access.property else {
+        return false;
+    };
+
+    artifacts
+        .get_expression_type(property_access.object)
+        .or_else(|| {
+            get_block_expression_id(property_access.object, context, block_context)
+                .and_then(|object_id| block_context.locals.get(&object_id).map(|object_type| &**object_type))
+        })
+        .is_some_and(|object_type| !declares_property(context.codebase, object_type, property_name.value))
 }
 
 fn get_variable_name(expr: &Expression<'_>) -> Option<Word> {
