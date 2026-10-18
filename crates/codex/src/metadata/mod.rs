@@ -53,6 +53,7 @@ pub mod attribute;
 pub mod class_like;
 pub mod class_like_constant;
 pub mod constant;
+pub mod deferred_int;
 mod entry_spans;
 pub mod enum_case;
 pub mod flags;

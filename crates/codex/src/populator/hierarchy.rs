@@ -716,6 +716,30 @@ pub fn populate_class_like_types(
                 force_repopulation,
             );
         }
+
+        if let Some(deferred) = &mut constant.deferred_int_value {
+            for operand in deferred.get_operands_mut() {
+                populate_union_type(
+                    operand,
+                    codebase_symbols,
+                    Some(&constant_reference_source),
+                    symbol_references,
+                    force_repopulation,
+                );
+            }
+        }
+
+        for (key, value) in constant.deferred_array_items.iter_mut().flatten() {
+            for item in [key, value] {
+                populate_union_type(
+                    item,
+                    codebase_symbols,
+                    Some(&constant_reference_source),
+                    symbol_references,
+                    force_repopulation,
+                );
+            }
+        }
     }
 
     for (enum_case_name, enum_case) in &mut metadata.enum_cases {

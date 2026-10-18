@@ -16,6 +16,8 @@ use crate::symbol::Symbols;
 use crate::ttype::union::populate_union_type;
 
 mod closures;
+mod deferred_array_items;
+mod deferred_ints;
 mod descendants;
 mod docblock;
 mod hierarchy;
@@ -525,6 +527,12 @@ fn populate_codebase_inner(
         trace_phase!("docblocks");
     }
 
+    deferred_ints::resolve(codebase);
+    trace_phase!("deferred_ints");
+
+    deferred_array_items::resolve(codebase);
+    trace_phase!("deferred_array_items");
+
     codebase.safe_symbols = safe_symbols;
     codebase.safe_symbol_members = safe_symbol_members;
 }
@@ -653,6 +661,18 @@ fn populate_constant(
             symbol_references,
             force_repopulation,
         );
+    }
+
+    if let Some(deferred) = &mut constant.deferred_int_value {
+        for operand in deferred.get_operands_mut() {
+            populate_union_type(
+                operand,
+                symbols,
+                Some(&ReferenceSource::Symbol(true, name)),
+                symbol_references,
+                force_repopulation,
+            );
+        }
     }
 
     constant.flags |= MetadataFlags::POPULATED;

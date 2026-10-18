@@ -19,6 +19,8 @@ use crate::scanner::docblock::apply_common_metadata_flag;
 use crate::scanner::docblock::find_most_trusted_tag;
 use crate::scanner::docblock::parse_docblock;
 use crate::scanner::inference::infer;
+use crate::scanner::inference::infer_deferred_array_items;
+use crate::scanner::inference::infer_deferred_int;
 use crate::scanner::ttype::get_type_metadata_from_hint;
 use crate::scanner::ttype::get_type_metadata_from_type;
 use crate::scanner::ttype::merge_type_preserving_nullability;
@@ -86,6 +88,8 @@ where
 
             meta.attributes.clone_from(&attributes);
             meta.inferred_type = infer(context, scope, item.value, classname).map(TUnion::get_single_owned);
+            meta.deferred_int_value = infer_deferred_int(context, scope, item.value, classname);
+            meta.deferred_array_items = infer_deferred_array_items(context, scope, item.value, classname);
 
             if let Some(TAtomic::Reference(TReference::Member {
                 class_like_name,

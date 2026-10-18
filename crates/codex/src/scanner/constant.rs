@@ -21,6 +21,7 @@ use crate::scanner::docblock::apply_common_metadata_flag;
 use crate::scanner::docblock::find_most_trusted_tag;
 use crate::scanner::docblock::parse_docblock;
 use crate::scanner::inference::infer;
+use crate::scanner::inference::infer_deferred_int;
 use crate::scanner::ttype::get_type_metadata_from_type;
 use crate::scanner::typing_error_issue;
 use crate::scanner::version_claim::evaluate_version_attributes;
@@ -54,6 +55,7 @@ where
             metadata.version_constraint = verdict.constraint.clone();
             metadata.attributes.clone_from(&attributes);
             metadata.inferred_type = infer(context, scope, item.value, None);
+            metadata.deferred_int_value = infer_deferred_int(context, scope, item.value, None);
 
             process_constant_docblock(&mut metadata, document.as_ref(), None, type_context, scope);
 
@@ -100,6 +102,7 @@ where
 
     let mut metadata = ConstantMetadata::new(name, define.span(), flags);
     metadata.inferred_type = infer(context, scope, value_arg.value(), None);
+    metadata.deferred_int_value = infer_deferred_int(context, scope, value_arg.value(), None);
 
     process_constant_docblock(&mut metadata, document.as_ref(), None, type_context, scope);
 

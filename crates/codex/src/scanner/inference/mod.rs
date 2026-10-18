@@ -35,6 +35,8 @@ use crate::flags::attribute::AttributeFlags;
 use crate::identifier::function_like::FunctionLikeIdentifier;
 use crate::metadata::class_like_constant::ClassLikeConstantMetadata;
 use crate::metadata::constant::ConstantMetadata;
+use crate::metadata::deferred_int::DeferredIntExpression;
+use crate::metadata::deferred_int::DeferredIntOperator;
 use crate::scanner::Context;
 use crate::ttype::atomic::TAtomic;
 use crate::ttype::atomic::array::TArray;
@@ -261,6 +263,100 @@ where
     infer_with_constant_sources(context, scope, expression, enclosing_class, None, Some(class_constants))
 }
 
+pub(super) fn infer_deferred_int<'arena, A>(
+    context: &Context<'_, 'arena, A>,
+    scope: &NamespaceScope,
+    expression: &'arena Expression<'arena>,
+    enclosing_class: Option<Word>,
+) -> Option<DeferredIntExpression>
+where
+    A: Arena,
+{
+    let deferred = infer_deferred_int_operation(context, scope, expression, enclosing_class)?;
+
+    deferred.has_reference().then_some(deferred)
+}
+
+pub(super) fn infer_deferred_array_items<'arena, A>(
+    context: &Context<'_, 'arena, A>,
+    scope: &NamespaceScope,
+    expression: &'arena Expression<'arena>,
+    enclosing_class: Option<Word>,
+) -> Option<Vec<(TUnion, TUnion)>>
+where
+    A: Arena,
+{
+    let (Expression::Array(Array { elements, .. }) | Expression::LegacyArray(LegacyArray { elements, .. })) =
+        unwrap_parens(expression)
+    else {
+        return None;
+    };
+
+    let mut items = Vec::new();
+    let mut has_reference = false;
+    for element in elements {
+        let ArrayElement::KeyValue(element) = element else {
+            return None;
+        };
+
+        let key = infer(context, scope, element.key, enclosing_class)?;
+        match key.types.as_ref() {
+            [TAtomic::Reference(TReference::Member { .. })] => has_reference = true,
+            [atomic] if atomic.to_array_key().is_some() => {}
+            _ => return None,
+        }
+
+        let value = infer(context, scope, element.value, enclosing_class).unwrap_or_else(get_mixed);
+        items.push((key, value));
+
+        if items.len() > 100 {
+            return None;
+        }
+    }
+
+    has_reference.then_some(items)
+}
+
+fn infer_deferred_int_operation<'arena, A>(
+    context: &Context<'_, 'arena, A>,
+    scope: &NamespaceScope,
+    expression: &'arena Expression<'arena>,
+    enclosing_class: Option<Word>,
+) -> Option<DeferredIntExpression>
+where
+    A: Arena,
+{
+    let Expression::Binary(Binary { operator, lhs, rhs }) = unwrap_parens(expression) else {
+        return None;
+    };
+
+    Some(DeferredIntExpression::Operation(
+        DeferredIntOperator::from_binary(operator)?,
+        Box::new(infer_deferred_int_operand(context, scope, lhs, enclosing_class)?),
+        Box::new(infer_deferred_int_operand(context, scope, rhs, enclosing_class)?),
+    ))
+}
+
+fn infer_deferred_int_operand<'arena, A>(
+    context: &Context<'_, 'arena, A>,
+    scope: &NamespaceScope,
+    expression: &'arena Expression<'arena>,
+    enclosing_class: Option<Word>,
+) -> Option<DeferredIntExpression>
+where
+    A: Arena,
+{
+    if let Some(operation) = infer_deferred_int_operation(context, scope, expression, enclosing_class) {
+        return Some(operation);
+    }
+
+    let operand = infer(context, scope, expression, enclosing_class)?;
+    let is_deferrable = operand.is_single()
+        && (operand.get_single_literal_int_value().is_some() || matches!(operand.get_single(), TAtomic::Reference(_)));
+
+    is_deferrable.then_some(DeferredIntExpression::Operand(operand))
+}
+
 #[inline]
 fn infer_with_constant_sources<'arena, A>(
     context: &Context<'_, 'arena, A>,
@@ -444,85 +540,20 @@ where
 
             Some(wrap_atomic(TAtomic::Scalar(TScalar::String(final_string_type))))
         }
-        Expression::Binary(Binary { operator, lhs, rhs }) if operator.is_bitwise() => {
+        Expression::Binary(Binary { operator, lhs, rhs }) if operator.is_bitwise() || operator.is_arithmetic() => {
+            let operator = DeferredIntOperator::from_binary(operator)?;
             let lhs = infer_with_constant_sources(context, scope, lhs, enclosing_class, constants, class_constants);
             let rhs = infer_with_constant_sources(context, scope, rhs, enclosing_class, constants, class_constants);
 
-            Some(wrap_atomic(
+            Some(
                 match (
                     lhs.and_then(|v| v.get_single_literal_int_value()),
                     rhs.and_then(|v| v.get_single_literal_int_value()),
                 ) {
-                    (Some(lhs), Some(rhs)) => {
-                        let value = match operator {
-                            BinaryOperator::BitwiseAnd(_) => lhs & rhs,
-                            BinaryOperator::BitwiseOr(_) => lhs | rhs,
-                            BinaryOperator::BitwiseXor(_) => lhs ^ rhs,
-                            BinaryOperator::LeftShift(_) => {
-                                if rhs < 0 {
-                                    return Some(get_int());
-                                }
-
-                                u32::try_from(rhs).ok().and_then(|s| lhs.checked_shl(s)).unwrap_or_default()
-                            }
-                            BinaryOperator::RightShift(_) => {
-                                if rhs < 0 {
-                                    return Some(get_int());
-                                }
-
-                                match u32::try_from(rhs).ok().and_then(|s| lhs.checked_shr(s)) {
-                                    Some(v) => v,
-                                    None => {
-                                        if lhs >= 0 {
-                                            0
-                                        } else {
-                                            -1
-                                        }
-                                    }
-                                }
-                            }
-                            #[allow(clippy::unreachable)]
-                            _ => {
-                                unreachable!("unexpected bitwise operator: {:?}", operator);
-                            }
-                        };
-
-                        TAtomic::Scalar(TScalar::literal_int(value))
-                    }
-                    _ => TAtomic::Scalar(TScalar::int()),
+                    (Some(lhs), Some(rhs)) => operator.get_result_type(lhs, rhs),
+                    _ => operator.get_unknown_result_type(),
                 },
-            ))
-        }
-        Expression::Binary(Binary { operator, lhs, rhs }) if operator.is_arithmetic() => {
-            let lhs = infer_with_constant_sources(context, scope, lhs, enclosing_class, constants, class_constants);
-            let rhs = infer_with_constant_sources(context, scope, rhs, enclosing_class, constants, class_constants);
-
-            match (
-                lhs.and_then(|v| v.get_single_literal_int_value()),
-                rhs.and_then(|v| v.get_single_literal_int_value()),
-            ) {
-                (Some(lhs_val), Some(rhs_val)) => {
-                    let result = match operator {
-                        BinaryOperator::Addition(_) => lhs_val.checked_add(rhs_val),
-                        BinaryOperator::Subtraction(_) => lhs_val.checked_sub(rhs_val),
-                        BinaryOperator::Multiplication(_) => lhs_val.checked_mul(rhs_val),
-                        #[allow(clippy::modulo_arithmetic)]
-                        BinaryOperator::Modulo(_) if rhs_val != 0 => Some(lhs_val % rhs_val),
-                        BinaryOperator::Exponentiation(_) if rhs_val >= 0 => lhs_val.checked_pow(rhs_val as u32),
-                        BinaryOperator::Division(_) if rhs_val != 0 && lhs_val % rhs_val == 0 => {
-                            Some(lhs_val / rhs_val)
-                        }
-                        _ => None,
-                    };
-
-                    match result {
-                        Some(v) => Some(get_literal_int(v)),
-                        None => Some(get_int_or_float()),
-                    }
-                }
-                // Can't compute - return int|float
-                _ => Some(get_int_or_float()),
-            }
+            )
         }
         Expression::Construct(construct) => match construct {
             Construct::Isset(_) => Some(get_bool()),
@@ -632,30 +663,69 @@ where
             if is_list_array_expression(expression) =>
         {
             let mut entries = BTreeMap::new();
+            let mut opaque_spread_values = vec![];
 
-            for (i, element) in elements.iter().enumerate() {
-                let ArrayElement::Value(element) = element else {
-                    return None;
-                };
+            for element in elements.iter() {
+                match element {
+                    ArrayElement::Value(element) => {
+                        let value_type = infer_with_constant_sources(
+                            context,
+                            scope,
+                            element.value,
+                            enclosing_class,
+                            constants,
+                            class_constants,
+                        )
+                        .unwrap_or_else(get_mixed);
 
-                let value_type = infer_with_constant_sources(
-                    context,
-                    scope,
-                    element.value,
-                    enclosing_class,
-                    constants,
-                    class_constants,
-                )
-                .unwrap_or_else(get_mixed);
+                        entries.insert(entries.len(), (false, value_type));
+                    }
+                    ArrayElement::Variadic(element) => {
+                        let spread_type = infer_with_constant_sources(
+                            context,
+                            scope,
+                            element.value,
+                            enclosing_class,
+                            constants,
+                            class_constants,
+                        )?;
 
-                entries.insert(i, (false, value_type));
+                        match get_sealed_list_values(&spread_type) {
+                            Some(value_types) => {
+                                for value_type in value_types {
+                                    entries.insert(entries.len(), (false, value_type));
+                                }
+                            }
+                            None => opaque_spread_values
+                                .push(TAtomic::Derived(TDerived::ValueOf(TValueOf::new(Arc::new(spread_type))))),
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+
+            if !opaque_spread_values.is_empty() {
+                let mut value_types = opaque_spread_values;
+                for (_, value_type) in entries.values() {
+                    for value in value_type.types.iter() {
+                        if !value_types.contains(value) {
+                            value_types.push(value.clone());
+                        }
+                    }
+                }
+
+                let mut array =
+                    TKeyedArray::new_with_parameters(Arc::new(get_arraykey()), Arc::new(TUnion::from_vec(value_types)));
+                array.non_empty = !entries.is_empty();
+
+                return Some(wrap_atomic(TAtomic::Array(TArray::Keyed(array))));
             }
 
             Some(wrap_atomic(TAtomic::Array(TArray::List(TList {
                 known_count: Some(entries.len()),
+                non_empty: !entries.is_empty(),
                 known_elements: Some(entries.into()),
                 element_type: Arc::new(get_never()),
-                non_empty: !elements.is_empty(),
             }))))
         }
         Expression::Array(Array { elements, .. }) | Expression::LegacyArray(LegacyArray { elements, .. })
@@ -767,10 +837,26 @@ fn infer_constant<'ctx, 'arena>(
 fn is_list_array_expression(expression: &Expression) -> bool {
     match expression {
         Expression::Array(Array { elements, .. }) | Expression::LegacyArray(LegacyArray { elements, .. }) => {
-            elements.iter().all(|element| matches!(element, ArrayElement::Value(_)))
+            elements.iter().all(|element| matches!(element, ArrayElement::Value(_) | ArrayElement::Variadic(_)))
         }
         _ => false,
     }
+}
+
+fn get_sealed_list_values(list_type: &TUnion) -> Option<Vec<TUnion>> {
+    let [TAtomic::Array(TArray::List(list))] = list_type.types.as_ref() else {
+        return None;
+    };
+
+    if !list.element_type.is_never() {
+        return None;
+    }
+
+    let Some(known_elements) = &list.known_elements else {
+        return Some(vec![]);
+    };
+
+    known_elements.values().map(|(optional, value_type)| (!optional).then(|| value_type.clone())).collect()
 }
 
 #[inline]

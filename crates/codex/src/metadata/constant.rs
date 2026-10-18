@@ -7,6 +7,7 @@ use mago_span::Span;
 use mago_word::Word;
 
 use crate::metadata::attribute::AttributeMetadata;
+use crate::metadata::deferred_int::DeferredIntExpression;
 use crate::metadata::flags::MetadataFlags;
 use crate::metadata::patch::PATCHABLE_COMMON_DOCBLOCK_FLAGS;
 use crate::metadata::patch::merge_explicit_docblock_flags;
@@ -27,6 +28,8 @@ pub struct ConstantMetadata {
     pub span: Span,
     pub type_metadata: Option<TypeMetadata>,
     pub inferred_type: Option<TUnion>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub deferred_int_value: Option<DeferredIntExpression>,
     pub flags: MetadataFlags,
     #[cfg_attr(feature = "serde", serde(default))]
     pub(crate) explicit_docblock_flags: MetadataFlags,
@@ -52,6 +55,7 @@ impl ConstantMetadata {
             explicit_docblock_flags: MetadataFlags::empty(),
             type_metadata: None,
             inferred_type: None,
+            deferred_int_value: None,
             issues: Vec::new(),
             version_constraint: VersionConstraint::unconstrained(),
         }

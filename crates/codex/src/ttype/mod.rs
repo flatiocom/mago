@@ -1515,6 +1515,14 @@ fn get_iterable_parameters_impl(
                         &mut value_type,
                     );
 
+                    let expansion_options = TypeExpansionOptions {
+                        self_class: Some(class_metadata.name),
+                        static_class_type: StaticClassType::Name(class_metadata.name),
+                        ..Default::default()
+                    };
+                    expander::expand_union(codebase, &mut key_type, &expansion_options);
+                    expander::expand_union(codebase, &mut value_type, &expansion_options);
+
                     if is_iterator_interface || (!key_type.is_mixed() && !value_type.is_mixed()) {
                         return Some((key_type, value_type));
                     }

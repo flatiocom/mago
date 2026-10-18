@@ -6,10 +6,12 @@ use mago_span::Span;
 use mago_word::Word;
 
 use crate::metadata::attribute::AttributeMetadata;
+use crate::metadata::deferred_int::DeferredIntExpression;
 use crate::metadata::flags::MetadataFlags;
 use crate::metadata::ttype::TypeMetadata;
 use crate::metadata::version_constraint::VersionConstraint;
 use crate::ttype::atomic::TAtomic;
+use crate::ttype::union::TUnion;
 use crate::visibility::Visibility;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -23,6 +25,10 @@ pub struct ClassLikeConstantMetadata {
     pub type_declaration: Option<TypeMetadata>,
     pub type_metadata: Option<TypeMetadata>,
     pub inferred_type: Option<TAtomic>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub deferred_int_value: Option<DeferredIntExpression>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub deferred_array_items: Option<Vec<(TUnion, TUnion)>>,
     pub flags: MetadataFlags,
     #[cfg_attr(feature = "serde", serde(default))]
     pub(crate) explicit_docblock_flags: MetadataFlags,
@@ -40,6 +46,8 @@ impl ClassLikeConstantMetadata {
             type_declaration: None,
             type_metadata: None,
             inferred_type: None,
+            deferred_int_value: None,
+            deferred_array_items: None,
             flags,
             explicit_docblock_flags: MetadataFlags::empty(),
             version_constraint: VersionConstraint::unconstrained(),

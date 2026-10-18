@@ -361,12 +361,14 @@ struct MethodInheritance {
     return_type: Option<TypeMetadata>,
     params_to_inherit: Vec<bool>,
     param_types: Vec<Option<(TUnion, Span, bool)>>,
+    out_types: Vec<Option<TypeMetadata>>,
     template_types: Option<TemplateTypes>,
     thrown_types: Option<Vec<TypeMetadata>>,
     clear_inferred_assertions: bool,
     assertions: Option<BTreeMap<Word, Vec<Assertion>>>,
     if_true_assertions: Option<BTreeMap<Word, Vec<Assertion>>>,
     if_false_assertions: Option<BTreeMap<Word, Vec<Assertion>>>,
+    purity: Option<bool>,
 }
 
 /// Sorts and applies docblock inheritance work items.
@@ -541,6 +543,7 @@ fn resolve_method_inheritance(
     let parent_assertions = &parent_method.assertions;
     let parent_if_true_assertions = &parent_method.if_true_assertions;
     let parent_if_false_assertions = &parent_method.if_false_assertions;
+    let parent_is_pure = parent_method.flags.is_pure();
 
     let child_class = codebase.class_likes.get(&class_name)?;
 
@@ -581,12 +584,14 @@ fn resolve_method_inheritance(
     let (
         should_inherit_return,
         params_to_inherit,
+        out_types_to_inherit,
         should_inherit_templates,
         should_inherit_thrown,
         should_inherit_assertions,
         should_inherit_if_true_assertions,
         should_inherit_if_false_assertions,
         should_clear_inferred_assertions,
+        should_inherit_purity,
     ) = {
         let child_method = codebase.function_likes.get(&child_method_id)?;
 
@@ -622,6 +627,17 @@ fn resolve_method_inheritance(
             })
             .collect();
 
+        let out_types_to_inherit: Vec<bool> = parent_parameters
+            .iter()
+            .enumerate()
+            .map(|(i, parent_param)| {
+                parent_param.out_type.is_some()
+                    && child_method.parameters.get(i).is_some_and(|child_param| {
+                        child_param.flags.is_by_reference() && child_param.out_type.is_none()
+                    })
+            })
+            .collect();
+
         let should_inherit_templates = child_method.template_types.is_empty() && !parent_template_types.is_empty();
         let should_inherit_thrown = child_method.thrown_types.is_empty() && !parent_thrown_types.is_empty();
 
@@ -642,26 +658,34 @@ fn resolve_method_inheritance(
 
         let should_clear_inferred_assertions = parent_has_any_assertions && child_assertions_are_inferred;
 
+        let should_inherit_purity = method_name != word("__construct")
+            && !child_method.explicit_docblock_flags.contains(MetadataFlags::PURE)
+            && child_method.flags.is_pure() != parent_is_pure;
+
         (
             should_inherit_return,
             params_to_inherit,
+            out_types_to_inherit,
             should_inherit_templates,
             should_inherit_thrown,
             should_inherit_assertions,
             should_inherit_if_true_assertions,
             should_inherit_if_false_assertions,
             should_clear_inferred_assertions,
+            should_inherit_purity,
         )
     };
 
     if !should_inherit_return
         && !params_to_inherit.iter().any(|inherit| *inherit)
+        && !out_types_to_inherit.iter().any(|inherit| *inherit)
         && !should_inherit_templates
         && !should_inherit_thrown
         && !should_inherit_assertions
         && !should_inherit_if_true_assertions
         && !should_inherit_if_false_assertions
         && !should_clear_inferred_assertions
+        && !should_inherit_purity
     {
         return None;
     }
@@ -681,6 +705,19 @@ fn resolve_method_inheritance(
                 .as_ref()
                 .filter(|_| *inherit)
                 .map(|metadata| (substitute_type(metadata), metadata.span, metadata.from_docblock))
+        })
+        .collect();
+
+    let substituted_out_types: Vec<Option<TypeMetadata>> = parent_parameters
+        .iter()
+        .zip(&out_types_to_inherit)
+        .map(|(parameter, inherit)| {
+            parameter.out_type.as_ref().filter(|_| *inherit).map(|metadata| TypeMetadata {
+                type_union: substitute_type(metadata),
+                span: metadata.span,
+                from_docblock: true,
+                inferred: true,
+            })
         })
         .collect();
 
@@ -774,12 +811,14 @@ fn resolve_method_inheritance(
         return_type: narrowed_return,
         params_to_inherit,
         param_types: substituted_param_types,
+        out_types: substituted_out_types,
         template_types: parent_templates_to_apply,
         thrown_types: parent_thrown_to_apply,
         clear_inferred_assertions: should_clear_inferred_assertions,
         assertions: parent_assertions_to_apply,
         if_true_assertions: parent_if_true_assertions_to_apply,
         if_false_assertions: parent_if_false_assertions_to_apply,
+        purity: should_inherit_purity.then_some(parent_is_pure),
     })
 }
 
@@ -799,6 +838,12 @@ fn apply_method_inheritance(codebase: &mut CodebaseMetadata, inheritance: Method
         {
             child_param.type_metadata = Some(TypeMetadata { type_union, span, from_docblock, inferred: true });
             child_param.add_null_from_null_default();
+        }
+    }
+
+    for (child_param, out_type) in child_method.parameters.iter_mut().zip(inheritance.out_types) {
+        if out_type.is_some() {
+            child_param.out_type = out_type;
         }
     }
 
@@ -827,6 +872,10 @@ fn apply_method_inheritance(codebase: &mut CodebaseMetadata, inheritance: Method
 
     if let Some(parent_false_asserts) = inheritance.if_false_assertions {
         child_method.if_false_assertions = parent_false_asserts;
+    }
+
+    if let Some(is_pure) = inheritance.purity {
+        child_method.flags.set(MetadataFlags::PURE, is_pure);
     }
 }
 

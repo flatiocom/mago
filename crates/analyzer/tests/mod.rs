@@ -62,6 +62,8 @@ test_case!(array_access_assignment_is_remembered_on_read, {
     settings
 });
 test_case!(array_access_assignment_is_not_remembered_by_default);
+test_case!(array_declared_with_mixed_key_has_array_key_keys);
+test_case!(class_constant_with_spread_has_inferred_type);
 test_case!(generic_docblock_native_return);
 test_case!(message_quality);
 test_case!(ds_map_defaults);
@@ -624,6 +626,7 @@ test_case!(short_ternary_with_truthy);
 test_case!(short_ternary_with_falsy);
 test_case!(conditional_type_narrowing);
 test_case!(conditional_initialization);
+test_case!(pure_inherited_by_override);
 test_case!(type_is_not_narrowed_by_nested_conditional_exit);
 test_case!(dynamic_array_key_in_string_interpolation);
 test_case!(big_numbers);
@@ -2895,6 +2898,7 @@ test_case!(issue_2523);
 test_case!(issue_2563);
 test_case!(issue_2585);
 test_case!(simplexml_truthiness);
+test_case!(traversable_static_template_binds_to_iterated_class);
 test_case!(closure_capture_by_reference_array);
 test_case!(nullable_receiver_method_call);
 test_case!(enum_case_constant_array_isset);
@@ -2927,6 +2931,9 @@ test_case!(foreach_empty_array_analyze_dead_code, {
     settings.analyze_dead_code = true;
     settings
 });
+test_case!(deferred_constant_int_folding);
+test_case!(inherited_param_out);
+test_case!(class_constant_keys_of_constant_array);
 test_case!(array_access_offset_isset_then_type_check);
 test_case!(array_access_union_offset_write_remembered, {
     let mut s = crate::framework::default_test_settings();
