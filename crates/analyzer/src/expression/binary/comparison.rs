@@ -4,8 +4,11 @@ use mago_allocator::Arena;
 use mago_bytes::BytesDisplay;
 use mago_codex::operator_overloading::OperandAcceptance;
 use mago_codex::operator_overloading::OperandSide;
+use mago_codex::operator_overloading::OverloadedOperator;
+use mago_codex::operator_overloading::get_class_overloading;
 use mago_codex::operator_overloading::get_comparison_handler;
 use mago_codex::ttype::TType;
+use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::get_bool;
 use mago_codex::ttype::get_false;
 use mago_codex::ttype::get_mixed;
@@ -132,7 +135,8 @@ where
     }
 
     let mut reported_general_invalid_operand =
-        report_operands_rejected_by_comparison_handler(context, binary, lhs_type, rhs_type);
+        report_operands_rejected_by_comparison_handler(context, binary, lhs_type, rhs_type)
+            || report_object_compared_with_number(context, binary, lhs_type, rhs_type);
 
     if !reported_general_invalid_operand && !lhs_type.is_mixed() && !rhs_type.is_mixed() {
         let op_str = BytesDisplay(binary.operator.as_bytes());
@@ -639,6 +643,54 @@ where
     }
 
     reported
+}
+
+pub(super) fn report_object_compared_with_number<'arena, A>(
+    context: &mut Context<'_, 'arena, A>,
+    binary: &Binary<'arena>,
+    lhs_type: &TUnion,
+    rhs_type: &TUnion,
+) -> bool
+where
+    A: Arena,
+{
+    if binary.operator.is_identity() {
+        return false;
+    }
+
+    let is_object_compared_with_number = (lhs_type.is_int_or_float() && is_object_without_comparison(rhs_type))
+        || (rhs_type.is_int_or_float() && is_object_without_comparison(lhs_type));
+    if !is_object_compared_with_number {
+        return false;
+    }
+
+    let operator = BytesDisplay(binary.operator.as_bytes());
+    context.collector.report_with_code(
+        IssueCode::InvalidOperand,
+        Issue::error(format!(
+            "Comparison operation `{operator}` between `{}` and `{}` results in an error.",
+            lhs_type.get_id(),
+            rhs_type.get_id(),
+        ))
+        .with_annotation(
+            Annotation::primary(binary.lhs.span()).with_message(format!("This has type `{}`", lhs_type.get_id())),
+        )
+        .with_annotation(
+            Annotation::secondary(binary.rhs.span()).with_message(format!("This has type `{}`", rhs_type.get_id())),
+        )
+        .with_note("PHP cannot convert the object to a number, so it emits a notice and compares the object as `1`.")
+        .with_help("Compare a number taken from the object, such as a property or a method result."),
+    );
+
+    true
+}
+
+fn is_object_without_comparison(union: &TUnion) -> bool {
+    union.types.iter().any(TAtomic::is_object_type)
+        && union.types.iter().all(|atomic| {
+            atomic.is_null()
+                || (atomic.is_object_type() && get_class_overloading(atomic, OverloadedOperator::Comparison).is_none())
+        })
 }
 
 /// Checks a single operand of a comparison operation for problematic types.

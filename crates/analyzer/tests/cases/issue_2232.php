@@ -48,5 +48,6 @@ function issue_2232_division(int $value): int
 function issue_2232_integer_precision(int $value): int
 {
     // @mago-expect analysis:invalid-return-statement
+    // @mago-expect analysis:redundant-cast
     return (int) ($value * 3);
 }

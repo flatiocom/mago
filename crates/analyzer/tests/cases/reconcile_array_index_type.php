@@ -25,6 +25,7 @@ function factorial(int $number): int
         return 1;
     }
 
+    // @mago-expect analysis:redundant-cast
     return (int) ($number * factorial($number - 1));
 }
 

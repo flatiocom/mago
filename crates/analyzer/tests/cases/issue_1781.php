@@ -6,6 +6,7 @@ declare(strict_types=1);
 function square_if_integer(mixed $value): int
 {
     if (is_int($value)) {
+        // @mago-expect analysis:invalid-return-statement
         return $value ** 2;
     }
 

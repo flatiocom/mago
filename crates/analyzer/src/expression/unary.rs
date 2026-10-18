@@ -382,32 +382,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPrefix<'arena> {
             UnaryPrefixOperator::IntCast(_, _) | UnaryPrefixOperator::IntegerCast(_, _) => {
                 let resulting_type = match operand_type {
                     Some(t) => {
-                        // we intentionally do not report redundant casts here, as
-                        // what we think is an integer, might be a float at runtime.
-                        //
-                        // Example:
-                        //
-                        // ```
-                        // function factorial(int $number): int {
-                        //     if ($number <= 1) {
-                        //         return 1;
-                        //     }
-                        //
-                        //     return $number * factorial($number - 1);
-                        // }
-                        // ```
-                        //
-                        // While this function looks like it always returns an integer,
-                        // it could result in a float ( via overflow ) at runtime.
-                        //
-                        // While currently we do not report overflows, we should allow the
-                        // user to explicitly cast the result to an integer.
-                        //
-                        // ---
-                        //
-                        // if t.is_int() {
-                        //     report_redundant_type_cast(&self.operator, self, &t, context);
-                        // }
+                        if t.is_int() {
+                            report_redundant_type_cast(&self.operator, self, &t, context);
+                        }
+
                         cast_type_to_int(&t, self.operand, artifacts, context)
                     }
                     None => get_int(),
@@ -478,6 +456,16 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPrefix<'arena> {
                     Some(t) => {
                         if t.is_any_string() {
                             report_redundant_type_cast(&self.operator, self, &t, context);
+                        }
+
+                        if has_mixed_operand(&t) {
+                            context.collector.report_with_code(
+                                IssueCode::InvalidTypeCast,
+                                Issue::warning("Casting `mixed` to `string`.")
+                                    .with_annotation(Annotation::primary(self.operand.span()).with_message("This expression has type `mixed`"))
+                                    .with_note("The string value of `mixed` cannot be determined statically, and arrays or non-stringable objects fail at runtime.")
+                                    .with_help("Narrow the value with a type check before casting it to `string`."),
+                            );
                         }
 
                         let operand_expression_id = get_block_expression_id(self.operand, context, block_context);
@@ -1212,6 +1200,16 @@ fn is_checked_by_its_own_rule(operand: &Expression<'_>, artifacts: &AnalysisArti
     }
 }
 
+fn has_mixed_operand(operand_type: &TUnion) -> bool {
+    operand_type.types.iter().any(|atomic| match atomic {
+        TAtomic::Mixed(_) => true,
+        TAtomic::GenericParameter(parameter) => {
+            parameter.is_constrained_as_mixed() && !parameter.has_intersection_types()
+        }
+        _ => false,
+    })
+}
+
 fn report_redundant_type_cast<'ast, 'arena, A>(
     cast_operator: &'ast UnaryPrefixOperator,
     expression: &'ast UnaryPrefix<'arena>,
@@ -1428,6 +1426,8 @@ where
     get_bool()
 }
 
+const FLOAT_CASTABLE_CLASS_NAMES: &[&[u8]] = &[b"SimpleXMLElement", b"GMP"];
+
 fn cast_type_to_float<'arena, A>(
     operand_type: &TUnion,
     context: &mut Context<'_, 'arena, A>,
@@ -1464,7 +1464,7 @@ where
                         if let Some(val) = i.get_literal_value() {
                             resulting_float_atomics.push(TAtomic::Scalar(TScalar::literal_float(val as f64)));
                         } else {
-                            return get_float();
+                            resulting_float_atomics.push(TAtomic::Scalar(TScalar::float()));
                         }
                     }
                     TScalar::Float(f) => resulting_float_atomics.push(TAtomic::Scalar(TScalar::Float(*f))),
@@ -1507,7 +1507,7 @@ where
                                 );
                             }
 
-                            return get_float();
+                            resulting_float_atomics.push(TAtomic::Scalar(TScalar::float()));
                         }
                     }
                     TScalar::ClassLikeString(_) => {
@@ -1523,9 +1523,7 @@ where
 
                         resulting_float_atomics.push(TAtomic::Scalar(TScalar::literal_float(0.0)));
                     }
-                    _ => {
-                        return get_float();
-                    }
+                    _ => resulting_float_atomics.push(TAtomic::Scalar(TScalar::float())),
                 }
             }
             TAtomic::Array(arr) => {
@@ -1535,6 +1533,13 @@ where
                     resulting_float_atomics.push(TAtomic::Scalar(TScalar::literal_float(0.0)));
                     resulting_float_atomics.push(TAtomic::Scalar(TScalar::literal_float(1.0)));
                 }
+            }
+            TAtomic::Object(TObject::Named(named_object))
+                if FLOAT_CASTABLE_CLASS_NAMES
+                    .iter()
+                    .any(|class_name| context.codebase.is_instance_of(named_object.name.as_bytes(), class_name)) =>
+            {
+                resulting_float_atomics.push(TAtomic::Scalar(TScalar::float()));
             }
             TAtomic::Object(_) => {
                 if !reported_error_for_object {
@@ -1563,7 +1568,7 @@ where
                         .with_help("Avoid casting resources directly to float. Use resource-specific functions to get relevant numeric data if needed."),
                 );
 
-                return get_float();
+                resulting_float_atomics.push(TAtomic::Scalar(TScalar::float()));
             }
             TAtomic::Never => return get_never(),
             TAtomic::Mixed(_) => {
@@ -1706,7 +1711,7 @@ fn cast_type_to_int<A>(
     operand_type: &TUnion,
     operand: &Expression<'_>,
     artifacts: &AnalysisArtifacts,
-    context: &Context<'_, '_, A>,
+    context: &mut Context<'_, '_, A>,
 ) -> TUnion
 where
     A: Arena,
@@ -1782,6 +1787,17 @@ where
                     return get_int();
                 }
             },
+            TAtomic::Mixed(_) => {
+                context.collector.report_with_code(
+                    IssueCode::InvalidTypeCast,
+                    Issue::warning("Casting `mixed` to `int`.")
+                        .with_annotation(Annotation::primary(operand.span()).with_message("This expression has type `mixed`"))
+                        .with_note("The integer value of `mixed` cannot be determined statically. The result will be a general `int`.")
+                        .with_help("Consider adding type assertions or checks if a more specific integer outcome is expected."),
+                );
+
+                return get_int();
+            }
             _ => return get_int(),
         };
 

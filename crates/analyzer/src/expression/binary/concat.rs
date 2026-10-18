@@ -18,6 +18,7 @@ use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
+use mago_span::Span;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Expression;
@@ -85,7 +86,9 @@ where
             "middle"
         };
 
-        analyze_string_concat_operand(context, artifacts, operand, side);
+        let operation_span = operand.span().from_start(binary.span().start);
+
+        analyze_string_concat_operand(context, artifacts, operand, operation_span, side);
     }
 
     let result_type = fold_concat_operands(&operands, artifacts, context.settings.string_combination_threshold);
@@ -99,6 +102,7 @@ fn analyze_string_concat_operand<'arena, A>(
     context: &mut Context<'_, 'arena, A>,
     artifacts: &AnalysisArtifacts,
     operand: &Expression<'arena>,
+    operation_span: Span,
     side: &'static str,
 ) where
     A: Arena,
@@ -113,7 +117,7 @@ fn analyze_string_concat_operand<'arena, A>(
             Issue::error(format!(
                 "Implicit conversion of `null` to empty string for {side} operand in string concatenation."
             ))
-            .with_annotation(Annotation::primary(operand.span()).with_message("Operand is `null` here"))
+            .with_annotation(Annotation::primary(operation_span).with_message("Operand is `null` here"))
             .with_note("Using `null` in string concatenation results in an empty string `''`.")
             .with_help(
                 "Explicitly cast to string `(string) $var` or handle the `null` case if concatenation is not intended.",
@@ -129,7 +133,7 @@ fn analyze_string_concat_operand<'arena, A>(
             Issue::error(format!(
                 "Implicit conversion of `false` to empty string for {side} operand in string concatenation."
             ))
-            .with_annotation(Annotation::primary(operand.span()).with_message("Operand is `false` here"))
+            .with_annotation(Annotation::primary(operation_span).with_message("Operand is `false` here"))
             .with_note("Using `false` in string concatenation results in an empty string `''`.")
             .with_help("Explicitly cast to string `(string) $var` or handle the `false` case if concatenation is not intended."),
         );
@@ -145,7 +149,7 @@ fn analyze_string_concat_operand<'arena, A>(
                 side,
                 operand_type.get_id()
             ))
-            .with_annotation(Annotation::primary(operand.span()).with_message("This might be `null`"))
+            .with_annotation(Annotation::primary(operation_span).with_message("This might be `null`"))
             .with_note("If this operand is `null` at runtime, it will be implicitly converted to an empty string `''`.")
             .with_help("Ensure the operand is non-null before concatenation using checks or assertions, or explicitly cast to string."),
         );
@@ -159,7 +163,7 @@ fn analyze_string_concat_operand<'arena, A>(
                 side,
                 operand_type.get_id()
             ))
-            .with_annotation(Annotation::primary(operand.span()).with_message("This might be `false`"))
+            .with_annotation(Annotation::primary(operation_span).with_message("This might be `false`"))
             .with_note(
                 "If this operand is `false` at runtime, it will be implicitly converted to an empty string `''`.",
             )
@@ -216,7 +220,7 @@ fn analyze_string_concat_operand<'arena, A>(
                                 side,
                                 parameter.parameter_name,
                             ))
-                            .with_annotation(Annotation::primary(operand.span()).with_message("Template type is unconstrained"))
+                            .with_annotation(Annotation::primary(operation_span).with_message("Template type is unconstrained"))
                             .with_note("An unconstrained template parameter could be substituted with any type, including arrays or objects without `__toString`.")
                             .with_help(format!("Constrain the template parameter, e.g. `@template {} of string` or `@template {} of string|int`, or cast the value explicitly.", parameter.parameter_name, parameter.parameter_name)),
                         );
@@ -235,7 +239,7 @@ fn analyze_string_concat_operand<'arena, A>(
                                 parameter.parameter_name,
                                 parameter.constraint.get_id()
                             ))
-                            .with_annotation(Annotation::primary(operand.span()).with_message("Template type not guaranteed to be string/numeric"))
+                            .with_annotation(Annotation::primary(operation_span).with_message("Template type not guaranteed to be string/numeric"))
                             .with_help("Ensure the template parameter constraint allows string conversion or cast the value explicitly."),
                         );
 
@@ -254,7 +258,7 @@ fn analyze_string_concat_operand<'arena, A>(
                                 "Invalid {side} operand: cannot determine if generic `object` is stringable."
                             ))
                             .with_annotation(
-                                Annotation::primary(operand.span())
+                                Annotation::primary(operation_span)
                                     .with_message("Cannot verify `__toString` for generic `object`"),
                             )
                             .with_note("Only objects with a `__toString` method can be used in string concatenation.")
@@ -276,7 +280,7 @@ fn analyze_string_concat_operand<'arena, A>(
                         Issue::warning(format!(
                             "Implicit conversion to `string` for {side} operand via `{class_like_name}::__toString()`."
                         ))
-                        .with_annotation(Annotation::primary(operand.span())
+                        .with_annotation(Annotation::primary(operation_span)
                             .with_message(format!("Object implicitly converted using `{class_like_name}::__toString()`"))
                         )
                         .with_note("Objects implementing `__toString` are automatically converted when used in string context.")
@@ -291,7 +295,7 @@ fn analyze_string_concat_operand<'arena, A>(
                                 side,
                                 operand_atomic_type.get_id()
                             ))
-                            .with_annotation(Annotation::primary(operand.span())
+                            .with_annotation(Annotation::primary(operation_span)
                                 .with_message(format!("Type `{}` does not have a `__toString` method", operand_atomic_type.get_id()))
                             )
                             .with_note("Only objects implementing the `Stringable` interface (or having a `__toString` method) can be used in string concatenation.")
@@ -313,7 +317,7 @@ fn analyze_string_concat_operand<'arena, A>(
                                 "Potential array in {side} operand of string concatenation."
                             ))
                             .with_annotation(
-                                Annotation::primary(operand.span())
+                                Annotation::primary(operation_span)
                                     .with_message("This expression may be an array."),
                             )
                             .with_note(
@@ -330,7 +334,7 @@ fn analyze_string_concat_operand<'arena, A>(
                                 "Invalid {side} operand: cannot use type `array` in string concatenation."
                             ))
                             .with_annotation(
-                                Annotation::primary(operand.span())
+                                Annotation::primary(operation_span)
                                     .with_message("Cannot concatenate with an `array`"),
                             )
                             .with_note(
@@ -353,7 +357,7 @@ fn analyze_string_concat_operand<'arena, A>(
                     Issue::warning(format!(
                         "Implicit conversion of `resource` to string for {side} operand."
                     ))
-                    .with_annotation(Annotation::primary(operand.span()).with_message("Resource implicitly converted to string"))
+                    .with_annotation(Annotation::primary(operation_span).with_message("Resource implicitly converted to string"))
                     .with_note("PHP converts resources to the string format 'Resource id #[id]' when used in string context.")
                     .with_help("Avoid relying on implicit resource-to-string conversion; extract necessary information from the resource first if possible."),
                 );
@@ -369,7 +373,7 @@ fn analyze_string_concat_operand<'arena, A>(
                             side,
                             operand_atomic_type.get_id()
                         ))
-                        .with_annotation(Annotation::primary(operand.span()).with_message("Operand has `mixed` type"))
+                        .with_annotation(Annotation::primary(operation_span).with_message("Operand has `mixed` type"))
                         .with_note("Using `mixed` in string concatenation is unsafe as the actual runtime type and its string representation are unknown.")
                         .with_help("Ensure the operand has a known type (`string`, `int`, `null`, `false`, or stringable object) using type hints, assertions, or checks."),
                     );
@@ -388,7 +392,7 @@ fn analyze_string_concat_operand<'arena, A>(
                              operand_atomic_type.get_id(),
                              side
                         ))
-                        .with_annotation(Annotation::primary(operand.span()).with_message("Invalid type for concatenation"))
+                        .with_annotation(Annotation::primary(operation_span).with_message("Invalid type for concatenation"))
                         .with_help("Ensure the operand is a string, number, null, false, resource, or an object with `__toString`."),
                     );
 
@@ -409,7 +413,7 @@ fn analyze_string_concat_operand<'arena, A>(
                 "Invalid type `{}` for {} operand in string concatenation.",
                 operand_type.get_id(), side
             ))
-            .with_annotation(Annotation::primary(operand.span()).with_message("Invalid type for concatenation"))
+            .with_annotation(Annotation::primary(operation_span).with_message("Invalid type for concatenation"))
             .with_note("Operands in string concatenation must be strings, numbers, null, false, resources, or objects implementing `__toString`.")
             .with_help("Ensure the operand has a compatible type or cast it explicitly to `string`."),
         );
@@ -422,7 +426,7 @@ fn analyze_string_concat_operand<'arena, A>(
                 side
             ))
             .with_annotation(
-                Annotation::primary(operand.span()).with_message("Operand type might be invalid for concatenation"),
+                Annotation::primary(operation_span).with_message("Operand type might be invalid for concatenation"),
             )
             .with_note("Some possible types for this operand are not compatible with string concatenation.")
             .with_help(

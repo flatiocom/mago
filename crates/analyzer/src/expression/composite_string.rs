@@ -1,15 +1,20 @@
 use mago_allocator::Arena;
+use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::atomic::scalar::string::TString;
+use mago_codex::ttype::atomic::scalar::string::TStringCasing;
 use mago_codex::ttype::atomic::scalar::string::TStringLiteral;
 use mago_codex::ttype::get_literal_string;
 use mago_codex::ttype::get_never;
 use mago_codex::ttype::get_non_empty_string;
 use mago_codex::ttype::get_non_empty_unspecified_literal_string;
 use mago_codex::ttype::get_string;
+use mago_codex::ttype::get_truthy_string;
 use mago_codex::ttype::get_unspecified_literal_string;
 use mago_codex::ttype::union::TUnion;
+use mago_reporting::Annotation;
+use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_syntax::cst::CompositeString;
 use mago_syntax::cst::StringPart;
@@ -18,6 +23,7 @@ use mago_word::word;
 
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
+use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
@@ -34,7 +40,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
     where
         A: Arena,
     {
-        let mut non_empty = false;
+        let mut non_empty_parts = 0usize;
+        let mut has_truthy_part = false;
         let mut all_literals = true;
         let mut resulting_strings: Option<Vec<String>> = Some(vec![String::new()]);
         let mut impossible = false;
@@ -42,7 +49,11 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
         for part in self.parts().as_slice() {
             let (part_type, part_expression_id) = match part {
                 StringPart::Literal(literal_string_part) => {
-                    non_empty = non_empty || !literal_string_part.raw.is_empty();
+                    if !literal_string_part.raw.is_empty() {
+                        non_empty_parts += 1;
+                    }
+                    has_truthy_part = has_truthy_part
+                        || literal_string_part.value.is_some_and(|value| !value.is_empty() && value != b"0");
                     if let Some(strings) = resulting_strings.as_mut() {
                         if let Some(Ok(part_str)) = literal_string_part.value.map(str::from_utf8) {
                             for s in strings.iter_mut() {
@@ -87,6 +98,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
                 continue;
             };
 
+            report_mixed_part(&part_type, part, context);
+
             let casted_part_type = cast_type_to_string(
                 &part_type,
                 part_expression_id.as_ref().map(|w| w.as_bytes()),
@@ -103,12 +116,14 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
             }
 
             let mut is_non_empty_part = true;
+            let mut is_truthy_part = true;
             let mut part_is_all_literals = true;
             let mut has_unspecified_literal = false;
             let mut part_literal_values: Vec<Word> = Vec::new();
 
             for cast_part_atomic in casted_part_type.types.as_ref() {
                 is_non_empty_part = is_non_empty_part && cast_part_atomic.is_non_empty_string();
+                is_truthy_part = is_truthy_part && cast_part_atomic.is_truthy();
 
                 if !part_is_all_literals {
                     continue;
@@ -132,7 +147,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
                 }
             }
 
-            non_empty = non_empty || is_non_empty_part;
+            if is_non_empty_part {
+                non_empty_parts += 1;
+            }
+            has_truthy_part = has_truthy_part || is_truthy_part;
             all_literals = all_literals && part_is_all_literals;
 
             if !part_is_all_literals || has_unspecified_literal {
@@ -177,6 +195,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
             }
         }
 
+        let non_falsy = has_truthy_part || non_empty_parts >= 2;
+        let non_empty = non_falsy || non_empty_parts > 0;
+
         let resulting_type = if impossible {
             get_never()
         } else if let Some(literal_strings) = resulting_strings {
@@ -190,6 +211,18 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
                         .collect(),
                 )
             }
+        } else if non_falsy {
+            if all_literals {
+                TUnion::from_atomic(TAtomic::Scalar(TScalar::String(TString::unspecified_literal_with_props(
+                    false,
+                    true,
+                    true,
+                    false,
+                    TStringCasing::Unspecified,
+                ))))
+            } else {
+                get_truthy_string()
+            }
         } else if non_empty {
             if all_literals { get_non_empty_unspecified_literal_string() } else { get_non_empty_string() }
         } else if all_literals {
@@ -201,6 +234,45 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for CompositeString<'arena> {
         artifacts.set_expression_type(self, resulting_type);
 
         Ok(())
+    }
+}
+
+fn report_mixed_part<A>(part_type: &TUnion, part: &StringPart<'_>, context: &mut Context<'_, '_, A>)
+where
+    A: Arena,
+{
+    for atomic in part_type.types.as_ref() {
+        match atomic {
+            TAtomic::Mixed(_) => {
+                context.collector.report_with_code(
+                    IssueCode::MixedOperand,
+                    Issue::error(format!(
+                        "Invalid interpolated string part: type `{}` cannot be reliably converted to string.",
+                        atomic.get_id()
+                    ))
+                    .with_annotation(Annotation::primary(part.span()).with_message("Part has `mixed` type"))
+                    .with_note("Interpolating `mixed` is unsafe as the actual runtime type and its string representation are unknown.")
+                    .with_help("Ensure the part has a known type (`string`, `int`, `null`, `false`, or stringable object) using type hints, assertions, or checks."),
+                );
+
+                return;
+            }
+            TAtomic::GenericParameter(parameter) if parameter.constraint.is_mixed() => {
+                context.collector.report_with_code(
+                    IssueCode::MixedOperand,
+                    Issue::error(format!(
+                        "Invalid interpolated string part: template parameter `{}` is unconstrained (effectively `mixed`) and cannot be reliably converted to string.",
+                        parameter.parameter_name,
+                    ))
+                    .with_annotation(Annotation::primary(part.span()).with_message("Template type is unconstrained"))
+                    .with_note("An unconstrained template parameter could be substituted with any type, including arrays or objects without `__toString`.")
+                    .with_help(format!("Constrain the template parameter, e.g. `@template {} of string` or `@template {} of string|int`, or cast the value explicitly.", parameter.parameter_name, parameter.parameter_name)),
+                );
+
+                return;
+            }
+            _ => {}
+        }
     }
 }
 
@@ -305,6 +377,7 @@ mod tests {
         "#},
         issues = [
             IssueCode::UndefinedVariable,
+            IssueCode::MixedOperand,
         ]
     }
 
@@ -493,6 +566,65 @@ mod tests {
              */
             function build_key(string $c): string {
                 return "hist8_{$c}";
+            }
+        "#}
+    }
+
+    test_analysis! {
+        name = composite_string_mixed_parts,
+        code = indoc! {r#"
+            <?php
+
+            function interpolate_mixed(mixed $m): string {
+                $heredoc = <<<TXT
+                    heredoc $m
+                    TXT;
+
+                return "simple $m" . "braced {$m}" . $heredoc;
+            }
+        "#},
+        issues = [
+            IssueCode::MixedOperand,
+            IssueCode::MixedOperand,
+            IssueCode::MixedOperand,
+        ]
+    }
+
+    test_analysis! {
+        name = composite_string_unconstrained_template_part,
+        code = indoc! {r#"
+            <?php
+
+            /**
+             * @template T
+             * @param T $t
+             */
+            function interpolate_template($t): string {
+                return "value $t";
+            }
+        "#},
+        issues = [
+            IssueCode::MixedOperand,
+        ]
+    }
+
+    test_analysis! {
+        name = composite_string_known_parts_are_not_mixed,
+        code = indoc! {r#"
+            <?php
+
+            final class Name {
+                public function __toString(): string {
+                    return 'name';
+                }
+            }
+
+            /**
+             * @template T of string
+             * @param T $t
+             */
+            function interpolate_known(string|int|float|bool|null $scalar, Name $name, $t): string {
+                return "$scalar {$name} $t";
             }
         "#}
     }

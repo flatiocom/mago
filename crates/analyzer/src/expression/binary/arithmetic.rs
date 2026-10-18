@@ -20,6 +20,7 @@ use mago_codex::ttype::atomic::scalar::int::TInteger;
 use mago_codex::ttype::combiner;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::atomic_comparator;
+use mago_codex::ttype::get_arraykey;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_never;
 use mago_codex::ttype::get_non_negative_int;
@@ -221,6 +222,8 @@ where
     let mut has_valid_right_operand = false;
     let mut overloading_class_names: Vec<&'static str> = Vec::new();
     let mut has_pair_without_overloading = false;
+    let mut reported_mixed_left = false;
+    let mut reported_mixed_right = false;
 
     let left_atomic_types = left_type
         .types
@@ -267,22 +270,24 @@ where
             let mut is_overloaded_pair = false;
 
             if left_atomic.is_mixed() {
-                context.collector.report_with_code(
-                    IssueCode::MixedOperand,
-                    Issue::error(
-                        "Left operand in binary operation has type `mixed`."
-                    )
-                    .with_annotation(
-                        Annotation::primary(binary.lhs.span())
-                            .with_message("Operand is `mixed`.")
-                    )
-                    .with_note(
-                        "Performing operations on `mixed` is unsafe as the actual runtime type is unknown."
-                    )
-                    .with_help(
-                        "Ensure the left operand has a known type (e.g., `int`, `float`, `string`) using type hints, assertions, or checks."
-                    ),
-                );
+                if !std::mem::replace(&mut reported_mixed_left, true) {
+                    context.collector.report_with_code(
+                        IssueCode::MixedOperand,
+                        Issue::error(
+                            "Left operand in binary operation has type `mixed`."
+                        )
+                        .with_annotation(
+                            Annotation::primary(binary.lhs.span())
+                                .with_message("Operand is `mixed`.")
+                        )
+                        .with_note(
+                            "Performing operations on `mixed` is unsafe as the actual runtime type is unknown."
+                        )
+                        .with_help(
+                            "Ensure the left operand has a known type (e.g., `int`, `float`, `string`) using type hints, assertions, or checks."
+                        ),
+                    );
+                }
 
                 pair_result_atomics.push(TAtomic::Mixed(TMixed::new()));
                 if !right_atomic.is_mixed() {
@@ -291,22 +296,24 @@ where
             }
 
             if right_atomic.is_mixed() {
-                context.collector.report_with_code(
-                    IssueCode::MixedOperand,
-                    Issue::error(
-                        "Right operand in binary operation has type `mixed`."
-                    )
-                    .with_annotation(
-                        Annotation::primary(binary.rhs.span())
-                            .with_message("Operand is `mixed`.")
-                    )
-                    .with_note(
-                        "Performing operations on `mixed` is unsafe as the actual runtime type is unknown."
-                    )
-                    .with_help(
-                        "Ensure the right operand has a known type (e.g., `int`, `float`, `string`) using type hints, assertions, or checks."
-                    ),
-                );
+                if !std::mem::replace(&mut reported_mixed_right, true) {
+                    context.collector.report_with_code(
+                        IssueCode::MixedOperand,
+                        Issue::error(
+                            "Right operand in binary operation has type `mixed`."
+                        )
+                        .with_annotation(
+                            Annotation::primary(binary.rhs.span())
+                                .with_message("Operand is `mixed`.")
+                        )
+                        .with_note(
+                            "Performing operations on `mixed` is unsafe as the actual runtime type is unknown."
+                        )
+                        .with_help(
+                            "Ensure the right operand has a known type (e.g., `int`, `float`, `string`) using type hints, assertions, or checks."
+                        ),
+                    );
+                }
 
                 if !pair_result_atomics.iter().any(mago_codex::ttype::atomic::TAtomic::is_mixed) {
                     pair_result_atomics.push(TAtomic::Mixed(TMixed::new()));
@@ -317,7 +324,10 @@ where
             }
 
             if left_atomic.is_mixed() || right_atomic.is_mixed() {
-                result_atomic_types.extend(pair_result_atomics);
+                match mixed_operand_result(&binary.operator, left_atomic, right_atomic) {
+                    Some(result_atomics) => result_atomic_types.extend(result_atomics),
+                    None => result_atomic_types.extend(pair_result_atomics),
+                }
                 continue;
             }
 
@@ -585,6 +595,39 @@ where
     Ok(())
 }
 
+fn mixed_operand_result(op: &BinaryOperator<'_>, left: &TAtomic, right: &TAtomic) -> Option<Vec<TAtomic>> {
+    let other = if left.is_mixed() { right } else { left };
+    if !other.is_mixed() && !other.is_int() && !other.is_float() {
+        return None;
+    }
+
+    let int_or_float = || vec![TAtomic::Scalar(TScalar::int()), TAtomic::Scalar(TScalar::float())];
+
+    match op {
+        BinaryOperator::Modulo(_) => Some(vec![TAtomic::Scalar(TScalar::int())]),
+        BinaryOperator::Addition(_) if other.is_mixed() => Some(vec![
+            TAtomic::Array(TArray::Keyed(TKeyedArray::new_with_parameters(
+                Arc::new(get_arraykey()),
+                Arc::new(get_mixed()),
+            ))),
+            TAtomic::Scalar(TScalar::int()),
+            TAtomic::Scalar(TScalar::float()),
+        ]),
+        BinaryOperator::Addition(_)
+        | BinaryOperator::Subtraction(_)
+        | BinaryOperator::Multiplication(_)
+        | BinaryOperator::Division(_)
+        | BinaryOperator::Exponentiation(_) => {
+            if other.is_float() {
+                Some(vec![TAtomic::Scalar(TScalar::float())])
+            } else {
+                Some(int_or_float())
+            }
+        }
+        _ => None,
+    }
+}
+
 #[inline]
 fn is_arithmetic_compatible_generic<A>(context: &Context<'_, '_, A>, union: &TUnion, other_union: &TUnion) -> bool
 where
@@ -685,7 +728,9 @@ fn determine_numeric_result(op: &BinaryOperator<'_>, left: &TAtomic, right: &TAt
     {
         return match (left, right) {
             (TAtomic::Scalar(TScalar::Integer(_)), TAtomic::Scalar(TScalar::Integer(_))) => match op {
-                BinaryOperator::Division(_) => vec![TAtomic::Scalar(TScalar::int()), TAtomic::Scalar(TScalar::float())],
+                BinaryOperator::Division(_) | BinaryOperator::Exponentiation(_) => {
+                    vec![TAtomic::Scalar(TScalar::int()), TAtomic::Scalar(TScalar::float())]
+                }
                 _ => vec![TAtomic::Scalar(TScalar::int())],
             },
             _ => match op {
@@ -719,6 +764,11 @@ fn determine_numeric_result(op: &BinaryOperator<'_>, left: &TAtomic, right: &TAt
     }
 
     match (left, right) {
+        (TAtomic::Scalar(TScalar::Integer(base)), TAtomic::Scalar(TScalar::Integer(exponent)))
+            if matches!(op, BinaryOperator::Exponentiation(_)) =>
+        {
+            int_exponentiation_result(*base, *exponent)
+        }
         (TAtomic::Scalar(TScalar::Integer(left_int)), TAtomic::Scalar(TScalar::Integer(right_int))) => {
             let result = calculate_int_arithmetic(op, *left_int, *right_int);
 
@@ -797,6 +847,51 @@ fn determine_numeric_result(op: &BinaryOperator<'_>, left: &TAtomic, right: &TAt
             }
         },
     }
+}
+
+fn int_exponentiation_result(base: TInteger, exponent: TInteger) -> Vec<TAtomic> {
+    let int_or_float = || vec![TAtomic::Scalar(TScalar::int()), TAtomic::Scalar(TScalar::float())];
+
+    match exponent.get_literal_value() {
+        Some(0) => return vec![TAtomic::Scalar(TScalar::literal_int(1))],
+        Some(1) => return vec![TAtomic::Scalar(TScalar::Integer(base))],
+        _ => {}
+    }
+
+    let Some(base_value) = base.get_literal_value() else {
+        return int_or_float();
+    };
+
+    let int_power = |exponent: i64| u32::try_from(exponent).ok().and_then(|exponent| base_value.checked_pow(exponent));
+
+    if let Some(exponent_value) = exponent.get_literal_value() {
+        return match int_power(exponent_value) {
+            Some(power) => vec![TAtomic::Scalar(TScalar::literal_int(power))],
+            None => vec![TAtomic::Scalar(TScalar::literal_float((base_value as f64).powf(exponent_value as f64)))],
+        };
+    }
+
+    let (Some(minimum), maximum) = exponent.get_bounds() else {
+        return int_or_float();
+    };
+
+    if base_value < 0 || minimum < 0 {
+        return int_or_float();
+    }
+
+    let Some(lowest) = int_power(minimum) else {
+        return int_or_float();
+    };
+
+    let highest = match maximum {
+        None => None,
+        Some(maximum) => match int_power(maximum) {
+            Some(highest) => Some(highest),
+            None => return int_or_float(),
+        },
+    };
+
+    vec![TAtomic::Scalar(TScalar::Integer(TInteger::from_bounds(Some(lowest), highest)))]
 }
 
 /// Compute the result of `string ^ string`, `string & string`, or

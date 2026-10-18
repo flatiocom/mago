@@ -275,6 +275,7 @@ final class Summary
             $pays = Yii::app()->db->createCommand(
                     'SELECT group_concat(nom) FROM Pays WHERE id IN (' . join(',', $st->paysId) . ') ORDER BY nom',
                 )->queryScalar();
+            // @mago-expect analysis:redundant-cast
             $paysIssn = Yii::app()->db->createCommand(
                     'SELECT nom FROM Pays WHERE id = :id',
                 )->queryScalar([':id' => (int) abs($st->issnpaysid)]) ?: 'SANS';
@@ -286,12 +287,14 @@ final class Summary
                     )->queryScalar();
             }
             if ($st->issnpaysid !== null) {
+                // @mago-expect analysis:redundant-cast
                 $name = Yii::app()->db->createCommand(
                         'SELECT nom FROM Pays WHERE id = :id',
                     )->queryScalar([':id' => (int) abs($st->issnpaysid)]);
                 $sum['Pays de publication'] = ($st->issnpaysid > 0 ? '' : 'SANS ') . $name;
             }
         }
+        /** @mago-expect analysis:invalid-type-cast */
         $getName = static fn(object $ar): string => (string) ($ar->nom ?? '');
         if ($st->editeurId) {
             $ids = array_map(abs(...), $st->editeurId);
@@ -418,6 +421,7 @@ final class Summary
             }
         }
         if ($st->grappe) {
+            // @mago-expect analysis:redundant-cast
             $gname = Yii::app()->db->createCommand('SELECT nom FROM Grappe WHERE id = '
                 . (int) abs($st->grappe))->queryScalar();
             $gid = $st->grappe > 0 ? $st->grappe : 0 - $st->grappe;

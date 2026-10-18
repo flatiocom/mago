@@ -17,12 +17,16 @@ function test(): void
 {
     while ($row = fassoc()) {
         /** @mago-expect analysis:possibly-undefined-string-array-index */
+        /** @mago-expect analysis:redundant-cast */
         $oid = (int) $row['object_id'];
         /** @mago-expect analysis:possibly-undefined-string-array-index */
+        /** @mago-expect analysis:redundant-cast */
         $r = (int) $row['r'];
         /** @mago-expect analysis:possibly-undefined-string-array-index */
+        /** @mago-expect analysis:redundant-cast */
         $s = (int) $row['s'];
         /** @mago-expect analysis:possibly-undefined-string-array-index */
+        /** @mago-expect analysis:redundant-cast */
         $y = (int) $row['year'];
 
         /** @mago-expect analysis:redundant-comparison */
