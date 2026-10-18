@@ -279,6 +279,18 @@ pub struct Settings {
     /// Defaults to `false`.
     pub check_property_initialization: bool,
 
+    /// Check each typed property once, in the class that declares it or uses its trait, abstract classes
+    /// included, and count what any method of that class its constructor calls on `$this` assigns, in any
+    /// branch and whether or not a subclass could override it. Each property is reported as
+    /// `uninitialized-property`, also in a class without a constructor.
+    ///
+    /// When `false`, every concrete class is checked against its inherited properties too, only private
+    /// or final methods called in every branch count, and a class without a constructor gets one
+    /// `missing-constructor`.
+    ///
+    /// Defaults to `false`.
+    pub check_property_initialization_in_declaring_class: bool,
+
     /// Keep the variables a `for` loop defines, in its initialization, condition or body, as defined after
     /// the loop. When `false`, they are possibly undefined there, like PHPStan with
     /// `polluteScopeWithLoopInitialAssignments: false`.
@@ -493,6 +505,7 @@ impl Settings {
             trust_existence_checks: true,
             class_initializers: Vec::new(),
             check_property_initialization: false,
+            check_property_initialization_in_declaring_class: false,
             pollute_scope_with_loop_initial_assignments: true,
             pollute_scope_with_always_iterable_foreach: true,
             pollute_scope_with_block: true,

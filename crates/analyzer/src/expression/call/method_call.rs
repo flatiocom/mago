@@ -292,6 +292,16 @@ where
         let method_name = mago_word::ascii_lowercase_word(method_ident.value);
         block_context.definitely_called_methods.insert(method_name);
         block_context.called_methods.insert(method_name);
+
+        if let Some(FunctionLikeIdentifier::Method(class_name, calling_method)) =
+            block_context.scope.get_function_like_identifier()
+        {
+            artifacts
+                .method_possibly_calls_this_methods
+                .entry((class_name, mago_word::ascii_lowercase_word(calling_method.as_bytes())))
+                .or_default()
+                .insert(method_name);
+        }
     }
 
     let mut method_resolution =

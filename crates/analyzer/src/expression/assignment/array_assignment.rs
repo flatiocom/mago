@@ -42,6 +42,7 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::block::ReferenceConstraintSource;
 use crate::error::AnalysisError;
+use crate::expression::access::property_access::analyze_offset_write_root;
 use crate::expression::assignment::PropertyWriteKind;
 use crate::expression::assignment::property_assignment;
 use crate::utils::expression::array::ArrayTarget;
@@ -77,7 +78,11 @@ where
     if artifacts.get_expression_type(root_array_expression).is_none() {
         let was_inside_general_use = block_context.flags.inside_general_use();
         block_context.flags.set_inside_general_use(true);
-        root_array_expression.analyze(context, block_context, artifacts)?;
+        if let Expression::Access(Access::Property(property_access)) = root_array_expression {
+            analyze_offset_write_root(context, block_context, artifacts, property_access)?;
+        } else {
+            root_array_expression.analyze(context, block_context, artifacts)?;
+        }
         block_context.flags.set_inside_general_use(was_inside_general_use);
     }
 
@@ -146,7 +151,7 @@ where
             if root_is_array_access_object {
                 PropertyWriteKind::ArrayAccessMutation
             } else {
-                PropertyWriteKind::Mutation
+                PropertyWriteKind::OffsetWrite
             },
         )?;
     }

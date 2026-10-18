@@ -291,6 +291,11 @@ pub struct AnalyzerConfiguration {
     /// Defaults to `false`.
     pub check_property_initialization: bool,
 
+    /// Whether to check each typed property only in the class that declares it, following every method of
+    /// that class its constructor calls.
+    #[serde(default)]
+    pub check_property_initialization_in_declaring_class: bool,
+
     /// Whether the variables a `for` loop defines stay defined after the loop.
     pub pollute_scope_with_loop_initial_assignments: bool,
 
@@ -553,6 +558,7 @@ impl AnalyzerConfiguration {
             trust_existence_checks: self.trust_existence_checks,
             class_initializers: self.class_initializers.iter().filter_map(|s| ClassInitializer::parse(s)).collect(),
             check_property_initialization: self.check_property_initialization,
+            check_property_initialization_in_declaring_class: self.check_property_initialization_in_declaring_class,
             pollute_scope_with_loop_initial_assignments: self.pollute_scope_with_loop_initial_assignments,
             pollute_scope_with_always_iterable_foreach: self.pollute_scope_with_always_iterable_foreach,
             pollute_scope_with_block: self.pollute_scope_with_block,
@@ -619,6 +625,7 @@ impl Default for AnalyzerConfiguration {
             trust_existence_checks: defaults.trust_existence_checks,
             class_initializers: vec![],
             check_property_initialization: defaults.check_property_initialization,
+            check_property_initialization_in_declaring_class: defaults.check_property_initialization_in_declaring_class,
             pollute_scope_with_loop_initial_assignments: defaults.pollute_scope_with_loop_initial_assignments,
             pollute_scope_with_always_iterable_foreach: defaults.pollute_scope_with_always_iterable_foreach,
             pollute_scope_with_block: defaults.pollute_scope_with_block,

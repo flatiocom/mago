@@ -282,8 +282,13 @@ where
         block_context.definitely_uninitialized_property_ids.remove(&property_access_id);
     }
 
-    if matches!(write_kind, PropertyWriteKind::Direct | PropertyWriteKind::Coalesce)
-        && block_context.flags.collect_initializations()
+    if matches!(
+        write_kind,
+        PropertyWriteKind::Direct
+            | PropertyWriteKind::Coalesce
+            | PropertyWriteKind::Reference
+            | PropertyWriteKind::OffsetWrite
+    ) && block_context.flags.collect_initializations()
         && let Expression::Variable(Variable::Direct(var)) = property_access.object
         && var.name == b"$this"
         && let ClassLikeMemberSelector::Identifier(ident) = &property_access.property

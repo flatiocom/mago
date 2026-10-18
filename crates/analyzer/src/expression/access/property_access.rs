@@ -32,6 +32,7 @@ use crate::error::AnalysisError;
 use crate::resolver::property::report_deprecated_property;
 use crate::resolver::property::resolve_declared_property;
 use crate::resolver::property::resolve_instance_properties;
+use crate::statement::class_like::initialization::report_read_before_initialization;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_property_access_expression_id;
 use crate::utils::expression::get_variable_id;
@@ -46,17 +47,32 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for PropertyAccess<'arena> {
     where
         A: Arena,
     {
-        analyze_property_access(
-            context,
-            block_context,
-            artifacts,
-            self.span(),
-            self.object,
-            self.arrow.span(),
-            &self.property,
-            false,
-        )
+        report_read_before_initialization(context, block_context, self.object, &self.property, self.span())?;
+
+        analyze_offset_write_root(context, block_context, artifacts, self)
     }
+}
+
+/// Analyzes the `$this->items` of `$this->items[] = $item`, which writes the property without reading it.
+pub(crate) fn analyze_offset_write_root<'ctx, 'arena, A>(
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+    property_access: &PropertyAccess<'arena>,
+) -> Result<(), AnalysisError>
+where
+    A: Arena,
+{
+    analyze_property_access(
+        context,
+        block_context,
+        artifacts,
+        property_access.span(),
+        property_access.object,
+        property_access.arrow.span(),
+        &property_access.property,
+        false,
+    )
 }
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for NullSafePropertyAccess<'arena> {
@@ -69,6 +85,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for NullSafePropertyAccess<'arena> {
     where
         A: Arena,
     {
+        report_read_before_initialization(context, block_context, self.object, &self.property, self.span())?;
+
         analyze_property_access(
             context,
             block_context,

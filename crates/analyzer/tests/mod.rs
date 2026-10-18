@@ -643,6 +643,16 @@ test_case!(short_ternary_with_truthy);
 test_case!(short_ternary_with_falsy);
 test_case!(conditional_type_narrowing);
 test_case!(conditional_initialization);
+test_case!(inherited_property_initialized_through_parent_chain);
+test_case!(property_initialization_switch_offset_reference);
+test_case!(property_initialization_try_catch);
+test_case!(property_read_before_initialization);
+test_case!(property_read_before_initialization_in_initializer, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_property_initialization_in_declaring_class = true;
+    s.class_initializers.push(mago_analyzer::settings::ClassInitializer::parse("ReadInInitBase::startup").unwrap());
+    s
+});
 test_case!(pure_inherited_by_override);
 test_case!(redundant_isset_check_like_phpstan);
 test_case!(scope_without_loop_and_block_pollution, {
@@ -650,6 +660,11 @@ test_case!(scope_without_loop_and_block_pollution, {
     s.pollute_scope_with_loop_initial_assignments = false;
     s.pollute_scope_with_always_iterable_foreach = false;
     s.pollute_scope_with_block = false;
+    s
+});
+test_case!(property_initialization_in_declaring_class, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_property_initialization_in_declaring_class = true;
     s
 });
 test_case!(type_is_not_narrowed_by_nested_conditional_exit);

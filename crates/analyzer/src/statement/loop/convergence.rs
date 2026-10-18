@@ -117,6 +117,7 @@ impl<'ctx> Snapshot<'ctx> {
         saved.inferred_parameter_types.clone_from(&artifacts.inferred_parameter_types);
         saved.method_initialized_properties.clone_from(&artifacts.method_initialized_properties);
         saved.method_calls_this_methods.clone_from(&artifacts.method_calls_this_methods);
+        saved.method_possibly_calls_this_methods.clone_from(&artifacts.method_possibly_calls_this_methods);
         saved.method_calls_parent_constructor.clone_from(&artifacts.method_calls_parent_constructor);
         saved.method_calls_parent_initializer.clone_from(&artifacts.method_calls_parent_initializer);
         saved.closure_bind_scope.clone_from(&artifacts.closure_bind_scope);
@@ -208,6 +209,7 @@ fn same_artifact_inputs(left: &AnalysisArtifacts, right: &AnalysisArtifacts) -> 
         }
         && left.method_initialized_properties == right.method_initialized_properties
         && left.method_calls_this_methods == right.method_calls_this_methods
+        && left.method_possibly_calls_this_methods == right.method_possibly_calls_this_methods
         && left.method_calls_parent_constructor == right.method_calls_parent_constructor
         && left.method_calls_parent_initializer == right.method_calls_parent_initializer
         && left.closure_bind_scope.as_ref().map(|scope| (scope.class_name, scope.has_this))

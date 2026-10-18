@@ -211,6 +211,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
         let mut original_block_context = try_block_context.clone();
         let mut definitely_newly_assigned_var_ids = newly_assigned_variable_ids;
         let mut previously_caught_types = WordSet::default();
+        let mut has_merged_catch_initializations = false;
 
         for (i, catch_clause) in self.catch_clauses.iter().enumerate() {
             let mut catch_block_context = original_block_context.clone();
@@ -377,6 +378,15 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
                 let end_action_only =
                     try_block_control_actions.len() == 1 && try_block_control_actions.contains(ControlAction::End);
 
+                if block_context.flags.collect_initializations() {
+                    merge_catch_initializations(
+                        block_context,
+                        &catch_block_context,
+                        end_action_only && !has_merged_catch_initializations,
+                    );
+                    has_merged_catch_initializations = true;
+                }
+
                 for (variable_id, variable_type) in &catch_block_context.locals {
                     if end_action_only {
                         block_context.locals.insert(*variable_id, Rc::clone(variable_type));
@@ -481,6 +491,12 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
 
             finally_has_returned = finally_block_context.flags.has_returned();
             block_context.possibly_undefined_variable_ids.extend(finally_block_context.possibly_undefined_variable_ids);
+            block_context
+                .definitely_initialized_properties
+                .extend(finally_block_context.definitely_initialized_properties);
+            block_context.possibly_initialized_properties.extend(finally_block_context.possibly_initialized_properties);
+            block_context.definitely_called_methods.extend(finally_block_context.definitely_called_methods);
+            block_context.called_methods.extend(finally_block_context.called_methods);
 
             for (variable_id, _) in finally_block_context.assigned_variable_ids {
                 let finally_variable_type = finally_block_context.locals.remove(&variable_id);
@@ -543,6 +559,33 @@ fn restore_loop_final_actions(loop_scope: &mut LoopScope, final_actions: &[Contr
     if let Some(parent_loop) = loop_scope.parent_loop.as_deref_mut() {
         restore_loop_final_actions(parent_loop, parent_final_actions);
     }
+}
+
+/// A catch that falls through keeps only what it assigns as well, or, when the try block never falls
+/// through, replaces what the try block assigned with what it assigns.
+fn merge_catch_initializations(
+    block_context: &mut BlockContext<'_>,
+    catch_block_context: &BlockContext<'_>,
+    replace: bool,
+) {
+    if replace {
+        block_context
+            .definitely_initialized_properties
+            .clone_from(&catch_block_context.definitely_initialized_properties);
+        block_context.definitely_called_methods.clone_from(&catch_block_context.definitely_called_methods);
+    } else {
+        block_context
+            .definitely_initialized_properties
+            .retain(|property| catch_block_context.definitely_initialized_properties.contains(property));
+        block_context
+            .definitely_called_methods
+            .retain(|method| catch_block_context.definitely_called_methods.contains(method));
+    }
+
+    block_context
+        .possibly_initialized_properties
+        .extend(catch_block_context.possibly_initialized_properties.iter().copied());
+    block_context.called_methods.extend(catch_block_context.called_methods.iter().copied());
 }
 
 /// Intersects definitely defined locals from paths that can enter the same catch clause.

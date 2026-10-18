@@ -74,6 +74,8 @@ mod variable_type_overwrite;
 pub(crate) enum PropertyWriteKind {
     Direct,
     Coalesce,
+    Reference,
+    OffsetWrite,
     Mutation,
     ArrayAccessMutation,
 }
@@ -264,7 +266,7 @@ where
     let property_write_kind = match assignment_operator {
         Some(AssignmentOperator::Coalesce(_)) => PropertyWriteKind::Coalesce,
         Some(_) => PropertyWriteKind::Mutation,
-        None if source_expression.is_some_and(Expression::is_reference) => PropertyWriteKind::Mutation,
+        None if source_expression.is_some_and(Expression::is_reference) => PropertyWriteKind::Reference,
         None => PropertyWriteKind::Direct,
     };
 

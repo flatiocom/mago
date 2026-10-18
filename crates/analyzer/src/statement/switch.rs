@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use foldhash::HashMap;
+use foldhash::HashSet;
 
 use mago_algebra::AssertionMap;
 use mago_algebra::clause::Clause;
@@ -95,6 +96,8 @@ where
     reachable_case_statements: Vec<bool>,
     seen_case_condition_types: Vec<(Rc<TUnion>, Span)>,
     has_default_case: bool,
+    definitely_initialized_properties: Option<WordSet>,
+    definitely_called_methods: Option<HashSet<Word>>,
 }
 
 impl<'anlyz, 'ctx, 'arena, A> SwitchAnalyzer<'anlyz, 'ctx, 'arena, A>
@@ -130,6 +133,8 @@ where
             reachable_case_statements: vec![],
             seen_case_condition_types: vec![],
             has_default_case: false,
+            definitely_initialized_properties: None,
+            definitely_called_methods: None,
         }
     }
 
@@ -273,6 +278,16 @@ where
                         .as_ref()
                         .is_some_and(|id| final_else_context.locals.get(id).is_some_and(|t| t.is_never()))
             };
+
+        if is_exhaustive && self.block_context.flags.collect_initializations() {
+            if let Some(properties) = self.definitely_initialized_properties.take() {
+                self.block_context.definitely_initialized_properties.extend(properties);
+            }
+
+            if let Some(methods) = self.definitely_called_methods.take() {
+                self.block_context.definitely_called_methods.extend(methods);
+            }
+        }
 
         let mut possibly_redefined_vars = self.possibly_redefined_variables.unwrap_or_default();
         if let Some(new_locals) = self.new_locals {
@@ -772,6 +787,12 @@ where
             self.handle_non_returning_case(&case_block_context, original_block_context, case_exit_type);
         }
 
+        if !matches!(case_exit_type, ControlAction::Return | ControlAction::Continue)
+            && self.block_context.flags.collect_initializations()
+        {
+            self.intersect_case_initializations(&case_block_context);
+        }
+
         inherit_branch_context_properties(self.context, self.block_context, &case_block_context);
 
         if let Some(break_vars) = &case_scope.break_vars {
@@ -901,6 +922,28 @@ where
             self.seen_case_condition_types.push((condition_type, condition.span()));
             false
         }
+    }
+
+    fn intersect_case_initializations(&mut self, case_block_context: &BlockContext<'ctx>) {
+        match &mut self.definitely_initialized_properties {
+            Some(properties) => {
+                properties.retain(|property| case_block_context.definitely_initialized_properties.contains(property));
+            }
+            None => {
+                self.definitely_initialized_properties =
+                    Some(case_block_context.definitely_initialized_properties.clone());
+            }
+        }
+
+        match &mut self.definitely_called_methods {
+            Some(methods) => methods.retain(|method| case_block_context.definitely_called_methods.contains(method)),
+            None => self.definitely_called_methods = Some(case_block_context.definitely_called_methods.clone()),
+        }
+
+        self.block_context
+            .possibly_initialized_properties
+            .extend(case_block_context.possibly_initialized_properties.iter().copied());
+        self.block_context.called_methods.extend(case_block_context.called_methods.iter().copied());
     }
 
     fn handle_non_returning_case(

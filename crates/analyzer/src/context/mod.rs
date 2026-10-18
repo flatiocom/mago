@@ -67,6 +67,7 @@ where
     pub(super) additional_symbol_references: Option<&'ctx SymbolReferences>,
     pub(super) property_types: HashMap<(Word, bool), PropertyTypes>,
     class_initializers: WordMap<WordSet>,
+    pub(crate) constructor_initialized_properties: WordMap<WordSet>,
 }
 
 impl<'ctx, 'arena, A> Context<'ctx, 'arena, A>
@@ -103,6 +104,7 @@ where
             additional_symbol_references,
             property_types: HashMap::default(),
             class_initializers: WordMap::default(),
+            constructor_initialized_properties: WordMap::default(),
         }
     }
 

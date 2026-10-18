@@ -119,6 +119,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `pollute-scope-with-always-iterable-foreach` | `true` | When `false`, the variables a `foreach` over a non-empty iterable defines are possibly undefined after the loop, like PHPStan's `polluteScopeWithAlwaysIterableForeach: false`. |
 | `pollute-scope-with-block` | `true` | When `false`, the variables a bare `{ ... }` block defines are possibly undefined after it, like PHPStan's `polluteScopeWithBlock: false`. |
 | `check-property-initialization` | `false` | Verify that typed properties are initialised in a constructor or class initialiser. |
+| `check-property-initialization-in-declaring-class` | `false` | Check each typed property once, in the class that declares it, like PHPStan. See [Property initialization](#property-initialization). |
 | `check-use-statements` | `false` | Report use statements that import non-existent classes, functions, or constants. |
 | `check-name-casing` | `false` | Report incorrect casing when referencing classes, functions, etc. Helps prevent autoload failures on case-sensitive filesystems. |
 | `enforce-class-finality` | `false` | Report classes that are not `final`, `abstract`, or annotated `@api` and have no children. |
@@ -132,7 +133,9 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 When `check-property-initialization` is enabled, the analyzer reports two issues:
 
 - `missing-constructor` for classes with typed properties and no constructor.
-- `uninitialized-property` for typed properties not assigned in the constructor.
+- `uninitialized-property` for typed properties not assigned in the constructor, and for a constructor read of `$this->property` before its first assignment.
+
+By default every concrete class is checked against the properties it inherits too, and only private or final methods the constructor calls in every branch count as assigning a property. `check-property-initialization-in-declaring-class` checks each property once instead, in the class that declares it or uses its trait, abstract classes included. Every method of that class the constructor calls on `$this` counts, in any branch, and each unassigned property is reported as `uninitialized-property`, also in a class without a constructor, so `missing-constructor` is not reported.
 
 `class-initializers` lets you mark additional methods that should count as initialisers, alongside `__construct`. Properties assigned in those methods are treated as definitely initialised. This is useful for frameworks that use lifecycle methods.
 

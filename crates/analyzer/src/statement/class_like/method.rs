@@ -102,6 +102,12 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
 
             let method_key = (class_like_metadata.name, lowercase_method_name);
 
+            if lowercase_method_name.as_bytes() == b"__construct" {
+                context
+                    .constructor_initialized_properties
+                    .insert(class_like_metadata.name, method_block_context.definitely_initialized_properties.clone());
+            }
+
             artifacts
                 .method_initialized_properties
                 .insert(method_key, std::mem::take(&mut method_block_context.definitely_initialized_properties));
