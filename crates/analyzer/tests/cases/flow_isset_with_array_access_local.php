@@ -6,7 +6,7 @@ function flow_isset_with_array_access_local(): string
 {
     $arr = ['name' => 'alice'];
 
-    /** @mago-expect analysis:redundant-condition */
+    /** @mago-expect analysis:redundant-condition,redundant-isset-check */
     if (isset($arr['name'])) {
         return $arr['name'];
     }

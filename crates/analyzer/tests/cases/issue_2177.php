@@ -82,7 +82,7 @@ final class Issue2177RealProperty
     public ?string $nullable = null;
 
     /**
-     * @mago-expect analysis:redundant-condition
+     * @mago-expect analysis:redundant-condition,redundant-isset-check
      */
     public function alwaysSet(): void
     {

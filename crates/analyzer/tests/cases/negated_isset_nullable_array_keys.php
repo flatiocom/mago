@@ -158,7 +158,7 @@ function absentAfterNullableGuard(array $array): void
  */
 function requiredNonNullTemplateKey(array $array): void
 {
-    // @mago-expect analysis:impossible-condition
+    // @mago-expect analysis:impossible-condition,redundant-isset-check
     if (!isset($array['value'])) {
     }
 }

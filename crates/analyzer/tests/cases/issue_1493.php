@@ -19,7 +19,7 @@ if ($last && !in_array($last, $ia, strict: true)) {
 
 // @mago-expect analysis:redundant-condition
 if (count($ia)) {
-    // @mago-expect analysis:impossible-condition
+    // @mago-expect analysis:impossible-condition,redundant-isset-check
     echo '0' . (!isset($ia[0]) ? '-' : $ia[0]) . "\n";
     echo '1' . (!isset($ia[1]) ? '-' : $ia[1]) . "\n";
 }

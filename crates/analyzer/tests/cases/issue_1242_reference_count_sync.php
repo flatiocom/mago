@@ -14,7 +14,7 @@ final class Repro
 
         $wave = &$riff['WAVE'];
 
-        if (isset($wave['rgad'][0]['data'])) { // @mago-expect analysis:redundant-condition
+        if (isset($wave['rgad'][0]['data'])) { // @mago-expect analysis:redundant-condition,redundant-isset-check
             $rgadData = &$wave['rgad'][0]['data'];
             $rgad = &$riffRaw['rgad'];
             $track = &$rgad['track'];

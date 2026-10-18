@@ -1,4 +1,5 @@
 use mago_allocator::Arena;
+use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::object::named::TNamedObject;
@@ -8,14 +9,18 @@ use mago_codex::ttype::get_bool;
 use mago_codex::ttype::get_false;
 use mago_codex::ttype::get_true;
 use mago_codex::ttype::union::TUnion;
+use mago_reporting::Annotation;
+use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Expression;
+use mago_word::Word;
 use mago_word::word;
 
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
+use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
@@ -116,7 +121,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Binary<'arena> {
 
 fn compute_instanceof_type<A>(
     binary: &Binary<'_>,
-    context: &Context<'_, '_, A>,
+    context: &mut Context<'_, '_, A>,
     block_context: &BlockContext<'_>,
     artifacts: &AnalysisArtifacts,
 ) -> TUnion
@@ -154,14 +159,44 @@ where
     );
 
     if is_already_subtype {
+        if !block_context.flags.inside_conditional() && !matches!(binary.rhs, Expression::Static(_)) {
+            report_constant_instanceof(context, binary, lhs_type, class_name, true);
+        }
+
         return get_true();
     }
 
     if !union_comparator::can_expression_types_be_identical(context.codebase, lhs_type, &target_type, true, false) {
+        if !block_context.flags.inside_conditional() {
+            report_constant_instanceof(context, binary, lhs_type, class_name, false);
+        }
+
         get_false()
     } else {
         get_bool()
     }
+}
+
+fn report_constant_instanceof<A>(
+    context: &mut Context<'_, '_, A>,
+    binary: &Binary<'_>,
+    lhs_type: &TUnion,
+    class_name: Word,
+    outcome: bool,
+) where
+    A: Arena,
+{
+    let code = if outcome { IssueCode::RedundantTypeComparison } else { IssueCode::ImpossibleTypeComparison };
+
+    context.collector.report_with_code(
+        code,
+        Issue::warning(format!(
+            "Instanceof between `{}` and `{class_name}` will always evaluate to {outcome}.",
+            lhs_type.get_id()
+        ))
+        .with_annotation(Annotation::primary(binary.span()).with_message(format!("This check is always {outcome}")))
+        .with_help("Remove the check, or fix the type of the checked value."),
+    );
 }
 
 #[cfg(test)]
@@ -640,6 +675,240 @@ mod tests {
                 {
                     return $this->classname;
                 }
+            }
+        "},
+    }
+
+    test_analysis! {
+        name = instanceof_of_the_same_class_is_always_true,
+        code = indoc! {"
+            <?php
+
+            class Box {}
+
+            function check(Box $box): bool
+            {
+                return $box instanceof Box;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_of_a_parent_class_is_always_true,
+        code = indoc! {"
+            <?php
+
+            interface Shape {}
+            class Base implements Shape {}
+            class Box extends Base {}
+
+            function is_base(Box $box): bool
+            {
+                return $box instanceof Base;
+            }
+
+            function is_shape(Box $box): bool
+            {
+                return $box instanceof Shape;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantTypeComparison,
+            IssueCode::RedundantTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_this_against_self_is_always_true,
+        code = indoc! {"
+            <?php
+
+            class Box
+            {
+                public function isBox(): bool
+                {
+                    return $this instanceof self;
+                }
+            }
+        "},
+        issues = [
+            IssueCode::RedundantTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_in_a_condition_is_reported_once,
+        code = indoc! {"
+            <?php
+
+            class Box {}
+
+            function check(Box $box): int
+            {
+                if ($box instanceof Box) {
+                    return 1;
+                }
+
+                return 0;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantCondition,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_on_the_left_of_an_or_is_left_to_the_logical_operation_check,
+        code = indoc! {"
+            <?php
+
+            class Box {}
+
+            function check(Box $box, bool $flag): bool
+            {
+                $result = $box instanceof Box || $flag;
+
+                return $result;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantLogicalOperation,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_that_can_fail_is_not_reported,
+        code = indoc! {"
+            <?php
+
+            class Base {}
+            class Box extends Base {}
+
+            function nullable(?Box $box): bool
+            {
+                return $box instanceof Box;
+            }
+
+            function parent_against_child(Base $base): bool
+            {
+                return $base instanceof Box;
+            }
+
+            function any_object(object $value): bool
+            {
+                return $value instanceof Box;
+            }
+
+            function anything(mixed $value): bool
+            {
+                return $value instanceof Box;
+            }
+
+            class Shelf
+            {
+                public function holds(self $other): bool
+                {
+                    return $other instanceof static;
+                }
+            }
+        "},
+    }
+
+    test_analysis! {
+        name = instanceof_unrelated_class_is_impossible,
+        code = indoc! {"
+            <?php
+
+            class Box {}
+            class Clock {}
+
+            function check(Box $box): bool
+            {
+                return $box instanceof Clock;
+            }
+        "},
+        issues = [
+            IssueCode::ImpossibleTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_on_scalar_is_impossible,
+        code = indoc! {"
+            <?php
+
+            class Box {}
+
+            function check(int $value): bool
+            {
+                return $value instanceof Box;
+            }
+        "},
+        issues = [
+            IssueCode::ImpossibleTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_this_against_sibling_class_is_impossible,
+        code = indoc! {"
+            <?php
+
+            abstract class Base {}
+            abstract class Front extends Base {}
+            abstract class Web extends Base
+            {
+                public function isFront(): bool
+                {
+                    return $this instanceof Front;
+                }
+            }
+        "},
+        issues = [
+            IssueCode::ImpossibleTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = instanceof_that_can_match_is_not_reported,
+        code = indoc! {"
+            <?php
+
+            interface Shape {}
+            class Base {}
+            class Box extends Base {}
+
+            function open_class_against_interface(Box $box): bool
+            {
+                return $box instanceof Shape;
+            }
+
+            function interface_against_class(Shape $shape): bool
+            {
+                return $shape instanceof Box;
+            }
+
+            function parent_against_child(Base $base): bool
+            {
+                return $base instanceof Box;
+            }
+
+            function object_against_class(object $value): bool
+            {
+                return $value instanceof Box;
+            }
+
+            function mixed_against_class(mixed $value): bool
+            {
+                return $value instanceof Box;
+            }
+
+            function nullable_against_class(?Box $box): bool
+            {
+                return $box instanceof Box;
             }
         "},
     }

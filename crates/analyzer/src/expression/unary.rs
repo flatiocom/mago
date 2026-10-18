@@ -50,6 +50,7 @@ use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::cst::BinaryOperator;
+use mago_syntax::cst::Construct;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::UnaryPostfix;
 use mago_syntax::cst::UnaryPostfixOperator;
@@ -60,6 +61,7 @@ use mago_text_edit::TextEdit;
 
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
+use crate::artifacts::get_expression_range;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
@@ -185,6 +187,11 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPrefix<'arena> {
                     Some(t) if t.is_always_falsy() => get_true(),
                     _ => get_bool(),
                 };
+
+                if !block_context.flags.inside_conditional() && (resulting_type.is_true() || resulting_type.is_false())
+                {
+                    report_constant_negation(self, resulting_type.is_true(), context, artifacts);
+                }
 
                 artifacts.set_expression_type(self, resulting_type);
             }
@@ -1145,6 +1152,64 @@ where
     }
 
     Ok(resulting_type_union)
+}
+
+fn report_constant_negation<A>(
+    negation: &UnaryPrefix<'_>,
+    is_always_true: bool,
+    context: &mut Context<'_, '_, A>,
+    artifacts: &AnalysisArtifacts,
+) where
+    A: Arena,
+{
+    if is_checked_by_its_own_rule(negation.operand, artifacts) {
+        return;
+    }
+
+    let (code, outcome) = if is_always_true {
+        (IssueCode::RedundantCondition, "true")
+    } else {
+        (IssueCode::ImpossibleCondition, "false")
+    };
+
+    context.collector.report_with_code(
+        code,
+        Issue::warning(format!("Negated boolean expression is always {outcome}."))
+            .with_annotation(
+                Annotation::primary(negation.span())
+                    .with_message(format!("This negation always evaluates to {outcome}")),
+            )
+            .with_help("Remove the negation, or fix the type of the negated expression."),
+    );
+}
+
+fn is_checked_by_its_own_rule(operand: &Expression<'_>, artifacts: &AnalysisArtifacts) -> bool {
+    match operand {
+        Expression::Parenthesized(parenthesized) => is_checked_by_its_own_rule(parenthesized.expression, artifacts),
+        Expression::Call(call) => {
+            let range = get_expression_range(call);
+
+            artifacts.if_true_assertions.contains_key(&range) || artifacts.if_false_assertions.contains_key(&range)
+        }
+        Expression::Binary(binary) => matches!(
+            binary.operator,
+            BinaryOperator::Equal(_)
+                | BinaryOperator::NotEqual(_)
+                | BinaryOperator::AngledNotEqual(_)
+                | BinaryOperator::Identical(_)
+                | BinaryOperator::NotIdentical(_)
+                | BinaryOperator::LessThan(_)
+                | BinaryOperator::LessThanOrEqual(_)
+                | BinaryOperator::GreaterThan(_)
+                | BinaryOperator::GreaterThanOrEqual(_)
+                | BinaryOperator::And(_)
+                | BinaryOperator::Or(_)
+                | BinaryOperator::Instanceof(_)
+        ),
+        Expression::UnaryPrefix(unary) => matches!(unary.operator, UnaryPrefixOperator::Not(_)),
+        Expression::Conditional(_) | Expression::Construct(Construct::Isset(_) | Construct::Empty(_)) => true,
+        _ => false,
+    }
 }
 
 fn report_redundant_type_cast<'ast, 'arena, A>(
@@ -2441,5 +2506,259 @@ mod tests {
         issues = [
             IssueCode::DeprecatedFeature,
         ]
+    }
+
+    test_analysis! {
+        name = negation_of_a_truthy_value_is_always_false,
+        code = indoc! {"
+            <?php
+
+            function negate_true(): bool
+            {
+                $t = true;
+
+                return !$t;
+            }
+        "},
+        issues = [
+            IssueCode::ImpossibleCondition,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_of_a_falsy_value_is_always_true,
+        code = indoc! {"
+            <?php
+
+            function negate_false(): bool
+            {
+                $f = false;
+
+                return !$f;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantCondition,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_in_a_condition_is_left_to_the_condition_check,
+        code = indoc! {"
+            <?php
+
+            function template_exists(string $path): bool
+            {
+                return $path !== '/missing.html';
+            }
+
+            function template_path(string $dir): string
+            {
+                $path = $dir . '/default.html';
+                if (!$path || !template_exists($path)) {
+                    $path = $dir . '/archive.html';
+                }
+
+                return $path;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantCondition,
+            IssueCode::RedundantLogicalOperation,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_as_a_whole_condition_is_reported_once,
+        code = indoc! {"
+            <?php
+
+            function guard(): int
+            {
+                $t = true;
+                if (!$t) {
+                    return 0;
+                }
+
+                return 1;
+            }
+        "},
+        issues = [
+            IssueCode::ImpossibleCondition,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_on_the_left_of_an_or_is_left_to_the_logical_operation_check,
+        code = indoc! {"
+            <?php
+
+            function negate_left(bool $flag): bool
+            {
+                $t = true;
+                $result = !$t || $flag;
+
+                return $result;
+            }
+        "},
+        issues = [
+            IssueCode::RedundantCondition,
+            IssueCode::RedundantLogicalOperation,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_of_an_operand_with_its_own_rule_is_not_reported_again,
+        code = indoc! {"
+            <?php
+
+            final class Box {}
+
+            function negate_and(): bool
+            {
+                $t = true;
+
+                return !($t && $t);
+            }
+
+            function negate_or(): bool
+            {
+                $t = true;
+
+                return !($t || $t);
+            }
+
+            function negate_instanceof(Box $box): bool
+            {
+                return !($box instanceof Box);
+            }
+
+            function negate_ternary(bool $flag): bool
+            {
+                return !($flag ? 'a' : 'b');
+            }
+
+            function negate_isset(): bool
+            {
+                $value = 1;
+
+                return !isset($value);
+            }
+
+            function negate_empty(): bool
+            {
+                $value = 1;
+
+                return !empty($value);
+            }
+        "},
+        issues = [
+            IssueCode::RedundantLogicalOperation,
+            IssueCode::RedundantLogicalOperation,
+            IssueCode::RedundantLogicalOperation,
+            IssueCode::RedundantTypeComparison,
+            IssueCode::RedundantIssetCheck,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_passed_as_an_argument_is_reported,
+        code = indoc! {"
+            <?php
+
+            function flag(bool $value): bool
+            {
+                return $value;
+            }
+
+            function pass(): bool
+            {
+                $f = false;
+
+                return flag(!$f);
+            }
+        "},
+        issues = [
+            IssueCode::RedundantCondition,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_of_a_value_that_may_be_either_is_not_reported,
+        code = indoc! {"
+            <?php
+
+            function negate(bool $flag, ?string $value): bool
+            {
+                return !$flag && !$value;
+            }
+        "}
+    }
+
+    test_analysis! {
+        name = negation_of_a_check_with_its_own_report_is_not_reported_again,
+        code = indoc! {"
+            <?php
+
+            function negate_identity(int $i): bool
+            {
+                return !($i === null);
+            }
+        "},
+        issues = [
+            IssueCode::RedundantComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_of_a_type_check_call_is_left_to_the_type_check,
+        code = indoc! {"
+            <?php
+
+            /**
+             * @assert-if-true list<int> $value
+             *
+             * @return ($value is list<int> ? true : false)
+             */
+            function is_id_list(mixed $value): bool
+            {
+                return $value === [];
+            }
+
+            /**
+             * @param list<int> $ids
+             */
+            function ids_invalid(array $ids): bool
+            {
+                return !is_id_list($ids);
+            }
+        "},
+        issues = [
+            IssueCode::RedundantTypeComparison,
+        ]
+    }
+
+    test_analysis! {
+        name = negation_of_a_flag_a_loop_flips_is_not_reported,
+        code = indoc! {"
+            <?php
+
+            function coin(int $seed): bool
+            {
+                return $seed % 7 === 3;
+            }
+
+            function poll(): int
+            {
+                $done = false;
+                $tries = 0;
+                while (!$done) {
+                    $tries++;
+                    $done = coin($tries);
+                }
+
+                return $tries;
+            }
+        "}
     }
 }

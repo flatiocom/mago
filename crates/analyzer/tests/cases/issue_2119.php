@@ -26,7 +26,7 @@ try {
     // $foo is surely defined in all catch blocks because the literal 1 cannot throw.
     $foo = 1;
 
-    // @mago-expect analysis:redundant-condition
+    // @mago-expect analysis:redundant-condition,redundant-isset-check
     if (isset($foo)) {
     }
 
@@ -34,7 +34,7 @@ try {
     $baz = doBaz();
 } catch (\InvalidArgumentException $e) {
     // $foo is always defined.
-    // @mago-expect analysis:redundant-condition
+    // @mago-expect analysis:redundant-condition,redundant-isset-check
     if (isset($foo)) {
     }
 
@@ -45,10 +45,10 @@ try {
     }
 } catch (\RuntimeException $e) {
     // $foo and $bar are always defined.
-    // @mago-expect analysis:redundant-condition
+    // @mago-expect analysis:redundant-condition,redundant-isset-check
     if (isset($foo)) {
     }
-    // @mago-expect analysis:redundant-condition
+    // @mago-expect analysis:redundant-condition,redundant-isset-check
     if (isset($bar)) {
     }
 
@@ -66,7 +66,7 @@ function catch_union(): void
         doBaz();
     } catch (\InvalidArgumentException|\RuntimeException) {
         // Every throw site is reached after this assignment.
-        // @mago-expect analysis:redundant-condition
+        // @mago-expect analysis:redundant-condition,redundant-isset-check
         if (isset($alwaysDefined)) {
         }
 
