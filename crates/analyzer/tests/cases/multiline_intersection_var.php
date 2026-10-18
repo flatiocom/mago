@@ -66,6 +66,7 @@ function testSpacedIntersectionVar(): void
  */
 function testSpacedUnionVar(): void
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var int | string $y Spaced union */
     $y = rand(0, 1) ? 42 : 'hello';
     echo $y;

@@ -105,6 +105,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Static<'arena> {
                         &docblock_type,
                         docblock_type_span,
                         initial_value,
+                        false,
                     );
 
                     docblock_type

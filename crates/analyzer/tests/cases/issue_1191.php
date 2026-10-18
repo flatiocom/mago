@@ -60,12 +60,10 @@ class Foo
     }
 }
 
-function multi(
-    // @mago-expect analysis:imprecise-type
+function multi( // @mago-expect analysis:imprecise-type(3)
     array $a,
-    // @mago-expect analysis:imprecise-type
     iterable $b,
-): array { // @mago-expect analysis:imprecise-type
+): array {
     return [];
 }
 

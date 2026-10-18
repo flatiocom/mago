@@ -113,6 +113,8 @@ where
         }
     }
 
+    crate::utils::casing::check_method_call_casing(context, &result.resolved_methods, method_selector);
+
     if let Some(editor) = &mut artifacts.editor {
         editor.record_methods(
             context.codebase,

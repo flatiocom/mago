@@ -109,6 +109,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `check-missing-type-hints` | `false` | Report missing type hints on parameters, properties, and return types. |
 | `check-closure-missing-type-hints` | `false` | Extend the type-hint check to closures (requires `check-missing-type-hints`). |
 | `check-arrow-function-missing-type-hints` | `false` | Extend the type-hint check to arrow functions (requires `check-missing-type-hints`). |
+| `check-closure-and-arrow-function-parameter-type-hints` | `false` | Report untyped parameters of closures and arrow functions, even when inferable. Works without `check-missing-type-hints`; return types are not covered. |
 | `allow-implicit-pipe-callable-types` | `false` | Skip the closure / arrow-function type-hint checks when the callable is the right-hand side of `\|>`. |
 | `register-super-globals` | `true` | Register PHP superglobals like `$_GET` and `$_POST` automatically. |
 | `trust-existence-checks` | `true` | Narrow types based on `method_exists()`, `property_exists()`, `function_exists()`, and `defined()`. |

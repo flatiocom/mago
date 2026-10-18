@@ -21,6 +21,7 @@ use crate::statement::attributes::analyze_attributes;
 use crate::statement::function_like::FunctionLikeBody;
 use crate::statement::function_like::analyze_function_like;
 use crate::statement::function_like::check_unused_function_template_parameters;
+use crate::statement::function_like::report_parameter_template_bound_violations;
 use crate::statement::function_like::unused_parameter;
 use crate::utils::missing_type_hints;
 
@@ -148,9 +149,16 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Function<'arena> {
             self.span(),
         );
 
+        let declaration = Some(Span::between(self.span(), self.name.span()));
         // Check for imprecise type hints (bare `array` or `iterable`)
         for (i, parameter) in self.parameter_list.parameters.iter().enumerate() {
-            missing_type_hints::check_imprecise_parameter_type_hint(context, function_metadata, parameter, i);
+            missing_type_hints::check_imprecise_parameter_type_hint(
+                context,
+                function_metadata,
+                parameter,
+                i,
+                declaration,
+            );
         }
 
         missing_type_hints::check_imprecise_return_type_hint(
@@ -158,7 +166,24 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Function<'arena> {
             function_metadata,
             self.name.value,
             self.return_type_hint.as_ref(),
+            declaration,
         );
+
+        missing_type_hints::check_function_like_callable_signatures(
+            context,
+            function_metadata,
+            self.name.span(),
+            &format!("function `{}`", function_metadata.original_name),
+        );
+
+        missing_type_hints::check_function_like_template_arguments(
+            context,
+            function_metadata,
+            self.name.span(),
+            &format!("function `{}`", function_metadata.original_name),
+        );
+
+        report_parameter_template_bound_violations(context, function_metadata, None);
 
         Ok(())
     }

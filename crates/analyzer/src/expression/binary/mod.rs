@@ -106,6 +106,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Binary<'arena> {
                         false,
                     );
 
+                    crate::utils::casing::check_class_like_casing(context, word(class_name), identifier.span());
+
                     if !context.codebase.class_like_exists(class_name) {
                         report_non_existent_class_like(context, identifier.span(), word(class_name));
                     }

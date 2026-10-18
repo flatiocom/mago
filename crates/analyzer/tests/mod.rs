@@ -701,6 +701,13 @@ test_case!(match_expression);
 test_case!(match_arm_reaching);
 test_case!(missing_constructor);
 test_case!(missing_property_type, crate::framework::check_missing_type_hints_settings());
+test_case!(missing_callable_signature, crate::framework::check_missing_type_hints_settings());
+test_case!(missing_callable_signature_disabled);
+test_case!(missing_template_arguments, crate::framework::check_missing_type_hints_settings());
+test_case!(missing_template_arguments_are_left_alone_without_missing_type_hints);
+test_case!(var_tag_missing_template_arguments, crate::framework::check_missing_type_hints_settings());
+test_case!(template_bound_in_parameter);
+test_case!(var_docblock_against_native_type);
 test_case!(property_initialization);
 test_case!(docblock_declared_members_undefined_types);
 test_case!(parent_constructor_init);
@@ -899,6 +906,7 @@ test_case!(unused_template_parameter);
 test_case!(unused_function_template_parameter);
 test_case!(unused_method);
 test_case!(unused_property);
+test_case!(docblock_var_widens_inferred_type);
 test_case!(redundant_int_cast);
 test_case!(unused_edge_cases);
 test_case!(uninitialized_property);
@@ -1017,6 +1025,11 @@ test_case!(pipe_callable_no_implicit_types_warns, {
     s.allow_implicit_pipe_callable_types = false;
     s
 });
+test_case!(closure_and_arrow_function_parameter_type_hints, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_closure_and_arrow_function_parameter_type_hints = true;
+    s
+});
 test_case!(pipe_callable_implicit_types_outside_pipe_warns, {
     let mut s = crate::framework::default_test_settings();
     s.check_missing_type_hints = true;
@@ -1066,6 +1079,11 @@ test_case!(new_and_template_type_utilities);
 test_case!(overly_wide_return_type, {
     let mut s = crate::framework::default_test_settings();
     s.find_overly_wide_return_types = true;
+    s
+});
+test_case!(missing_type_hint_without_native_equivalent, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_missing_type_hints = true;
     s
 });
 test_case!(side_effects_in_condition, {
@@ -2412,6 +2430,7 @@ test_case!(issue_1031);
 test_case!(issue_1038);
 test_case!(issue_1040);
 test_case!(issue_1045);
+test_case!(class_like_casing_in_type_hints, crate::framework::check_name_casing_settings());
 test_case!(issue_1048, {
     let mut s = crate::framework::default_test_settings();
     s.check_name_casing = true;
@@ -2674,6 +2693,7 @@ test_case!(issue_1679);
 test_case!(issue_1682);
 test_case!(issue_1682_php90, crate::framework::php_90_settings());
 test_case!(issue_1680, crate::framework::check_name_casing_settings());
+test_case!(incorrect_method_casing, crate::framework::check_name_casing_settings());
 test_case!(date_interval_days_after_diff_is_int);
 test_case!(issue_1678);
 test_case!(issue_1686);
@@ -2950,6 +2970,13 @@ test_case!(foreach_empty_array_analyze_dead_code, {
 test_case!(object_compared_with_number);
 test_case!(mixed_operand_reported_once_per_operation);
 test_case!(concat_operand_reported_at_operation_start);
+test_case!(imprecise_var_tag_type, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_missing_type_hints = true;
+    s
+});
+test_case!(foreach_var_tag_widening);
+test_case!(docblock_var_string_over_empty_or_non_empty);
 test_case!(composite_string_non_falsy);
 test_case!(mixed_operand_arithmetic_result);
 test_case!(conditional_parent_return_covariance);
@@ -2966,6 +2993,7 @@ test_case!(array_access_union_offset_write_remembered, {
     s
 });
 test_case!(conditional_return_empty_array_is_not_non_empty);
+test_case!(imprecise_signature_type_on_declaration_line, crate::framework::check_missing_type_hints_settings());
 test_case!(key_of_non_empty_array_like_phpstan);
 test_case!(clone_drops_non_object_like_phpstan);
 test_case!(debug_backtrace_shape_like_phpstan);

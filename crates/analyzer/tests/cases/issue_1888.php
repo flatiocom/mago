@@ -11,6 +11,7 @@ interface B {}
 /** @return list{A, B} */
 function test(A $module): array
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var B $module🤔_lorem_ipsum_dolor_sit_amet_consete */
     $module🤔_lorem_ipsum_dolor_sit_amet_consete = new class implements B {};
 

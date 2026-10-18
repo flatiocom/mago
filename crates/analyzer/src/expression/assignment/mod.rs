@@ -53,6 +53,7 @@ use crate::error::AnalysisError;
 use crate::expression::find_expression_logic_issues;
 use crate::formula::get_formula;
 use crate::resolver::function::is_builtin_function_call;
+use crate::utils::docblock::check_docblock_type_against_native_type;
 use crate::utils::docblock::check_docblock_type_incompatibility;
 use crate::utils::docblock::get_type_from_var_docblock;
 use crate::utils::expression::array::get_array_target_type_given_index;
@@ -667,15 +668,32 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
     if let Some((variable_type, variable_type_span)) =
         get_type_from_var_docblock(context, block_context, artifacts, Some(variable_id.as_bytes()), !destructuring)
     {
-        check_docblock_type_incompatibility(
-            context,
-            Some(variable_id.as_bytes()),
-            variable_span,
-            &assigned_type,
-            &variable_type,
-            variable_type_span,
-            source_expression,
-        );
+        let is_outside_native_type = !destructuring
+            && source_expression.is_some_and(|source_expression| {
+                check_docblock_type_against_native_type(
+                    context,
+                    block_context,
+                    artifacts,
+                    variable_id.as_bytes(),
+                    &assigned_type,
+                    &variable_type,
+                    variable_type_span,
+                    source_expression,
+                )
+            });
+
+        if !is_outside_native_type {
+            check_docblock_type_incompatibility(
+                context,
+                Some(variable_id.as_bytes()),
+                variable_span,
+                &assigned_type,
+                &variable_type,
+                variable_type_span,
+                source_expression,
+                block_context.flags.inside_foreach_value(),
+            );
+        }
 
         assigned_type = Rc::new(variable_type);
         from_docblock = true;
@@ -1401,6 +1419,9 @@ mod tests {
             /** @var list<int|string> */
             $scalar = get_list();
         "},
+        issues = [
+            IssueCode::DocblockTypeMismatch,
+        ]
     }
 
     test_analysis! {

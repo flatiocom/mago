@@ -196,6 +196,15 @@ pub struct Settings {
     /// Defaults to `false`.
     pub check_arrow_function_missing_type_hints: bool,
 
+    /// Check closure and arrow function parameters for missing type hints.
+    ///
+    /// When `true`, every untyped parameter of a closure (`function() {}`) or an arrow function
+    /// (`fn() => ...`) is reported, even when its type could be inferred. This works without
+    /// `check_missing_type_hints` and does not cover return types.
+    ///
+    /// Defaults to `false`.
+    pub check_closure_and_arrow_function_parameter_type_hints: bool,
+
     /// Skip the missing-type-hint checks for closures and arrow functions used
     /// directly as the right-hand side of the pipe operator (`|>`).
     ///
@@ -447,6 +456,7 @@ impl Settings {
             check_missing_type_hints: false,
             check_closure_missing_type_hints: false,
             check_arrow_function_missing_type_hints: false,
+            check_closure_and_arrow_function_parameter_type_hints: false,
             allow_implicit_pipe_callable_types: false,
             register_super_globals: true,
             diff: false,

@@ -863,6 +863,8 @@ where
         }
     }
 
+    crate::utils::casing::check_inherited_method_casing(context, class_like_metadata, members);
+
     let has_complete_hierarchy = !class_like_metadata.has_incomplete_hierarchy();
 
     if has_complete_hierarchy && !class_like_metadata.kind.is_trait() && !class_like_metadata.flags.is_abstract() {
@@ -1096,6 +1098,18 @@ where
 
                 let prop_meta = first_property_name.and_then(|name| class_like_metadata.properties.get(&name));
                 missing_type_hints::check_imprecise_property_type_hint(context, property, prop_meta);
+
+                for variable in property.variables() {
+                    let type_metadata = class_like_metadata
+                        .properties
+                        .get(&word(variable.name))
+                        .and_then(|metadata| metadata.type_metadata.as_ref());
+                    let subject =
+                        format!("Property `{}::{}`", class_like_metadata.original_name, BytesDisplay(variable.name));
+
+                    missing_type_hints::check_callable_signatures(context, type_metadata, variable.span(), &subject);
+                    missing_type_hints::check_template_arguments(context, type_metadata, variable.span(), &subject);
+                }
 
                 let property_names: Vec<Word> = match property {
                     Property::Plain(plain) => plain.items.iter().map(|item| word(item.variable().name)).collect(),
@@ -3061,6 +3075,9 @@ fn check_docblock_declared_members<A>(
             [&property_metadata.type_metadata, &property_metadata.write_type_metadata].into_iter().flatten()
         {
             report_undefined_type_references(context, type_metadata);
+            let subject = format!("Docblock property `{}::{property_name}`", class_like_metadata.original_name);
+            missing_type_hints::check_callable_signatures(context, Some(type_metadata), type_metadata.span, &subject);
+            missing_type_hints::check_template_arguments(context, Some(type_metadata), type_metadata.span, &subject);
         }
     }
 

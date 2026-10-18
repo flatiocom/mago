@@ -1,11 +1,15 @@
 use mago_allocator::Arena;
 use std::rc::Rc;
 
+use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::TypeRef;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::object::TObject;
+use mago_codex::ttype::atomic::object::r#enum::TEnum;
+use mago_codex::ttype::atomic::object::named::TNamedObject;
 use mago_codex::ttype::atomic::reference::TReference;
+use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::builder::get_union_from_type;
 use mago_codex::ttype::builder::reject_unresolvable_tag_variable;
 use mago_codex::ttype::comparator::ComparisonResult;
@@ -13,16 +17,20 @@ use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_ide
 use mago_codex::ttype::comparator::union_comparator::is_contained_by;
 use mago_codex::ttype::expander;
 use mago_codex::ttype::expander::TypeExpansionOptions;
+use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::union::TUnion;
 use mago_codex::ttype::union::populate_union_type;
 use mago_phpdoc_syntax::cst::Element;
 use mago_phpdoc_syntax::cst::TagValue;
+use mago_phpdoc_syntax::cst::r#type::Type as DocblockType;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::comments::docblock::PrecedingDocblocks;
+use mago_syntax::cst::Call;
 use mago_syntax::cst::Expression;
+use mago_syntax::cst::Variable;
 use mago_word::Word;
 use mago_word::word;
 
@@ -30,6 +38,10 @@ use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
+use crate::utils::casing::check_class_like_casing;
+use crate::utils::missing_type_hints::report_imprecise_type;
+use crate::utils::missing_type_hints::report_missing_template_arguments;
+use crate::utils::native_type::get_native_expression_type;
 use mago_bytes::BytesDisplay;
 
 /// Populates the context with variable types defined in the docblock.
@@ -55,6 +67,90 @@ pub fn populate_docblock_variables<'ctx, A>(
     populate_docblock_variables_excluding(context, block_context, artifacts, override_existing, None);
 }
 
+/// Reports a bare `array`, `list` or `iterable` anywhere in an inline `@var` type, like PHPStan's
+/// missingType.iterableValue for `@var` tags.
+fn report_imprecise_var_tag_types<A>(context: &mut Context<'_, '_, A>)
+where
+    A: Arena,
+{
+    if !context.settings.check_missing_type_hints {
+        return;
+    }
+
+    let mut imprecise_types = Vec::new();
+    for element in context.get_parsed_docblocks() {
+        let Element::Tag(tag) = element else {
+            continue;
+        };
+
+        let TagValue::Var(var_tag) = &tag.value else {
+            continue;
+        };
+
+        let location = match &var_tag.variable {
+            Some(variable) => format!("`@var` tag for variable `{}`", BytesDisplay(variable.value)),
+            None => "`@var` tag".to_string(),
+        };
+
+        let mut found = Vec::new();
+        collect_bare_iterable_types(var_tag.r#type, &mut found);
+        imprecise_types.extend(found.into_iter().map(|(type_name, span)| (type_name, span, location.clone())));
+    }
+
+    for (type_name, span, location) in imprecise_types {
+        report_imprecise_type(context, type_name, span, &location);
+    }
+}
+
+fn collect_bare_iterable_types(r#type: &DocblockType<'_>, found: &mut Vec<(&'static str, Span)>) {
+    let (type_name, parameters, span) = match r#type {
+        DocblockType::Array(array) => ("array", array.parameters.as_ref(), array.span()),
+        DocblockType::NonEmptyArray(array) => ("array", array.parameters.as_ref(), array.span()),
+        DocblockType::AssociativeArray(array) => ("array", array.parameters.as_ref(), array.span()),
+        DocblockType::List(list) => ("list", list.parameters.as_ref(), list.span()),
+        DocblockType::NonEmptyList(list) => ("list", list.parameters.as_ref(), list.span()),
+        DocblockType::Iterable(iterable) => ("iterable", iterable.parameters.as_ref(), iterable.span()),
+        DocblockType::Reference(reference) => {
+            if let Some(parameters) = &reference.parameters {
+                for entry in parameters.entries.iter() {
+                    collect_bare_iterable_types(&entry.inner, found);
+                }
+            }
+
+            return;
+        }
+        DocblockType::Parenthesized(parenthesized) => return collect_bare_iterable_types(parenthesized.inner, found),
+        DocblockType::Nullable(nullable) => return collect_bare_iterable_types(nullable.inner, found),
+        DocblockType::TrailingPipe(trailing) => return collect_bare_iterable_types(trailing.inner, found),
+        DocblockType::Slice(slice) => return collect_bare_iterable_types(slice.inner, found),
+        DocblockType::Union(union) => {
+            collect_bare_iterable_types(union.left, found);
+            return collect_bare_iterable_types(union.right, found);
+        }
+        DocblockType::Intersection(intersection) => {
+            collect_bare_iterable_types(intersection.left, found);
+            return collect_bare_iterable_types(intersection.right, found);
+        }
+        DocblockType::Shape(shape) => {
+            for field in shape.fields.iter() {
+                collect_bare_iterable_types(field.value, found);
+            }
+
+            return;
+        }
+        _ => return,
+    };
+
+    match parameters {
+        Some(parameters) => {
+            for entry in parameters.entries.iter() {
+                collect_bare_iterable_types(&entry.inner, found);
+            }
+        }
+        None => found.push((type_name, span)),
+    }
+}
+
 /// Same as `populate_docblock_variables`, but allows excluding a specific variable.
 ///
 /// This is useful for assignment statements where we want to populate all @var annotations
@@ -72,9 +168,31 @@ pub fn populate_docblock_variables_excluding<'ctx, A>(
         return;
     }
 
+    report_imprecise_var_tag_types(context);
+
+    // `self`, `static` and `$this` resolve to the enclosing class's lowercase name, which is no casing mistake.
+    let enclosing_class = block_context.scope.get_class_like_name();
+
     for (name, variable_type, variable_type_span) in get_docblock_variables(context, block_context, artifacts, true) {
+        if context.settings.check_missing_type_hints {
+            let subject = match name {
+                Some(variable_name) => format!("`@var` tag for variable `{variable_name}`"),
+                None => "`@var` tag".to_string(),
+            };
+
+            report_missing_template_arguments(context, &variable_type, variable_type_span, &subject);
+        }
+
         // Check for undefined type references in ALL @var types, regardless of variable name.
         for type_ref in variable_type.get_all_child_nodes() {
+            if let TypeRef::Atomic(TAtomic::Object(
+                TObject::Named(TNamedObject { name, .. }) | TObject::Enum(TEnum { name, .. }),
+            )) = type_ref
+                && Some(*name) != enclosing_class
+            {
+                check_class_like_casing(context, *name, variable_type_span);
+            }
+
             let TypeRef::Atomic(TAtomic::Reference(TReference::Symbol { name: ref_name, .. })) = type_ref else {
                 continue;
             };
@@ -399,6 +517,75 @@ pub fn insert_variable_from_docblock<'ctx, A>(
     }
 }
 
+pub fn check_docblock_type_against_native_type<A>(
+    context: &mut Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &AnalysisArtifacts,
+    variable_id: &[u8],
+    assigned_type: &TUnion,
+    docblock_type: &TUnion,
+    docblock_type_span: Span,
+    source_expression: &Expression<'_>,
+) -> bool
+where
+    A: Arena,
+{
+    let codebase = context.codebase;
+    let (native_type, is_valid) = match source_expression.unparenthesized() {
+        Expression::Literal(_) | Expression::ConstantAccess(_) | Expression::Array(_) | Expression::LegacyArray(_) => {
+            (assigned_type.clone(), types_overlap(codebase, assigned_type, docblock_type))
+        }
+        expression => {
+            let Some(native_type) = get_native_expression_type(context, block_context, artifacts, expression) else {
+                return false;
+            };
+
+            let is_subtype = is_contained_by(
+                codebase,
+                docblock_type,
+                &native_type,
+                false,
+                false,
+                false,
+                &mut ComparisonResult::default(),
+            );
+
+            (native_type, is_subtype)
+        }
+    };
+
+    if is_valid {
+        return false;
+    }
+
+    let variable_id = BytesDisplay(variable_id);
+    let docblock_type_str = docblock_type.get_id();
+    let native_type_str = native_type.get_id();
+
+    context.collector.report_with_code(
+        IssueCode::DocblockTypeMismatch,
+        Issue::error(format!("Docblock type mismatch for variable `{variable_id}`."))
+            .with_annotation(Annotation::primary(docblock_type_span).with_message(format!(
+                "This docblock asserts the type should be `{docblock_type_str}`, which is not a subtype of the native type `{native_type_str}`."
+            )))
+            .with_annotation(
+                Annotation::secondary(source_expression.span())
+                    .with_message(format!("This expression has the native type `{native_type_str}`.")),
+            )
+            .with_note("A `@var` tag may narrow the type an expression has without docblocks, never widen or contradict it.")
+            .with_help(format!("Change the `@var` tag to a subtype of `{native_type_str}`.")),
+    );
+
+    true
+}
+
+fn types_overlap(codebase: &CodebaseMetadata, left: &TUnion, right: &TUnion) -> bool {
+    is_contained_by(codebase, left, right, false, false, false, &mut ComparisonResult::default())
+        || is_contained_by(codebase, right, left, false, false, false, &mut ComparisonResult::default())
+        || unions_could_share_object_runtime_instance(left, right)
+        || can_expression_types_be_identical(codebase, left, right, false, false)
+}
+
 pub fn check_docblock_type_incompatibility<A>(
     context: &mut Context<'_, '_, A>,
     value_expression_variable_id: Option<&[u8]>,
@@ -407,6 +594,7 @@ pub fn check_docblock_type_incompatibility<A>(
     docblock_type: &TUnion,
     dockblock_type_span: Span,
     source_expression: Option<&Expression>,
+    is_foreach_value: bool,
 ) where
     A: Arena,
 {
@@ -497,6 +685,36 @@ pub fn check_docblock_type_incompatibility<A>(
         return;
     }
 
+    let widened_inferred_type = match source_expression {
+        Some(source_expression) => {
+            get_inferred_type_widened_by_docblock(context.codebase, inferred_type, docblock_type, source_expression)
+        }
+        None if is_foreach_value => {
+            get_inferred_type_widened(context.codebase, inferred_type, docblock_type, false, false)
+        }
+        None => None,
+    };
+
+    if let Some(inferred_type) = widened_inferred_type {
+        let docblock_type_str = docblock_type.get_id();
+        let inferred_type_str = inferred_type.get_id();
+
+        context.collector.report_with_code(
+            IssueCode::DocblockTypeMismatch,
+            Issue::error(format!("Docblock type `{docblock_type_str}` is not a subtype of the inferred type `{inferred_type_str}`."))
+                .with_annotation(Annotation::primary(dockblock_type_span).with_message(format!(
+                    "This docblock widens the type to `{docblock_type_str}`..."
+                )))
+                .with_annotation(Annotation::secondary(value_expression_span).with_message(format!(
+                    "...but the assigned expression is known to be `{inferred_type_str}`."
+                )))
+                .with_note("A `@var` tag may narrow the type of an expression, but widening it hides what the code is known to hold.")
+                .with_help(format!("Change the `@var` tag to `{inferred_type_str}` or a subtype of it, or remove it.")),
+        );
+
+        return;
+    }
+
     if is_redundant {
         let docblock_type_str = docblock_type.get_id();
         let inferred_type_str = inferred_type.get_id();
@@ -535,6 +753,131 @@ pub fn check_docblock_type_incompatibility<A>(
 
         context.collector.report_with_code(IssueCode::RedundantDocblockType, issue);
     }
+}
+
+fn is_scalar_like(expression: &Expression<'_>) -> bool {
+    matches!(
+        expression.unparenthesized(),
+        Expression::Literal(_)
+            | Expression::CompositeString(_)
+            | Expression::MagicConstant(_)
+            | Expression::ConstantAccess(_)
+            | Expression::Array(_)
+            | Expression::LegacyArray(_)
+    )
+}
+
+fn get_inferred_type_widened_by_docblock(
+    codebase: &CodebaseMetadata,
+    inferred_type: &TUnion,
+    docblock_type: &TUnion,
+    source_expression: &Expression<'_>,
+) -> Option<TUnion> {
+    if is_scalar_like(source_expression) {
+        return None;
+    }
+
+    get_inferred_type_widened(
+        codebase,
+        inferred_type,
+        docblock_type,
+        is_method_call_on_this(source_expression),
+        matches!(source_expression.unparenthesized(), Expression::Instantiation(_)),
+    )
+}
+
+fn get_inferred_type_widened(
+    codebase: &CodebaseMetadata,
+    inferred_type: &TUnion,
+    docblock_type: &TUnion,
+    keeps_static: bool,
+    is_instantiation: bool,
+) -> Option<TUnion> {
+    let inferred_type =
+        merge_empty_string_into_non_empty_string(relax_inferred_type(inferred_type, keeps_static, is_instantiation));
+    let is_narrowing =
+        is_contained_by(codebase, docblock_type, &inferred_type, false, false, false, &mut ComparisonResult::default());
+
+    (!is_narrowing).then_some(inferred_type)
+}
+
+fn relax_inferred_type(inferred_type: &TUnion, keeps_static: bool, is_instantiation: bool) -> TUnion {
+    TUnion::from_vec(
+        inferred_type
+            .types
+            .iter()
+            .map(|atomic| match atomic {
+                TAtomic::Object(TObject::Named(named)) => {
+                    let mut named = named.clone();
+                    if !keeps_static {
+                        named = named.with_is_static(false);
+                    }
+
+                    for type_parameter in named.get_type_parameters_mut().into_iter().flatten() {
+                        if is_instantiation {
+                            *type_parameter = get_mixed();
+                        } else {
+                            type_parameter.widen_literals();
+                        }
+
+                        if type_parameter.is_mixed() {
+                            type_parameter.set_from_unspecified_template(true);
+                        }
+                    }
+
+                    TAtomic::Object(TObject::Named(named))
+                }
+                atomic => atomic.clone(),
+            })
+            .collect(),
+    )
+}
+
+fn merge_empty_string_into_non_empty_string(inferred_type: TUnion) -> TUnion {
+    let is_empty_string =
+        |atomic: &TAtomic| matches!(atomic, TAtomic::Scalar(TScalar::String(string)) if string.is_empty());
+    let is_plain_non_empty_string = |atomic: &TAtomic| {
+        matches!(
+            atomic,
+            TAtomic::Scalar(TScalar::String(string))
+                if string.is_general()
+                    && string.is_non_empty
+                    && !string.is_truthy
+                    && !string.is_numeric
+                    && !string.is_callable
+        )
+    };
+
+    if !inferred_type.types.iter().any(is_empty_string) || !inferred_type.types.iter().any(is_plain_non_empty_string) {
+        return inferred_type;
+    }
+
+    TUnion::from_vec(
+        inferred_type
+            .types
+            .iter()
+            .filter(|atomic| !is_empty_string(atomic))
+            .map(|atomic| match atomic {
+                TAtomic::Scalar(TScalar::String(string)) if is_plain_non_empty_string(atomic) => {
+                    let mut string = *string;
+                    string.is_non_empty = false;
+
+                    TAtomic::Scalar(TScalar::String(string))
+                }
+                atomic => atomic.clone(),
+            })
+            .collect(),
+    )
+}
+
+fn is_method_call_on_this(expression: &Expression<'_>) -> bool {
+    let object = match expression.unparenthesized() {
+        Expression::Call(Call::Method(call)) => call.object,
+        Expression::Call(Call::NullSafeMethod(call)) => call.object,
+        _ => return false,
+    };
+
+    matches!(object, Expression::Variable(Variable::Direct(variable)) if variable.name == b"$this")
 }
 
 fn unions_could_share_object_runtime_instance(inferred_type: &TUnion, docblock_type: &TUnion) -> bool {

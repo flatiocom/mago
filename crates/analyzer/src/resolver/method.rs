@@ -385,6 +385,8 @@ where
         report_call_on_non_object(context, &TAtomic::Mixed(TMixed::new()), object.span(), selector);
     }
 
+    crate::utils::casing::check_method_call_casing(context, &result.resolved_methods, selector);
+
     for method_id in asserted_descendant_method_references {
         artifacts.symbol_references.add_reference_for_method_call(&block_context.scope, &method_id);
     }

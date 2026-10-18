@@ -199,6 +199,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Closure<'arena> {
                 function_metadata,
                 parameter,
                 i,
+                None,
             );
         }
 
@@ -207,6 +208,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Closure<'arena> {
             function_metadata,
             b"closure",
             self.return_type_hint.as_ref(),
+            None,
         );
 
         let inferred_parameter_types = artifacts.inferred_parameter_types.take();

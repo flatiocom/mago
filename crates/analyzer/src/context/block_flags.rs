@@ -26,6 +26,7 @@ impl BlockContextFlags {
     /// its body.
     pub const INSIDE_CLASS_LIKE_ATTRIBUTE: u32 = 1 << 18;
     pub const INSIDE_REFERENCE: u32 = 1 << 19;
+    pub const INSIDE_FOREACH_VALUE: u32 = 1 << 20;
 
     #[inline]
     pub const fn new() -> Self {
@@ -57,6 +58,11 @@ impl BlockContextFlags {
     #[inline(always)]
     pub const fn inside_conditional(&self) -> bool {
         self.contains(Self::INSIDE_CONDITIONAL)
+    }
+
+    #[inline(always)]
+    pub const fn inside_foreach_value(&self) -> bool {
+        self.contains(Self::INSIDE_FOREACH_VALUE)
     }
 
     #[inline(always)]
@@ -252,5 +258,10 @@ impl BlockContextFlags {
     #[inline(always)]
     pub fn set_inside_reference(&mut self, value: bool) {
         self.set(Self::INSIDE_REFERENCE, value);
+    }
+
+    #[inline(always)]
+    pub fn set_inside_foreach_value(&mut self, value: bool) {
+        self.set(Self::INSIDE_FOREACH_VALUE, value);
     }
 }

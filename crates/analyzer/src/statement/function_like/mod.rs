@@ -5,6 +5,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use foldhash::HashMap;
+use foldhash::fast::RandomState;
+use indexmap::IndexMap;
 
 use mago_word::Word;
 use mago_word::concat_word;
@@ -43,6 +45,10 @@ use mago_codex::ttype::get_list;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_never;
 use mago_codex::ttype::get_void;
+use mago_codex::ttype::template::GenericTemplate;
+use mago_codex::ttype::template::TemplateResult;
+use mago_codex::ttype::template::definition_type_replacer;
+use mago_codex::ttype::template::definition_type_replacer::DefinitionReplacementOptions;
 use mago_codex::ttype::union::TUnion;
 use mago_codex::ttype::wrap_atomic;
 use mago_php_version::feature::Feature;
@@ -73,6 +79,7 @@ use crate::statement::class_like::property::analyze_property_hook;
 use crate::statement::r#return::handle_return_value;
 use crate::statement::r#static::add_captured_types;
 use crate::statement::r#static::infer_static_local_types;
+use crate::utils::casing::check_class_like_casing;
 use crate::utils::expression::get_variable_id;
 
 pub mod function;
@@ -1530,7 +1537,8 @@ fn check_parameter_default_value<'ctx, 'arena, A>(
     context.collector.report_with_code(IssueCode::InvalidParameterDefaultValue, issue);
 }
 
-/// Reports missing types, including object types whose declarations were removed after population.
+/// Reports missing types, including object types whose declarations were removed after population, and docblock
+/// class references with the wrong casing.
 pub fn report_undefined_type_references<A>(context: &mut Context<'_, '_, A>, type_metadata: &TypeMetadata)
 where
     A: Arena,
@@ -1543,8 +1551,18 @@ where
         let name = match type_ref {
             TypeRef::Atomic(TAtomic::Reference(TReference::Symbol { name, .. })) => name,
             TypeRef::Atomic(TAtomic::Object(TObject::Named(TNamedObject { name, .. }) | TObject::Enum(TEnum { name, .. })))
-                if !matches!(name.as_bytes(), b"self" | b"static" | b"parent" | b"$this")
-                    && context.codebase.get_class_like_by_name(*name).is_none() => name,
+                if !matches!(name.as_bytes(), b"self" | b"static" | b"parent" | b"$this") =>
+            {
+                if context.codebase.get_class_like_by_name(*name).is_some() {
+                    if type_metadata.from_docblock {
+                        check_class_like_casing(context, *name, type_metadata.span);
+                    }
+
+                    return false;
+                }
+
+                name
+            }
             _ => return false,
         };
 
@@ -1562,4 +1580,103 @@ where
 
         false
     });
+}
+
+pub fn report_parameter_template_bound_violations<A>(
+    context: &mut Context<'_, '_, A>,
+    function_like_metadata: &FunctionLikeMetadata,
+    calling_class: Option<Word>,
+) where
+    A: Arena,
+{
+    for parameter in &function_like_metadata.parameters {
+        let Some(type_metadata) =
+            parameter.type_metadata.as_ref().filter(|metadata| metadata.from_docblock && !metadata.inferred)
+        else {
+            continue;
+        };
+
+        let mut parameter_type = type_metadata.type_union.clone();
+        expander::expand_union(
+            context.codebase,
+            &mut parameter_type,
+            &TypeExpansionOptions { self_class: calling_class, ..Default::default() },
+        );
+
+        for node in parameter_type.get_all_child_nodes() {
+            let TypeRef::Atomic(generic_atomic @ TAtomic::Object(TObject::Named(object))) = node else {
+                continue;
+            };
+
+            let Some(arguments) = &object.type_parameters else {
+                continue;
+            };
+
+            let Some(class_like_metadata) = context.codebase.get_class_like_by_name(object.name) else {
+                continue;
+            };
+
+            let bound_parent = GenericParent::ClassLike(class_like_metadata.name);
+            let arguments_by_template: IndexMap<Word, Vec<GenericTemplate>, RandomState> = class_like_metadata
+                .template_types
+                .keys()
+                .zip(arguments.iter())
+                .map(|(template_name, argument)| {
+                    (*template_name, vec![GenericTemplate::new(bound_parent, argument.clone())])
+                })
+                .collect();
+
+            for ((template_name, template), argument) in class_like_metadata.template_types.iter().zip(arguments.iter())
+            {
+                if template.constraint.is_mixed() {
+                    continue;
+                }
+
+                let mut bound = definition_type_replacer::replace(
+                    &template.constraint,
+                    &mut TemplateResult::new(arguments_by_template.clone(), HashMap::default()),
+                    context.codebase,
+                    DefinitionReplacementOptions::default(),
+                );
+                expander::expand_union(
+                    context.codebase,
+                    &mut bound,
+                    &TypeExpansionOptions { self_class: Some(class_like_metadata.name), ..Default::default() },
+                );
+
+                if union_comparator::is_contained_by(
+                    context.codebase,
+                    argument,
+                    &bound,
+                    false,
+                    false,
+                    false,
+                    &mut ComparisonResult::default(),
+                ) {
+                    continue;
+                }
+
+                let argument_str = argument.get_id();
+                let generic_str = generic_atomic.get_id();
+                let bound_str = bound.get_id();
+                let class_name = class_like_metadata.original_name;
+                let parameter_name = parameter.name.0;
+
+                context.collector.report_with_code(
+                    IssueCode::InvalidTemplateParameter,
+                    Issue::error(format!(
+                        "Type `{argument_str}` in generic type `{generic_str}` for parameter `{parameter_name}` is not a subtype of template `{template_name}` of `{class_name}`."
+                    ))
+                    .with_annotation(
+                        Annotation::primary(parameter.span)
+                            .with_message(format!("`{argument_str}` does not satisfy `{template_name} of {bound_str}`")),
+                    )
+                    .with_annotation(Annotation::secondary(type_metadata.span).with_message("Declared here"))
+                    .with_help(format!(
+                        "Use a type within `{bound_str}` for `{template_name}`, or widen the bound on `{class_name}`."
+                    )),
+                );
+            }
+        }
+    }
 }

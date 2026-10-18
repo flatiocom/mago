@@ -352,6 +352,8 @@ final class AnalyzerCodeModuleGenerator
         'unavailable-constant',
         'unavailable-class-constant',
         'unavailable-enum-case',
+        'missing-callable-signature',
+        'incorrect-method-casing',
     ];
 
     /**

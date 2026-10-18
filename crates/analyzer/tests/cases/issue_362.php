@@ -90,6 +90,7 @@ function appendToCollection(ArrayCollection $collection, string $value): void
 // honoured even though invariance prevents it from being a strict subtype of
 // the inferred `ArrayCollection<int, string>`. PHPStan/Psalm accept the same
 // idiom.
+// @mago-expect analysis:docblock-type-mismatch
 /** @var ArrayCollection<non-negative-int, string> $collection */
 $collection = ArrayCollection::fromArray([
     0 => 'a',

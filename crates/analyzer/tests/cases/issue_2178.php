@@ -46,6 +46,8 @@ class Builder
 {
     /**
      * @param array<array-key, (callable(Relation<mixed, mixed, mixed>): mixed)|string> $relations
+     *
+     * @mago-expect analysis:invalid-template-parameter(2)
      */
     public function with(array $relations): void {}
 }

@@ -92,6 +92,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Return<'arena> {
                         &docblock_type,
                         docblock_type_span,
                         None,
+                        false,
                     );
 
                     Rc::new(docblock_type)

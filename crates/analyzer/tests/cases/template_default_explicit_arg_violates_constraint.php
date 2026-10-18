@@ -15,6 +15,7 @@ final class Bag
 
 /**
  * @mago-expect analysis:docblock-type-mismatch
+ * @mago-expect analysis:invalid-template-parameter
  *
  * @param Bag<bool> $b
  */

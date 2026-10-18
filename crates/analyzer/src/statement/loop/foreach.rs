@@ -118,6 +118,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
         }
 
         let source_value_type = value_type.clone();
+        let is_variable_value = matches!(value_expression, Expression::Variable(Variable::Direct(_)));
+        loop_block_context.flags.set_inside_foreach_value(is_variable_value);
         let assigned = assign_to_expression(
             context,
             &mut loop_block_context,
@@ -129,6 +131,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             false,
             if is_by_reference { PropertyWriteKind::Mutation } else { PropertyWriteKind::Direct },
         )?;
+        loop_block_context.flags.set_inside_foreach_value(false);
 
         if !assigned {
             context.collector.report_with_code(

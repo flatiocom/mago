@@ -7,6 +7,7 @@ use mago_codex::identifier::method::MethodIdentifier;
 use mago_codex::reference::ReferenceOrigin;
 
 use mago_span::HasSpan;
+use mago_span::Span;
 use mago_syntax::cst::Method;
 use mago_syntax::cst::MethodBody;
 
@@ -20,6 +21,7 @@ use crate::statement::attributes::analyze_attributes;
 use crate::statement::function_like::FunctionLikeBody;
 use crate::statement::function_like::analyze_function_like;
 use crate::statement::function_like::check_unused_function_template_parameters;
+use crate::statement::function_like::report_parameter_template_bound_violations;
 use crate::statement::function_like::unused_parameter;
 use crate::utils::missing_type_hints;
 
@@ -129,6 +131,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
             concat_word!(&class_like_metadata.original_name, "::", self.name.value)
         });
 
+        let declaration = Some(Span::between(self.span(), self.name.span()));
         // Check for missing type hints
         for (i, parameter) in self.parameter_list.parameters.iter().enumerate() {
             missing_type_hints::check_parameter_type_hint(
@@ -138,7 +141,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
                 parameter,
             );
 
-            missing_type_hints::check_imprecise_parameter_type_hint(context, method_metadata, parameter, i);
+            missing_type_hints::check_imprecise_parameter_type_hint(
+                context,
+                method_metadata,
+                parameter,
+                i,
+                declaration,
+            );
         }
 
         missing_type_hints::check_return_type_hint(
@@ -155,7 +164,24 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Method<'arena> {
             method_metadata,
             self.name.value,
             self.return_type_hint.as_ref(),
+            declaration,
         );
+
+        missing_type_hints::check_function_like_callable_signatures(
+            context,
+            method_metadata,
+            self.name.span(),
+            &format!("method `{}::{}`", class_like_metadata.original_name, method_metadata.original_name),
+        );
+
+        missing_type_hints::check_function_like_template_arguments(
+            context,
+            method_metadata,
+            self.name.span(),
+            &format!("method `{}::{}`", class_like_metadata.original_name, method_metadata.original_name),
+        );
+
+        report_parameter_template_bound_violations(context, method_metadata, Some(class_like_metadata.name));
 
         Ok(())
     }

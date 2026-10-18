@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 function test_no_default(): void
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var string $field */
     $field = rand(min: 0, max: 1) ? 'a' : 'something_else';
 
@@ -28,6 +29,7 @@ function test_no_default(): void
  */
 function test_default_throws(): array
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var string $field */
     $field = rand(min: 0, max: 1) ? 'a' : 'something_else';
 
@@ -50,6 +52,7 @@ function test_default_throws(): array
  */
 function test_default_returns(): false|array
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var string $field */
     $field = rand(min: 0, max: 1) ? 'a' : 'something_else';
 
@@ -72,6 +75,7 @@ function test_default_returns(): false|array
  */
 function test_default_sets_variable(): array
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var string $field */
     $field = rand(min: 0, max: 1) ? 'a' : 'something_else';
 
@@ -95,6 +99,7 @@ function test_default_sets_variable(): array
  */
 function test_multiple_cases_no_default(): false|array
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var string $field */
     $field = rand(min: 0, max: 2) ? (rand(0, 1) ? 'a' : 'b') : 'something_else';
 
@@ -137,6 +142,7 @@ function test_boolean_exhaustive(): string
 
 function test_fallthrough(): void
 {
+    // @mago-expect analysis:docblock-type-mismatch
     /** @var string $field */
     $field = rand(min: 0, max: 1) ? 'a' : 'something_else';
 
