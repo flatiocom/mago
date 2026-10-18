@@ -7,7 +7,6 @@ class MyClass
 
 /**
  * @mago-expect analysis:null-property-access
- * @mago-expect analysis:invalid-return-statement
  */
 function testNullPropertyAccess(): string
 {

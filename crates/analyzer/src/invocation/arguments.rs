@@ -260,7 +260,7 @@ pub fn verify_argument_type<'arena, A>(
             return;
         }
 
-        if input_type.is_nullable() && !input_type.ignore_nullable_issues() {
+        if input_type.is_nullable() && !input_type.ignore_nullable_issues() && !input_type.has_error_path_null() {
             let argument_subject = argument_subject();
             let target_name_str = invocation_target.guess_name(context);
             let input_type_str = input_type.get_id();

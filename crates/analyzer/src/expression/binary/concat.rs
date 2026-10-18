@@ -71,6 +71,8 @@ where
     A: Arena,
 {
     let operands = collect_concat_operands(binary);
+    let is_concat_assignment = block_context.flags.inside_concat_assignment();
+    block_context.flags.set_inside_concat_assignment(false);
 
     for operand in &operands {
         operand.analyze(context, block_context, artifacts)?;
@@ -87,8 +89,9 @@ where
         };
 
         let operation_span = operand.span().from_start(binary.span().start);
+        let reports_null = i != 0 || !is_concat_assignment;
 
-        analyze_string_concat_operand(context, artifacts, operand, operation_span, side);
+        analyze_string_concat_operand(context, artifacts, operand, operation_span, side, reports_null);
     }
 
     let result_type = fold_concat_operands(&operands, artifacts, context.settings.string_combination_threshold);
@@ -104,12 +107,17 @@ fn analyze_string_concat_operand<'arena, A>(
     operand: &Expression<'arena>,
     operation_span: Span,
     side: &'static str,
+    reports_null: bool,
 ) where
     A: Arena,
 {
     let Some(operand_type) = artifacts.get_expression_type(operand) else {
         return;
     };
+
+    if !reports_null && operand_type.is_null() {
+        return;
+    }
 
     if operand_type.is_null() {
         context.collector.report_with_code(
@@ -141,7 +149,11 @@ fn analyze_string_concat_operand<'arena, A>(
         return;
     }
 
-    if operand_type.is_nullable() && !operand_type.ignore_nullable_issues() {
+    if reports_null
+        && operand_type.is_nullable()
+        && !operand_type.ignore_nullable_issues()
+        && !operand_type.has_error_path_null()
+    {
         context.collector.report_with_code(
             IssueCode::PossiblyNullOperand,
             Issue::warning(format!(

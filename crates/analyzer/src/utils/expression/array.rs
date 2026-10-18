@@ -157,7 +157,9 @@ where
         return (get_never(), false);
     }
 
-    if index_type.is_null() && !index_type.is_keyed_array() {
+    let container_can_be_array = array_like_type.types.iter().any(can_be_array);
+
+    if container_can_be_array && index_type.is_null() && !index_type.is_keyed_array() {
         context.collector.report_with_code(
             IssueCode::NullArrayIndex,
             Issue::error(format!(
@@ -175,7 +177,11 @@ where
         );
     }
 
-    if index_type.is_nullable() && !index_type.ignore_nullable_issues() {
+    if container_can_be_array
+        && index_type.is_nullable()
+        && !index_type.ignore_nullable_issues()
+        && !index_type.has_error_path_null()
+    {
         context.collector.report_with_code(
             IssueCode::PossiblyNullArrayIndex,
             Issue::warning(format!(
@@ -315,6 +321,7 @@ where
                     && !block_context.flags.inside_isset()
                     && !block_context.flags.inside_unset()
                     && !array_like_type.ignore_nullable_issues()
+                    && !array_like_type.has_error_path_null()
                 {
                     if array_like_type.is_nullable() {
                         context.collector.report_with_code(
@@ -1215,7 +1222,15 @@ where
                     }
                 }
 
-                if has_value_parameter { value_parameter.into_owned() } else { get_null() }
+                if has_value_parameter {
+                    value_parameter.into_owned()
+                } else if *key_in_other_variant {
+                    let mut missing_key_null = get_null();
+                    missing_key_null.set_error_path_null(true);
+                    missing_key_null
+                } else {
+                    get_null()
+                }
             } else if has_value_parameter {
                 // Inside isset() check on array with generic parameters - the key might exist at runtime
                 // Don't report impossible isset - just return the value type as possibly undefined
@@ -1651,7 +1666,10 @@ where
         &mut union_comparison_result,
     );
 
-    if index_type_contained_by_expected {
+    let read_index_can_be_expected = assign_value_type.is_none()
+        && can_expression_types_be_identical(context.codebase, index_type, &expected_key_type, false, false);
+
+    if index_type_contained_by_expected || read_index_can_be_expected {
         *has_valid_expected_index = true;
     } else {
         expected_index_types.push(expected_key_type);
@@ -1858,4 +1876,12 @@ where
     }
 
     get_mixed()
+}
+
+fn can_be_array(atomic: &TAtomic) -> bool {
+    match atomic {
+        TAtomic::Array(_) => true,
+        TAtomic::GenericParameter(parameter) => parameter.constraint.types.iter().any(can_be_array),
+        _ => false,
+    }
 }

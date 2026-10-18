@@ -3176,6 +3176,7 @@ test_case!(magic_property_narrows_native_type);
 test_case!(trait_reads_properties_every_user_declares);
 test_case!(trait_calls_methods_every_user_declares);
 test_case!(receiver_checks_like_phpstan);
+test_case!(error_path_null_like_phpstan);
 test_case!(null_coalesce_chain_narrows_shared_base);
 test_case!(offset_write_drops_scalar_members);
 test_case!(stable_method_in_array_narrowing);
@@ -3216,7 +3217,20 @@ test_case!(foreach_write_back_after_value_reassignment, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(concat_assignment_left_null_like_phpstan);
+test_case!(comparison_error_path_null_like_phpstan);
+test_case!(null_array_index_only_on_arrays_like_phpstan);
 test_case!(key_of_non_empty_array_like_phpstan);
+test_case!(missing_union_key_null_is_error_path_like_phpstan, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(destructuring_error_path_null_like_phpstan, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
 test_case!(clone_drops_non_object_like_phpstan);
 test_case!(debug_backtrace_shape_like_phpstan);
 test_case!(isset_on_mixed_array_keeps_mixed_like_phpstan);

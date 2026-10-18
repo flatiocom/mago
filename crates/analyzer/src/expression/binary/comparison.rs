@@ -796,7 +796,7 @@ fn check_comparison_operand<'ast, 'arena, A>(
             .with_note(format!("Comparing `null` with `{op_str}` can lead to unexpected results due to PHP's type coercion rules (e.g., `null == 0` is true)."))
             .with_help("Ensure this operand is non-null and has a comparable type. Explicitly check for `null` if it's an expected state."),
         );
-    } else if operand_type.can_be_null() && !operand_type.is_mixed() {
+    } else if operand_type.can_be_null() && !operand_type.is_mixed() && !operand_type.has_error_path_null() {
         context.collector.report_with_code(
             IssueCode::PossiblyNullOperand,
             Issue::warning(format!(

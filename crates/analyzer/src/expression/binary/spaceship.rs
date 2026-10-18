@@ -169,7 +169,7 @@ fn check_spaceship_operand<'arena, A>(
              .with_note("PHP compares `null` with other types according to specific rules (e.g., `null == 0` is true, `null < 1` is true).")
              .with_help("Ensure this comparison with `null` is intended, or provide a non-null operand."),
          );
-    } else if operand_type.can_be_null() && !operand_type.is_mixed() {
+    } else if operand_type.can_be_null() && !operand_type.is_mixed() && !operand_type.has_error_path_null() {
         context.collector.report_with_code(
             IssueCode::PossiblyNullOperand,
             Issue::warning(format!(

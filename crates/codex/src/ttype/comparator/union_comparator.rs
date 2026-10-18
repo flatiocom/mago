@@ -33,6 +33,7 @@ pub fn is_contained_by(
         return true;
     }
 
+    let ignore_null = ignore_null || (!inside_assertion && input_type.has_error_path_null());
     let container_has_template = container_type.has_template_or_static();
     let mut all_matched = true;
 

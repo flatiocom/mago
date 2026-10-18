@@ -7,6 +7,6 @@ declare(strict_types=1);
  */
 function unguarded(array $arr): string
 {
-    // @mago-expect analysis:nullable-return-statement,invalid-return-statement,possibly-undefined-string-array-index
+    // @mago-expect analysis:possibly-undefined-string-array-index
     return $arr['b'];
 }

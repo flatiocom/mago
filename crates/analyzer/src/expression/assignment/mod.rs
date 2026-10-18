@@ -174,6 +174,9 @@ where
             Some(assignment_operator) => {
                 artifacts.begin_expression_type_checkpoint();
                 block_context.flags.set_inside_assignment_operation(true);
+                block_context
+                    .flags
+                    .set_inside_concat_assignment(matches!(assignment_operator, AssignmentOperator::Concat(_)));
 
                 let binary_expression = Expression::Binary(Binary {
                     lhs: context.arena.alloc(target_expression.clone()),
@@ -202,6 +205,7 @@ where
                     return Err(error);
                 }
                 block_context.flags.set_inside_assignment_operation(false);
+                block_context.flags.set_inside_concat_assignment(false);
                 assignment_operation_type = if let Some(assignment_span) = assignment_span {
                     artifacts.get_rc_expression_type(&assignment_span).cloned()
                 } else {
@@ -1066,6 +1070,10 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
     }
 }
 
+fn nullable_element(element_type: TUnion, source_type: &TUnion) -> TUnion {
+    if source_type.has_error_path_null() { element_type.as_error_path_nullable() } else { element_type.as_nullable() }
+}
+
 fn analyze_destructuring<'ctx, 'ast, 'arena, A>(
     context: &mut Context<'ctx, 'arena, A>,
     block_context: &mut BlockContext<'ctx>,
@@ -1147,6 +1155,8 @@ where
         context.collector.report_with_code(IssueCode::InvalidDestructuringSource, issue);
 
         non_array = true;
+    } else if source_has_null && array_type.has_error_path_null() {
+        add_null = true;
     } else if source_has_null {
         let assigned_type_str = array_type.get_id();
 
@@ -1289,7 +1299,7 @@ where
                         true,
                     );
 
-                    if add_null { access_type.as_nullable() } else { access_type }
+                    if add_null { nullable_element(access_type, array_type) } else { access_type }
                 };
 
                 analyze_assignment(
@@ -1330,7 +1340,7 @@ where
                         true,
                     );
 
-                    if add_null { access_type.as_nullable() } else { access_type }
+                    if add_null { nullable_element(access_type, array_type) } else { access_type }
                 };
 
                 analyze_assignment(

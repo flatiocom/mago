@@ -27,10 +27,7 @@ function nested_write_into_a_key_that_may_be_missing(array $names, int $month): 
 
     foreach (array_keys($totals) as $name) {
         /** @mago-expect analysis:possibly-undefined-string-array-index */
-        /** @mago-expect analysis:possibly-null-array-access */
-        /** @mago-expect analysis:possibly-null-array-access */
         /** @mago-expect analysis:possibly-undefined-int-array-index */
-        /** @mago-expect analysis:possibly-null-operand */
         $totals[$name]['visits'][$month] += 1.0;
     }
 

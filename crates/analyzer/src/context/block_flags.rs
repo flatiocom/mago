@@ -27,6 +27,7 @@ impl BlockContextFlags {
     pub const INSIDE_CLASS_LIKE_ATTRIBUTE: u32 = 1 << 18;
     pub const INSIDE_REFERENCE: u32 = 1 << 19;
     pub const INSIDE_FOREACH_VALUE: u32 = 1 << 20;
+    pub const INSIDE_CONCAT_ASSIGNMENT: u32 = 1 << 21;
 
     #[inline]
     pub const fn new() -> Self {
@@ -98,6 +99,11 @@ impl BlockContextFlags {
     #[inline(always)]
     pub const fn inside_assignment_operation(&self) -> bool {
         self.contains(Self::INSIDE_ASSIGNMENT_OPERATION)
+    }
+
+    #[inline(always)]
+    pub const fn inside_concat_assignment(&self) -> bool {
+        self.contains(Self::INSIDE_CONCAT_ASSIGNMENT)
     }
 
     #[inline(always)]
@@ -263,5 +269,10 @@ impl BlockContextFlags {
     #[inline(always)]
     pub fn set_inside_foreach_value(&mut self, value: bool) {
         self.set(Self::INSIDE_FOREACH_VALUE, value);
+    }
+
+    #[inline(always)]
+    pub fn set_inside_concat_assignment(&mut self, value: bool) {
+        self.set(Self::INSIDE_CONCAT_ASSIGNMENT, value);
     }
 }

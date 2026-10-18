@@ -83,7 +83,7 @@ where
         // In Psalm, null operand often leads to mixed result or halts analysis for this path.
         // Let's set result to mixed and return, similar to Psalm's behavior.
         final_result_type = Some(get_mixed());
-    } else if left_type.is_nullable() && !left_type.ignore_nullable_issues() {
+    } else if left_type.is_nullable() && !left_type.ignore_nullable_issues() && !left_type.has_error_path_null() {
         context.collector.report_with_code(
             IssueCode::PossiblyNullOperand,
             Issue::warning(format!(
@@ -108,7 +108,7 @@ where
         );
 
         final_result_type = Some(get_mixed());
-    } else if right_type.is_nullable() && !right_type.ignore_nullable_issues() {
+    } else if right_type.is_nullable() && !right_type.ignore_nullable_issues() && !right_type.has_error_path_null() {
         context.collector.report_with_code(
             IssueCode::PossiblyNullOperand,
             Issue::warning(format!(

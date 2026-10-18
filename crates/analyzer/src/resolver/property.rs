@@ -225,7 +225,11 @@ where
         if object_atomic.is_null() || object_atomic.is_void() {
             result.encountered_null = true;
 
-            if checks_receiver && !is_null_safe && !object_type.has_nullsafe_null() {
+            if checks_receiver
+                && !is_null_safe
+                && !object_type.has_nullsafe_null()
+                && !object_type.has_error_path_null()
+            {
                 report_access_on_null(
                     context,
                     block_context,

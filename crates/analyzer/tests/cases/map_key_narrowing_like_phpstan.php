@@ -24,7 +24,7 @@ final class LangLists
      */
     public function no_isset(string $lang): array
     {
-        return $this->lists[$lang]; // @mago-expect analysis:possibly-undefined-string-array-index,nullable-return-statement,invalid-return-statement
+        return $this->lists[$lang]; // @mago-expect analysis:possibly-undefined-string-array-index
     }
 }
 
@@ -52,7 +52,7 @@ function cast_key_isset(array $links_of, array $references_by_batch, string $id)
  */
 function cast_key_without_isset(array $map, int $key): int
 {
-    return $map[(string) $key]; // @mago-expect analysis:possibly-undefined-string-array-index,nullable-return-statement,invalid-return-statement
+    return $map[(string) $key]; // @mago-expect analysis:possibly-undefined-string-array-index
 }
 
 /**
@@ -63,7 +63,7 @@ function cast_key_reassigned(array $map, int $key): int
     if (isset($map[(string) $key])) {
         $key++;
 
-        return $map[(string) $key]; // @mago-expect analysis:possibly-undefined-string-array-index,nullable-return-statement,invalid-return-statement
+        return $map[(string) $key]; // @mago-expect analysis:possibly-undefined-string-array-index
     }
 
     return 0;
@@ -87,7 +87,7 @@ function concat_key_guarded(array $link): string
  */
 function concat_key_unguarded(array $map, string $side): string
 {
-    return $map[$side . '@ref']; // @mago-expect analysis:possibly-undefined-string-array-index,nullable-return-statement,invalid-return-statement
+    return $map[$side . '@ref']; // @mago-expect analysis:possibly-undefined-string-array-index
 }
 
 /**
@@ -133,7 +133,7 @@ function nullable_array_closure_parameter_takes_shape(array $skip): array
 function nullable_array_closure_parameter_takes_map(array $skip): int
 {
     return count(array_map(
-        static fn (array|null $documents): array => $documents === null ? [] : $documents['closed'], // @mago-expect analysis:possibly-undefined-string-array-index,nullable-return-statement,invalid-return-statement
+        static fn (array|null $documents): array => $documents === null ? [] : $documents['closed'], // @mago-expect analysis:possibly-undefined-string-array-index
         array_values($skip),
     ));
 }

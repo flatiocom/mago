@@ -6,7 +6,6 @@ $x = null;
 
 /**
  * @mago-expect analysis:possibly-undefined-string-array-index
- * @mago-expect analysis:possibly-null-array-access
  */
 echo $y['foo']['baz'];
 

@@ -303,7 +303,13 @@ pub fn handle_return_value<'ctx, A>(
     }
 
     if return_value.is_some() {
-        artifacts.inferred_return_types.push(Rc::clone(&inferred_return_type));
+        artifacts.inferred_return_types.push(
+            if inferred_return_type.has_error_path_null() && !inferred_return_type.is_null() {
+                Rc::new(inferred_return_type.to_non_nullable())
+            } else {
+                Rc::clone(&inferred_return_type)
+            },
+        );
     }
 
     if let Some(return_value) = return_value {

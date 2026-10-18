@@ -19,7 +19,7 @@ final class Ordinal
      */
     public static function one_key_missing(string $suffix): string
     {
-        return self::SUFFIX[$suffix]; // @mago-expect analysis:possibly-undefined-string-array-index,nullable-return-statement,invalid-return-statement
+        return self::SUFFIX[$suffix]; // @mago-expect analysis:possibly-undefined-string-array-index
     }
 }
 
@@ -36,7 +36,7 @@ function sealed_shape_every_key_defined(array $applied, string $currency): float
  */
 function sealed_shape_optional_key(array $applied, string $currency): float
 {
-    return $applied[$currency === 'USD' ? 'usd' : 'eur'] + 1.0; // @mago-expect analysis:possibly-undefined-string-array-index,possibly-null-operand
+    return $applied[$currency === 'USD' ? 'usd' : 'eur'] + 1.0; // @mago-expect analysis:possibly-undefined-string-array-index
 }
 
 /**
@@ -44,7 +44,7 @@ function sealed_shape_optional_key(array $applied, string $currency): float
  */
 function union_member_lacks_key(array $applied, string $currency): float
 {
-    return $applied[$currency === 'USD' ? 'usd' : 'eur'] + 1.0; // @mago-expect analysis:possibly-undefined-string-array-index,possibly-null-operand
+    return $applied[$currency === 'USD' ? 'usd' : 'eur'] + 1.0; // @mago-expect analysis:possibly-undefined-string-array-index
 }
 
 function constant_array_every_key_defined(int $amount, bool $fx): string

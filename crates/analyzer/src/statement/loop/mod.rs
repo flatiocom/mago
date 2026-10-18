@@ -1631,7 +1631,7 @@ where
         return Ok((false, get_arraykey(), get_never()));
     }
 
-    if iterator_type.is_nullable() && !iterator_type.ignore_nullable_issues() {
+    if iterator_type.is_nullable() && !iterator_type.ignore_nullable_issues() && !iterator_type.has_error_path_null() {
         context.collector.report_with_code(
             IssueCode::PossiblyNullIterator,
             Issue::warning(format!("Expression being iterated (type `{}`) might be `null` at runtime.", iterator_type.get_id()))

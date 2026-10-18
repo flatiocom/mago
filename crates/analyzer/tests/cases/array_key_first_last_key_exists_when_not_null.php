@@ -40,7 +40,7 @@ function unchecked(array $values): int
 {
     $last = array_key_last($values);
 
-    /** @mago-expect analysis:possibly-null-array-index,possibly-undefined-int-array-index,nullable-return-statement,invalid-return-statement */
+    /** @mago-expect analysis:possibly-null-array-index,possibly-undefined-int-array-index */
     return $values[$last];
 }
 
@@ -55,7 +55,7 @@ function other_array(array $values, array $others): int
         return 0;
     }
 
-    /** @mago-expect analysis:possibly-undefined-int-array-index,nullable-return-statement,invalid-return-statement */
+    /** @mago-expect analysis:possibly-undefined-int-array-index */
     return $others[$last];
 }
 
@@ -68,6 +68,6 @@ function reassigned_key(array $values, int $index): int
         return 0;
     }
 
-    /** @mago-expect analysis:possibly-undefined-int-array-index,nullable-return-statement,invalid-return-statement */
+    /** @mago-expect analysis:possibly-undefined-int-array-index */
     return $values[$last];
 }

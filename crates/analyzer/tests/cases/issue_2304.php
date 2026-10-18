@@ -109,7 +109,7 @@ final class Repro
         if ($root->wrapper->item instanceof Gamma) {
             $gamma = new OutputGamma();
             replaceItem($root->wrapper);
-            // @mago-expect analysis:non-existent-property,non-existent-property,possibly-null-argument
+            // @mago-expect analysis:non-existent-property,non-existent-property
             $gamma->setShared($root->wrapper->item->shared);
         }
     }

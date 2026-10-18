@@ -191,7 +191,7 @@ function unsetInsideBranch(array $files, string $key): void
     }
 
     if ($valid) {
-        // @mago-expect analysis:possibly-undefined-string-array-index,possibly-null-argument
+        // @mago-expect analysis:possibly-undefined-string-array-index
         take_string($files[$key]);
     }
 }
@@ -206,7 +206,7 @@ function changedKeyInsideBranch(array $files, string $key, string $replacement):
     }
 
     if ($valid) {
-        // @mago-expect analysis:possibly-undefined-string-array-index,possibly-null-argument
+        // @mago-expect analysis:possibly-undefined-string-array-index
         take_string($files[$key]);
     }
 }
