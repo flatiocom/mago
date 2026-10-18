@@ -113,6 +113,9 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `allow-implicit-pipe-callable-types` | `false` | Skip the closure / arrow-function type-hint checks when the callable is the right-hand side of `\|>`. |
 | `register-super-globals` | `true` | Register PHP superglobals like `$_GET` and `$_POST` automatically. |
 | `trust-existence-checks` | `true` | Narrow types based on `method_exists()`, `property_exists()`, `function_exists()`, and `defined()`. |
+| `pollute-scope-with-loop-initial-assignments` | `true` | When `false`, the variables a `for` loop defines, in its initialization, condition or body, are possibly undefined after the loop, like PHPStan's `polluteScopeWithLoopInitialAssignments: false`. |
+| `pollute-scope-with-always-iterable-foreach` | `true` | When `false`, the variables a `foreach` over a non-empty iterable defines are possibly undefined after the loop, like PHPStan's `polluteScopeWithAlwaysIterableForeach: false`. |
+| `pollute-scope-with-block` | `true` | When `false`, the variables a bare `{ ... }` block defines are possibly undefined after it, like PHPStan's `polluteScopeWithBlock: false`. |
 | `check-property-initialization` | `false` | Verify that typed properties are initialised in a constructor or class initialiser. |
 | `check-use-statements` | `false` | Report use statements that import non-existent classes, functions, or constants. |
 | `check-name-casing` | `false` | Report incorrect casing when referencing classes, functions, etc. Helps prevent autoload failures on case-sensitive filesystems. |

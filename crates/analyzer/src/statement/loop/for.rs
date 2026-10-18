@@ -19,7 +19,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for For<'arena> {
     where
         A: Arena,
     {
-        let infinite_loop = self.initializations.is_empty() && self.conditions.is_empty() && self.increments.is_empty();
+        let infinite_loop = self.conditions.is_empty();
+
+        let defined_before_loop = (!context.settings.pollute_scope_with_loop_initial_assignments)
+            .then(|| block_context.defined_variable_ids());
 
         r#loop::analyze_for_or_while_loop(
             context,
@@ -31,7 +34,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for For<'arena> {
             self.body.statements(),
             self.span(),
             infinite_loop,
-        )
+        )?;
+
+        if let Some(defined_before_loop) = defined_before_loop {
+            block_context.mark_new_variables_possibly_undefined(&defined_before_loop);
+        }
+
+        Ok(())
     }
 }
 

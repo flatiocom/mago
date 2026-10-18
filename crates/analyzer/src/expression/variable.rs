@@ -165,7 +165,10 @@ where
         Some(variable_type) => Rc::clone(variable_type),
         None => {
             if block_context.variables_possibly_in_scope.contains(&variable_atom) {
-                if !block_context.flags.inside_isset() && !block_context.flags.inside_unset() {
+                if !block_context.flags.inside_isset()
+                    && !block_context.flags.inside_unset()
+                    && !block_context.flags.inside_variable_reference()
+                {
                     context.collector.report_with_code(
                         IssueCode::PossiblyUndefinedVariable,
                         Issue::warning(format!(
@@ -181,7 +184,11 @@ where
                     );
                 }
 
-                Rc::new(get_mixed())
+                block_context
+                    .possibly_in_scope_types
+                    .get(&variable_atom)
+                    .cloned()
+                    .unwrap_or_else(|| Rc::new(get_mixed()))
             } else if block_context.flags.inside_variable_reference() {
                 context.collector.report_with_code(
                     IssueCode::ReferenceToUndefinedVariable,
@@ -262,6 +269,7 @@ where
         && block_context.possibly_undefined_variable_ids.contains(&variable_atom)
         && !block_context.flags.inside_isset()
         && !block_context.flags.inside_unset()
+        && !block_context.flags.inside_variable_reference()
     {
         context.collector.report_with_code(
             IssueCode::PossiblyUndefinedVariable,
@@ -275,7 +283,10 @@ where
             .with_note("Accessing an undefined variable will result in an `E_WARNING` (PHP 8+) or `E_NOTICE` (PHP 7) and it will be treated as `null`.")
             .with_help(format!("Initialize `{variable_name}` before conditional paths, or use `isset()` to check its existence.")),
         );
-    } else if variable_type.possibly_undefined_from_try() && !block_context.flags.inside_isset() {
+    } else if variable_type.possibly_undefined_from_try()
+        && !block_context.flags.inside_isset()
+        && !block_context.flags.inside_variable_reference()
+    {
         context.collector.report_with_code(
             IssueCode::PossiblyUndefinedVariable,
             Issue::warning(format!(
@@ -444,6 +455,8 @@ mod tests {
             IssueCode::PossiblyUndefinedVariable, // $key
             IssueCode::PossiblyUndefinedVariable, // $value
             IssueCode::PossiblyUndefinedVariable, // $y
+            IssueCode::RedundantCast, // $key
+            IssueCode::RedundantCast, // $value
         ]
     }
 

@@ -44,6 +44,7 @@ use crate::context::scope::conditional_scope::IfConditionalScope;
 use crate::context::scope::control_action::ControlAction;
 use crate::context::scope::control_action::ControlActionSet;
 use crate::context::scope::if_scope::IfScope;
+use crate::context::scope::is_access_path;
 use crate::context::scope::var_has_root;
 use crate::context::scope::var_references_dynamic;
 use crate::context::utils::inherit_branch_context_properties;
@@ -51,7 +52,7 @@ use crate::error::AnalysisError;
 use crate::formula;
 use crate::formula::negate_or_synthesize;
 use crate::reconciler::reconcile_keyed_types;
-use crate::statement::analyze_statements;
+use crate::statement::analyze_body_statements;
 use crate::utils::conditional;
 use crate::utils::expression::is_derived_access_path;
 use crate::utils::misc::check_for_paradox;
@@ -585,7 +586,7 @@ where
     let assigned_variable_ids = std::mem::take(&mut if_block_context.assigned_variable_ids);
     let possibly_assigned_variable_ids = std::mem::take(&mut if_block_context.possibly_assigned_variable_ids);
 
-    analyze_statements(if_statement.body.statements(), context, &mut if_block_context, artifacts)?;
+    analyze_body_statements(if_statement.body.statements(), context, &mut if_block_context, artifacts)?;
 
     for variable_id in &if_block_context.parent_conflicting_clause_variables {
         outer_block_context.remove_variable_from_conflicting_clauses(context, *variable_id, None);
@@ -662,6 +663,7 @@ where
             .negated_types
             .keys()
             .filter(|key| pre_assignment_else_redefined_locals.contains_key(key))
+            .filter(|key| updates_from_branch(key, &if_block_context, has_leaving_statements))
             .copied()
             .collect::<WordSet>();
 
@@ -934,7 +936,7 @@ where
     let pre_assigned_variable_ids = std::mem::take(&mut else_if_block_context.assigned_variable_ids);
     let pre_possibly_assigned_variable_ids = std::mem::take(&mut else_if_block_context.possibly_assigned_variable_ids);
 
-    analyze_statements(else_if_clause.1, context, &mut else_if_block_context, artifacts)?;
+    analyze_body_statements(else_if_clause.1, context, &mut else_if_block_context, artifacts)?;
 
     for variable_id in &else_if_block_context.parent_conflicting_clause_variables {
         outer_block_context.remove_variable_from_conflicting_clauses(context, *variable_id, None);
@@ -1165,7 +1167,7 @@ where
     let pre_possibly_assigned_variable_ids = std::mem::take(&mut else_block_context.possibly_assigned_variable_ids);
 
     if let Some(statements) = else_statements {
-        analyze_statements(statements, context, else_block_context, artifacts)?;
+        analyze_body_statements(statements, context, else_block_context, artifacts)?;
     }
 
     for variable_id in &else_block_context.parent_conflicting_clause_variables {
@@ -1214,6 +1216,7 @@ where
             .keys()
             .copied()
             .filter(|var| outer_block_context.locals.contains_key(var))
+            .filter(|var| updates_from_branch(var, else_block_context, has_leaving_statements))
             .collect::<WordSet>();
 
         outer_block_context.update_locals(
@@ -1467,6 +1470,11 @@ fn update_if_scope<'ctx, A>(
         if_scope.redefined_variables = Some(redefined_variables);
         if_scope.possibly_redefined_variables = possibly_redefined_variables;
     }
+}
+
+/// An impure call in a branch drops its property and index narrowings; the outer type then stays as it was.
+fn updates_from_branch(variable_id: &Word, branch_context: &BlockContext<'_>, has_leaving_statements: bool) -> bool {
+    has_leaving_statements || branch_context.locals.contains_key(variable_id) || !is_access_path(variable_id.as_bytes())
 }
 
 fn merge_definitely_uninitialized_property_ids(if_scope: &mut IfScope<'_>, branch_context: &BlockContext<'_>) {

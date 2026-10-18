@@ -286,6 +286,15 @@ pub struct AnalyzerConfiguration {
     /// Defaults to `false`.
     pub check_property_initialization: bool,
 
+    /// Whether the variables a `for` loop defines stay defined after the loop.
+    pub pollute_scope_with_loop_initial_assignments: bool,
+
+    /// Whether the variables a `foreach` over a non-empty iterable defines stay defined after the loop.
+    pub pollute_scope_with_always_iterable_foreach: bool,
+
+    /// Whether the variables a bare `{ ... }` block defines stay defined after it.
+    pub pollute_scope_with_block: bool,
+
     /// Check for non-existent symbols in use statements.
     ///
     /// When enabled, the analyzer will report use statements that import symbols
@@ -532,6 +541,9 @@ impl AnalyzerConfiguration {
             trust_existence_checks: self.trust_existence_checks,
             class_initializers: self.class_initializers.iter().filter_map(|s| ClassInitializer::parse(s)).collect(),
             check_property_initialization: self.check_property_initialization,
+            pollute_scope_with_loop_initial_assignments: self.pollute_scope_with_loop_initial_assignments,
+            pollute_scope_with_always_iterable_foreach: self.pollute_scope_with_always_iterable_foreach,
+            pollute_scope_with_block: self.pollute_scope_with_block,
             check_use_statements: self.check_use_statements,
             check_experimental: self.check_experimental,
             check_name_casing: self.check_name_casing,
@@ -593,6 +605,9 @@ impl Default for AnalyzerConfiguration {
             trust_existence_checks: defaults.trust_existence_checks,
             class_initializers: vec![],
             check_property_initialization: defaults.check_property_initialization,
+            pollute_scope_with_loop_initial_assignments: defaults.pollute_scope_with_loop_initial_assignments,
+            pollute_scope_with_always_iterable_foreach: defaults.pollute_scope_with_always_iterable_foreach,
+            pollute_scope_with_block: defaults.pollute_scope_with_block,
             check_use_statements: defaults.check_use_statements,
             check_experimental: defaults.check_experimental,
             check_name_casing: defaults.check_name_casing,

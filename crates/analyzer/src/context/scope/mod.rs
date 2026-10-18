@@ -8,6 +8,13 @@ pub mod if_scope;
 pub mod loop_scope;
 
 #[inline]
+pub fn is_access_path(var_id: &[u8]) -> bool {
+    var_id.contains(&b'[')
+        || memchr::memmem::find(var_id, b"->").is_some()
+        || memchr::memmem::find(var_id, b"::").is_some()
+}
+
+#[inline]
 pub fn var_has_root(var_id: Word, root_var_id: Word) -> bool {
     if var_id == root_var_id {
         return true;

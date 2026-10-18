@@ -65,6 +65,10 @@ test_case!(array_access_assignment_is_not_remembered_by_default);
 test_case!(array_declared_with_mixed_key_has_array_key_keys);
 test_case!(class_constant_with_spread_has_inferred_type);
 test_case!(closure_keeps_declared_return_over_wider_inferred_return);
+test_case!(property_narrowing_dropped_in_branch_keeps_the_outer_type);
+test_case!(switch_case_only_variable_is_possibly_defined_after_switch);
+test_case!(loop_body_variable_keeps_its_type_on_the_next_pass);
+test_case!(loop_body_only_variable_keeps_its_type_after_the_loop);
 test_case!(collator_sort_keeps_value_type);
 test_case!(generic_docblock_native_return);
 test_case!(message_quality);
@@ -636,6 +640,13 @@ test_case!(conditional_type_narrowing);
 test_case!(conditional_initialization);
 test_case!(pure_inherited_by_override);
 test_case!(redundant_isset_check_like_phpstan);
+test_case!(scope_without_loop_and_block_pollution, {
+    let mut s = crate::framework::default_test_settings();
+    s.pollute_scope_with_loop_initial_assignments = false;
+    s.pollute_scope_with_always_iterable_foreach = false;
+    s.pollute_scope_with_block = false;
+    s
+});
 test_case!(type_is_not_narrowed_by_nested_conditional_exit);
 test_case!(dynamic_array_key_in_string_interpolation);
 test_case!(big_numbers);
@@ -2981,11 +2992,13 @@ test_case!(composite_string_non_falsy);
 test_case!(mixed_operand_arithmetic_result);
 test_case!(conditional_parent_return_covariance);
 test_case!(deferred_constant_int_folding);
+test_case!(by_reference_argument_possibly_undefined);
 test_case!(int_exponentiation_result);
 test_case!(inherited_param_out);
 test_case!(array_merge_renumbers_int_keys);
 test_case!(class_constant_keys_of_constant_array);
 test_case!(generic_first_class_callable_argument);
+test_case!(for_without_condition_never_exits);
 test_case!(array_access_offset_isset_then_type_check);
 test_case!(array_access_union_offset_write_remembered, {
     let mut s = crate::framework::default_test_settings();

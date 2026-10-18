@@ -274,6 +274,25 @@ pub struct Settings {
     /// Defaults to `false`.
     pub check_property_initialization: bool,
 
+    /// Keep the variables a `for` loop defines, in its initialization, condition or body, as defined after
+    /// the loop. When `false`, they are possibly undefined there, like PHPStan with
+    /// `polluteScopeWithLoopInitialAssignments: false`.
+    ///
+    /// Defaults to `true`.
+    pub pollute_scope_with_loop_initial_assignments: bool,
+
+    /// Keep the variables a `foreach` over a non-empty iterable defines as defined after the loop. When
+    /// `false`, they are possibly undefined there, like PHPStan with `polluteScopeWithAlwaysIterableForeach: false`.
+    ///
+    /// Defaults to `true`.
+    pub pollute_scope_with_always_iterable_foreach: bool,
+
+    /// Keep the variables a bare `{ ... }` block defines as defined after it. When `false`, they are
+    /// possibly undefined there, like PHPStan with `polluteScopeWithBlock: false`.
+    ///
+    /// Defaults to `true`.
+    pub pollute_scope_with_block: bool,
+
     /// Check for non-existent symbols in use statements.
     ///
     /// When enabled, the analyzer will report use statements that import symbols
@@ -463,6 +482,9 @@ impl Settings {
             trust_existence_checks: true,
             class_initializers: Vec::new(),
             check_property_initialization: false,
+            pollute_scope_with_loop_initial_assignments: true,
+            pollute_scope_with_always_iterable_foreach: true,
+            pollute_scope_with_block: true,
             check_use_statements: false,
             check_experimental: false,
             check_name_casing: false,

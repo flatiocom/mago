@@ -42,6 +42,7 @@ use crate::context::scope::case_scope::CaseScope;
 use crate::context::scope::control_action::BreakType;
 use crate::context::scope::control_action::ControlAction;
 use crate::context::scope::control_action::ControlActionSet;
+use crate::context::scope::is_access_path;
 use crate::context::utils::inherit_branch_context_properties;
 use crate::error::AnalysisError;
 use crate::expression::binary::utils::is_always_identical_to;
@@ -81,6 +82,7 @@ where
     new_locals: Option<WordMap<Rc<TUnion>>>,
     redefined_variables: Option<WordMap<Rc<TUnion>>>,
     possibly_redefined_variables: Option<WordMap<Rc<TUnion>>>,
+    possibly_defined_variables: WordMap<Rc<TUnion>>,
     leftover_statement_groups: Vec<(Vec<Statement<'arena>>, bool)>,
     leftover_case_equality_expression: Option<Expression<'arena>>,
     has_fallthrough: bool,
@@ -115,6 +117,7 @@ where
             new_locals: None,
             redefined_variables: None,
             possibly_redefined_variables: None,
+            possibly_defined_variables: WordMap::default(),
             leftover_statement_groups: vec![],
             leftover_case_equality_expression: None,
             has_fallthrough: false,
@@ -295,6 +298,17 @@ where
                     possibly_redefined_vars.insert(var_id, var_type);
                 }
             }
+        }
+
+        for (var_id, var_type) in self.possibly_defined_variables {
+            if self.block_context.locals.contains_key(&var_id) {
+                continue;
+            }
+
+            let mut var_type = Rc::unwrap_or_clone(var_type);
+            var_type.set_possibly_undefined(true, None);
+            self.block_context.locals.insert(var_id, Rc::new(var_type));
+            self.block_context.possibly_undefined_variable_ids.insert(var_id);
         }
 
         for (var_id, var_type) in possibly_redefined_vars {
@@ -898,6 +912,27 @@ where
         if matches!(case_exit_type, ControlAction::Continue) {
             return;
         }
+
+        for (var_id, var_type) in &case_block_context.locals {
+            if original_block_context.locals.contains_key(var_id)
+                || !var_id.as_bytes().starts_with(b"$")
+                || is_access_path(var_id.as_bytes())
+            {
+                continue;
+            }
+
+            let combined = match self.possibly_defined_variables.get(var_id) {
+                Some(existing_type) => {
+                    combine_union_types_rc(var_type, existing_type, self.context.codebase, CombinerOptions::default())
+                }
+                None => Rc::clone(var_type),
+            };
+            self.possibly_defined_variables.insert(*var_id, combined);
+        }
+
+        self.block_context
+            .variables_possibly_in_scope
+            .extend(case_block_context.variables_possibly_in_scope.iter().copied());
 
         let mut removed_var_ids = WordSet::default();
         let case_redefined_vars =

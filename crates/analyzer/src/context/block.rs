@@ -26,6 +26,7 @@ use crate::context::Context;
 use crate::context::block_flags::BlockContextFlags;
 use crate::context::scope::control_action::ControlActionSet;
 use crate::context::scope::finally_scope::FinallyScope;
+use crate::context::scope::is_access_path;
 use crate::context::scope::var_has_root;
 use crate::reconciler::assertion_reconciler;
 use crate::reconciler::negated_assertion_reconciler;
@@ -58,6 +59,7 @@ pub struct BlockContext<'ctx> {
     pub locals: WordMap<Rc<TUnion>>,
     pub static_locals: WordSet,
     pub variables_possibly_in_scope: WordSet,
+    pub possibly_in_scope_types: WordMap<Rc<TUnion>>,
     pub conditionally_referenced_variable_ids: WordSet,
     pub assigned_variable_ids: WordMap<u32>,
     pub possibly_assigned_variable_ids: WordSet,
@@ -212,6 +214,7 @@ impl<'ctx> BlockContext<'ctx> {
             locals: if register_super_globals { get_super_globals() } else { WordMap::default() },
             static_locals: WordSet::default(),
             variables_possibly_in_scope: WordSet::default(),
+            possibly_in_scope_types: WordMap::default(),
             conditionally_referenced_variable_ids: WordSet::default(),
             assigned_variable_ids: WordMap::default(),
             possibly_assigned_variable_ids: WordSet::default(),
@@ -304,6 +307,37 @@ impl<'ctx> BlockContext<'ctx> {
         }
 
         redefined_vars
+    }
+
+    pub fn defined_variable_ids(&self) -> WordSet {
+        self.locals
+            .iter()
+            .filter(|(variable, variable_type)| {
+                !variable_type.possibly_undefined() || !self.possibly_undefined_variable_ids.contains(*variable)
+            })
+            .map(|(variable, _)| *variable)
+            .collect()
+    }
+
+    /// Marks the variables defined since `defined_before` as possibly undefined, as if the code in between
+    /// might not have run.
+    pub fn mark_new_variables_possibly_undefined(&mut self, defined_before: &WordSet) {
+        if self.flags.has_returned() {
+            return;
+        }
+
+        for (variable, variable_type) in &mut self.locals {
+            let name = variable.as_bytes();
+            if defined_before.contains(variable) || !name.starts_with(b"$") || is_access_path(name) {
+                continue;
+            }
+
+            if !variable_type.possibly_undefined() {
+                Rc::make_mut(variable_type).set_possibly_undefined(true, None);
+            }
+
+            self.possibly_undefined_variable_ids.insert(*variable);
+        }
     }
 
     pub fn get_new_or_updated_locals(original_context: &Self, new_context: &Self) -> WordSet {
@@ -652,6 +686,7 @@ impl<'ctx> BlockContext<'ctx> {
 
         self.locals.remove(&remove_var_atom);
         self.variables_possibly_in_scope.remove(&remove_var_atom);
+        self.possibly_in_scope_types.remove(&remove_var_atom);
         self.assigned_variable_ids.remove(&remove_var_atom);
         self.possibly_assigned_variable_ids.remove(&remove_var_atom);
         self.conditionally_referenced_variable_ids.remove(&remove_var_atom);

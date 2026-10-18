@@ -180,7 +180,17 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Statement<'arena> {
                 function.analyze(context, block_context, artifacts)
             }
             Statement::Block(block) => {
-                analyze_statements(block.statements.as_slice(), context, block_context, artifacts)
+                let is_bare_block = context.body_block_span != Some(block.span());
+                let defined_before_block = (is_bare_block && !context.settings.pollute_scope_with_block)
+                    .then(|| block_context.defined_variable_ids());
+
+                analyze_statements(block.statements.as_slice(), context, block_context, artifacts)?;
+
+                if let Some(defined_before_block) = defined_before_block {
+                    block_context.mark_new_variables_possibly_undefined(&defined_before_block);
+                }
+
+                Ok(())
             }
             Statement::Expression(expression) => expression.expression.analyze(context, block_context, artifacts),
             Statement::Try(r#try) => r#try.analyze(context, block_context, artifacts),
@@ -280,6 +290,23 @@ where
     }
 
     Ok(())
+}
+
+/// Analyzes the body of a control structure, whose braces open no block of their own.
+pub fn analyze_body_statements<'ctx, 'arena, A>(
+    statements: &[Statement<'arena>],
+    context: &mut Context<'ctx, 'arena, A>,
+    block: &mut BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+) -> Result<(), AnalysisError>
+where
+    A: Arena,
+{
+    if let [Statement::Block(body)] = statements {
+        context.body_block_span = Some(body.span());
+    }
+
+    analyze_statements(statements, context, block, artifacts)
 }
 
 /// Checks statement expressions for unused results or lack of side effects.

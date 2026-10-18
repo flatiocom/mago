@@ -162,24 +162,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Break<'arena> {
                 );
             }
 
-            if loop_scope.iteration_count == 0 {
-                for (var_id, var_type) in &block_context.locals {
-                    if !loop_scope.parent_context_variables.contains_key(var_id) {
-                        loop_scope.possibly_defined_loop_parent_variables.insert(
-                            *var_id,
-                            match loop_scope.possibly_defined_loop_parent_variables.get(var_id) {
-                                Some(existing_type) => Rc::new(combine_union_types(
-                                    existing_type,
-                                    var_type,
-                                    context.codebase,
-                                    CombinerOptions::default(),
-                                )),
-                                None => Rc::clone(var_type),
-                            },
-                        );
-                    }
-                }
-            }
+            loop_scope.record_possibly_defined_loop_parent_variables(&block_context.locals, context.codebase);
 
             if let Some(finally_scope) = block_context.finally_scope.clone() {
                 let mut finally_scope = (*finally_scope).borrow_mut();

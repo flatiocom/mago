@@ -64,16 +64,19 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
         let was_inside_isset = block_context.flags.inside_isset();
         let was_inside_general_use = block_context.flags.inside_general_use();
         let was_inside_unset = block_context.flags.inside_unset();
+        let was_inside_variable_reference = block_context.flags.inside_variable_reference();
 
         block_context.flags.set_inside_isset(false);
         block_context.flags.set_inside_general_use(true);
         block_context.flags.set_inside_unset(false);
+        block_context.flags.set_inside_variable_reference(false);
 
         self.index.analyze(context, block_context, artifacts)?;
 
         block_context.flags.set_inside_isset(was_inside_isset);
         block_context.flags.set_inside_unset(was_inside_unset);
         block_context.flags.set_inside_general_use(was_inside_general_use);
+        block_context.flags.set_inside_variable_reference(was_inside_variable_reference);
 
         let index_type =
             artifacts.get_rc_expression_type(&self.index).cloned().unwrap_or_else(|| Rc::new(get_arraykey()));

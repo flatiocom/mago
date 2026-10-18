@@ -201,6 +201,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Continue<'arena> {
                     },
                 );
             }
+
+            loop_scope.record_possibly_defined_loop_parent_variables(&block_context.locals, context.codebase);
         }
 
         if let Some(finally_scope) = block_context.finally_scope.clone() {

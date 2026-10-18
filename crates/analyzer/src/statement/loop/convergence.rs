@@ -386,6 +386,7 @@ fn same_flow(left: &BlockContext<'_>, right: &BlockContext<'_>) -> bool {
         && same_scope_context(&left.scope, &right.scope)
         && left.static_locals == right.static_locals
         && left.variables_possibly_in_scope == right.variables_possibly_in_scope
+        && left.possibly_in_scope_types == right.possibly_in_scope_types
         && left.conditionally_referenced_variable_ids == right.conditionally_referenced_variable_ids
         && left.assigned_variable_ids == right.assigned_variable_ids
         && left.possibly_assigned_variable_ids == right.possibly_assigned_variable_ids

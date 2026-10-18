@@ -3,6 +3,9 @@ use std::rc::Rc;
 use mago_word::WordMap;
 use mago_word::WordSet;
 
+use mago_codex::metadata::CodebaseMetadata;
+use mago_codex::ttype::combine_union_types;
+use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::union::TUnion;
 use mago_span::Span;
 
@@ -50,5 +53,30 @@ impl LoopScope {
 
     pub fn with_parent_loop(self, parent_loop: Option<Box<LoopScope>>) -> Self {
         Self { parent_loop, ..self }
+    }
+
+    pub fn record_possibly_defined_loop_parent_variables(
+        &mut self,
+        locals: &WordMap<Rc<TUnion>>,
+        codebase: &CodebaseMetadata,
+    ) {
+        if self.iteration_count != 0 {
+            return;
+        }
+
+        for (var_id, var_type) in locals {
+            if self.parent_context_variables.contains_key(var_id) {
+                continue;
+            }
+
+            let resulting_type = match self.possibly_defined_loop_parent_variables.get(var_id) {
+                Some(existing_type) => {
+                    Rc::new(combine_union_types(existing_type, var_type, codebase, CombinerOptions::default()))
+                }
+                None => Rc::clone(var_type),
+            };
+
+            self.possibly_defined_loop_parent_variables.insert(*var_id, resulting_type);
+        }
     }
 }

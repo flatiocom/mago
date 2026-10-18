@@ -57,7 +57,6 @@ use mago_word::WordSet;
 use mago_word::word;
 
 use crate::analyzable::Analyzable;
-use crate::analyze_statements;
 use crate::artifacts::AnalysisArtifacts;
 use crate::artifacts::CheckpointAction;
 use crate::code::IssueCode;
@@ -65,6 +64,7 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::block::BreakContext;
 use crate::context::scope::control_action::ControlAction;
+use crate::context::scope::is_access_path;
 use crate::context::scope::loop_scope::LoopScope;
 use crate::context::scope::var_has_root;
 use crate::context::utils::inherit_branch_context_properties;
@@ -72,6 +72,7 @@ use crate::error::AnalysisError;
 use crate::formula::get_formula;
 use crate::formula::negate_or_synthesize;
 use crate::reconciler::reconcile_keyed_types;
+use crate::statement::analyze_body_statements;
 use crate::statement::r#loop::assignment_map_visitor::get_assignment_map;
 use crate::statement::r#loop::cleaner::clean_nodes;
 
@@ -258,26 +259,34 @@ fn inherit_loop_block_context<'ctx, A>(
                 }
             }
 
-            for (variable, _) in inner_loop_block_context.locals {
-                block_context.variables_possibly_in_scope.insert(variable);
-            }
-        } else {
             for (variable, variable_type) in inner_loop_block_context.locals {
-                if !has_break_or_continue {
-                    block_context.locals.insert(variable, variable_type);
+                block_context.variables_possibly_in_scope.insert(variable);
+
+                if loop_scope.condition_always_false
+                    || block_context.locals.contains_key(&variable)
+                    || !variable.as_bytes().starts_with(b"$")
+                    || is_access_path(variable.as_bytes())
+                {
                     continue;
                 }
 
-                if let Some(possible_type) = loop_scope.possibly_defined_loop_parent_variables.get(&variable) {
-                    block_context.locals.insert(
-                        variable,
-                        Rc::new(ttype::combine_union_types(
-                            &variable_type,
-                            possible_type,
-                            context.codebase,
-                            CombinerOptions::default(),
-                        )),
-                    );
+                let Some(exit_type) =
+                    loop_exit_type(context, &loop_scope, has_break_or_continue, variable, variable_type)
+                else {
+                    continue;
+                };
+
+                let mut exit_type = Rc::unwrap_or_clone(exit_type);
+                exit_type.set_possibly_undefined(true, None);
+                block_context.locals.insert(variable, Rc::new(exit_type));
+                block_context.possibly_undefined_variable_ids.insert(variable);
+            }
+        } else {
+            for (variable, variable_type) in inner_loop_block_context.locals {
+                if let Some(exit_type) =
+                    loop_exit_type(context, &loop_scope, has_break_or_continue, variable, variable_type)
+                {
+                    block_context.locals.insert(variable, exit_type);
                 }
             }
         }
@@ -292,6 +301,30 @@ fn inherit_loop_block_context<'ctx, A>(
     } else {
         block_context.variables_possibly_in_scope = loop_scope.variables_possibly_in_scope;
     }
+}
+
+fn loop_exit_type<A>(
+    context: &Context<'_, '_, A>,
+    loop_scope: &LoopScope,
+    has_break_or_continue: bool,
+    variable: Word,
+    end_of_body_type: Rc<TUnion>,
+) -> Option<Rc<TUnion>>
+where
+    A: Arena,
+{
+    if !has_break_or_continue {
+        return Some(end_of_body_type);
+    }
+
+    let break_type = loop_scope.possibly_defined_loop_parent_variables.get(&variable)?;
+
+    Some(Rc::new(ttype::combine_union_types(
+        &end_of_body_type,
+        break_type,
+        context.codebase,
+        CombinerOptions::default(),
+    )))
 }
 
 #[allow(clippy::similar_names)]
@@ -426,7 +459,7 @@ where
             artifacts.set_loop_scope(loop_scope.clone());
         }
 
-        analyze_statements(statements, context, &mut continue_context, artifacts)?;
+        analyze_body_statements(statements, context, &mut continue_context, artifacts)?;
         loop_scope = unsafe {
             // SAFETY: we know the loop scope will remain in the context.
             artifacts.take_loop_scope_unchecked()
@@ -475,7 +508,7 @@ where
 
             loop_scope = {
                 artifacts.set_loop_scope(loop_scope);
-                analyze_statements(statements, context, &mut continue_context, artifacts)?;
+                analyze_body_statements(statements, context, &mut continue_context, artifacts)?;
 
                 unsafe {
                     // SAFETY: we know the loop scope will remain in the context.
@@ -737,7 +770,26 @@ where
             }
 
             for variable_id in variables_to_remove {
-                continue_context.locals.remove(&variable_id);
+                let Some(variable_type) = continue_context.locals.remove(&variable_id) else {
+                    continue;
+                };
+
+                if variable_id.as_bytes().starts_with(b"$") && !is_access_path(variable_id.as_bytes()) {
+                    let mut variable_type = Rc::unwrap_or_clone(variable_type);
+                    variable_type.set_possibly_undefined(false, Some(false));
+
+                    let carried_type = match continue_context.possibly_in_scope_types.get(&variable_id) {
+                        Some(carried_type) => Rc::new(combine_union_types(
+                            &variable_type,
+                            carried_type,
+                            context.codebase,
+                            CombinerOptions::default(),
+                        )),
+                        None => Rc::new(variable_type),
+                    };
+
+                    continue_context.possibly_in_scope_types.insert(variable_id, carried_type);
+                }
             }
 
             continue_context.clauses.clone_from(&pre_loop_context.clauses);
@@ -857,7 +909,7 @@ where
 
                 let loop_scope = {
                     artifacts.set_loop_scope(loop_scope);
-                    analyze_statements(statements, context, &mut continue_context, artifacts)?;
+                    analyze_body_statements(statements, context, &mut continue_context, artifacts)?;
 
                     unsafe {
                         // SAFETY: we know the loop scope will remain in the context.

@@ -61,6 +61,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             return Ok(());
         }
 
+        let defined_before_loop = (always_enters_loop && !context.settings.pollute_scope_with_always_iterable_foreach)
+            .then(|| block_context.defined_variable_ids());
+
         if key_type.is_never() {
             key_type = get_mixed();
         }
@@ -214,6 +217,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             always_enters_loop,
             /* infinite_loop = */ false,
         );
+
+        if let Some(defined_before_loop) = defined_before_loop {
+            block_context.mark_new_variables_possibly_undefined(&defined_before_loop);
+        }
 
         // Refine after inheriting the loop context so a non-empty iterator's
         // widened type does not overwrite the fully transformed value type.
