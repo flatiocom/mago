@@ -451,7 +451,7 @@ pub(crate) fn assign_to_expression<'ctx, 'ast, 'arena, A>(
     mut source_type: Rc<TUnion>,
     destructuring: bool,
     property_write_kind: PropertyWriteKind,
-    is_compound_assignment: bool,
+    index_read_first: bool,
 ) -> Result<bool, AnalysisError>
 where
     A: Arena,
@@ -523,7 +523,7 @@ where
                 artifacts,
                 array_access.into(),
                 &source_type,
-                is_compound_assignment,
+                index_read_first,
             )?;
         }
         Expression::ArrayAppend(array_append) => {
@@ -533,7 +533,7 @@ where
                 artifacts,
                 array_append.into(),
                 &source_type,
-                is_compound_assignment,
+                index_read_first,
             )?;
         }
         Expression::Array(array) => {

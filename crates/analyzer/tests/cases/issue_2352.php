@@ -82,7 +82,7 @@ final readonly class NarrowWithClassConstant implements Equable
 
 function invalid(Thing1|Thing2 $left, Thing1|Thing2 $right): bool
 {
-    // @mago-expect analysis:possibly-invalid-argument,possibly-invalid-argument
+    // @mago-expect analysis:possibly-invalid-argument
     return $left->equals($right);
 }
 

@@ -518,7 +518,7 @@ where
                     Rc::clone(&new_type),
                     false,
                     PropertyWriteKind::Mutation,
-                    false,
+                    true,
                 )?;
 
                 block_context.assigned_variable_ids.insert(argument_id, argument.start_offset());
@@ -550,7 +550,7 @@ where
                     Rc::clone(&new_type),
                     false,
                     PropertyWriteKind::Mutation,
-                    false,
+                    true,
                 )?;
 
                 if let Some(argument_id) = argument_id {

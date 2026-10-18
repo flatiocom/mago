@@ -357,6 +357,7 @@ final class AnalyzerCodeModuleGenerator
         'unused-property-type',
         'overly-wide-bool-property-type',
         'unused-class-constant',
+        'unresolvable-template-type',
         'incorrect-method-casing',
         'unused-closure-use-variable',
         'possibly-invalid-array-index',

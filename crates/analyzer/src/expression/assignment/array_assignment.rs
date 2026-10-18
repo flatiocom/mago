@@ -61,7 +61,7 @@ pub(crate) fn analyze<'ctx, 'arena, A>(
     artifacts: &mut AnalysisArtifacts,
     array_target: ArrayTarget<'_, 'arena>,
     assign_value_type: &TUnion,
-    is_compound_assignment: bool,
+    index_read_first: bool,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
@@ -134,7 +134,7 @@ where
         root_var_id,
         &mut root_array_type,
         &mut current_type,
-        is_compound_assignment,
+        index_read_first,
     )?;
 
     let root_is_string = root_array_type.has_string();
@@ -740,7 +740,7 @@ pub(crate) fn analyze_nested_array_assignment<'ctx, 'ast, 'arena, A>(
     root_var_id: Option<Word>,
     root_type: &mut Rc<TUnion>,
     last_array_expr_type: &mut Rc<TUnion>,
-    is_compound_assignment: bool,
+    index_read_first: bool,
 ) -> Result<Option<&'ast Expression<'arena>>, AnalysisError>
 where
     A: Arena,
@@ -818,7 +818,7 @@ where
 
         let is_last = i == array_target_expressions.len() - 1;
 
-        let index_reported_on_read = is_compound_assignment
+        let index_reported_on_read = index_read_first
             && array_target
                 .get_index()
                 .is_some_and(|index| artifacts.reported_array_index_offsets.contains(&index.span().start.offset));

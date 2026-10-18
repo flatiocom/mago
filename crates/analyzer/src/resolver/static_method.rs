@@ -85,6 +85,10 @@ where
         }
     }
 
+    if class_resolutions.iter().any(ResolvedClassname::is_from_mixed) {
+        report_static_call_on_mixed(context, class_expr.span(), method_selector.span());
+    }
+
     for resolved_classname in &class_resolutions {
         if resolved_classname.is_possibly_invalid() {
             result.has_ambiguous_target = true;
@@ -657,6 +661,19 @@ where
             })
         })
     })
+}
+
+fn report_static_call_on_mixed<A>(context: &mut Context<'_, '_, A>, class_span: Span, method_span: Span)
+where
+    A: Arena,
+{
+    context.collector.report_with_code(
+        IssueCode::MixedMethodAccess,
+        Issue::error("Attempting to call a static method on a class name of type `mixed`.")
+            .with_annotation(Annotation::primary(method_span).with_message("Cannot call static method here"))
+            .with_annotation(Annotation::secondary(class_span).with_message("This expression has type `mixed`"))
+            .with_help("Narrow the expression to a `class-string` or an object before calling a static method on it."),
+    );
 }
 
 fn report_non_static_access<A>(context: &mut Context<'_, '_, A>, method_id: &MethodIdentifier, span: Span)

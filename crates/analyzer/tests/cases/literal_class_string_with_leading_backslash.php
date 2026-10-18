@@ -50,7 +50,7 @@ lookup('Controller')->addMessage('saved');
 controllerOnly('\Controller');
 anyClass('\Controller');
 
-// @mago-expect analysis:possibly-invalid-argument
+// @mago-expect analysis:possibly-invalid-argument,unresolvable-template-type
 lookup('\Unrelated');
 
 /**

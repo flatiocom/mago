@@ -953,6 +953,8 @@ test_case!(unused_closure_use_variable, {
     s.find_unused_parameters = true;
     s
 });
+test_case!(unresolvable_template_type);
+test_case!(call_reports_argument_issues_once);
 test_case!(docblock_var_widens_inferred_type);
 test_case!(unused_property_type);
 test_case!(overly_wide_bool_property_type, {
@@ -2770,6 +2772,8 @@ test_case!(issue_1682);
 test_case!(issue_1682_php90, crate::framework::php_90_settings());
 test_case!(issue_1680, crate::framework::check_name_casing_settings());
 test_case!(incorrect_method_casing, crate::framework::check_name_casing_settings());
+test_case!(static_method_call_on_mixed);
+test_case!(dynamic_call_to_static_method);
 test_case!(date_interval_days_after_diff_is_int);
 test_case!(issue_1678);
 test_case!(issue_1686);

@@ -26,5 +26,5 @@ function gen_id_animal_cs(string $clz): string
     return $clz;
 }
 
-/** @mago-expect analysis:invalid-argument */
+/** @mago-expect analysis:invalid-argument,unresolvable-template-type */
 gen_id_animal_cs(GenCarCs2::class);

@@ -134,6 +134,11 @@ where
     input_objects
 }
 
+fn is_nullable_generic_parameter(container_type: &TUnion) -> bool {
+    container_type.types.iter().filter(|atomic| matches!(atomic, TAtomic::GenericParameter(_))).count() == 1
+        && container_type.types.iter().all(|atomic| matches!(atomic, TAtomic::GenericParameter(_) | TAtomic::Null))
+}
+
 fn infer_templates_from_input_and_container_types<A>(
     context: &Context<'_, '_, A>,
     container_type: &TUnion,
@@ -155,7 +160,7 @@ fn infer_templates_from_input_and_container_types<A>(
     let top_level = options.is_top_level;
     let options = InferenceOptions { is_top_level: false, ..options };
 
-    if container_type.is_mixed() || (input_type.is_mixed() && !container_type.is_generic_parameter()) {
+    if container_type.is_mixed() || (input_type.is_mixed() && !is_nullable_generic_parameter(container_type)) {
         return;
     }
 
@@ -547,6 +552,34 @@ fn infer_templates_from_input_and_container_types<A>(
                                 }
                             }
                         }
+                    } else if let TAtomic::Iterable(input_iterable) = input_atomic {
+                        let (container_key_type, container_value_type) = match container_array {
+                            TArray::List(container_list) => (None, container_list.element_type.as_ref()),
+                            TArray::Keyed(container_keyed) => match container_keyed.parameters.as_ref() {
+                                Some((key_type, value_type)) => (Some(key_type.as_ref()), value_type.as_ref()),
+                                None => continue,
+                            },
+                        };
+
+                        if let Some(container_key_type) = container_key_type {
+                            infer_templates_from_input_and_container_types(
+                                context,
+                                container_key_type,
+                                input_iterable.get_key_type(),
+                                template_result,
+                                options,
+                                violations,
+                            );
+                        }
+
+                        infer_templates_from_input_and_container_types(
+                            context,
+                            container_value_type,
+                            input_iterable.get_value_type(),
+                            template_result,
+                            options,
+                            violations,
+                        );
                     }
                 }
             }

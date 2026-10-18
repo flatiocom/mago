@@ -64,6 +64,7 @@ trait Issue1727InheritedAssertTrait
     {
         $transaction = $this->getRepo()->findOne();
 
+        // @mago-expect analysis:dynamic-static-method-call
         $this->assertNotNull($transaction);
     }
 }

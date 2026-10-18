@@ -1,3 +1,4 @@
+use foldhash::HashSet;
 use mago_allocator::Arena;
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use mago_span::Span;
 use mago_syntax::cst::Call;
 use mago_word::Word;
 use mago_word::WordMap;
+use mago_word::WordSet;
 use mago_word::ascii_lowercase_word;
 use mago_word::concat_word;
 
@@ -118,13 +120,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Call<'arena> {
     }
 }
 
-fn analyze_invocation_targets<'ctx, 'ast, 'arena, A>(
+fn analyze_invocation_targets<'ctx, 'arena, A>(
     context: &mut Context<'ctx, 'arena, A>,
     block_context: &mut BlockContext<'ctx>,
     artifacts: &mut AnalysisArtifacts,
     mut template_result: TemplateResult,
     invocation_targets: Vec<InvocationTarget<'ctx>>,
-    invocation_arguments: InvocationArgumentsSource<'ast, 'arena>,
+    invocation_arguments: InvocationArgumentsSource<'_, 'arena>,
     call_span: Span,
     this_variable: Option<Word>,
     encountered_mixed_targets: bool,
@@ -166,84 +168,32 @@ where
 
     let mut resulting_type = None;
     let mut all_targets_non_nullable_return = !invocation_targets.is_empty();
+    let mut reported_issues = HashSet::default();
     for target in invocation_targets {
-        if let InvocationTarget::FunctionLike { metadata, .. } = &target {
-            let name = metadata.name;
-            match true {
-                _ if name.as_bytes().eq_ignore_ascii_case(b"mago\\inspect") => {
-                    inspect_arguments(context, block_context, artifacts, &target, &invocation_arguments)?;
+        let (return_type, issues) = context.record(|context| {
+            analyze_invocation_target(
+                context,
+                block_context,
+                artifacts,
+                &mut template_result,
+                target,
+                invocation_arguments,
+                call_span,
+                this_variable,
+                class_related_argument_variables.as_ref(),
+            )
+        });
 
-                    resulting_type =
-                        Some(add_optional_union_type(get_void(), resulting_type.as_ref(), context.codebase));
+        let new_issues: Vec<Issue> = issues
+            .into_iter()
+            .filter(|issue| !reported_issues.contains(&(issue.code.clone(), issue.primary_span())))
+            .collect();
+        reported_issues.extend(new_issues.iter().map(|issue| (issue.code.clone(), issue.primary_span())));
+        context.collector.extend(new_issues);
 
-                    continue;
-                }
-                _ if name.as_bytes().eq_ignore_ascii_case(b"mago\\confirm") => {
-                    confirm_argument_type(context, block_context, artifacts, &target, &invocation_arguments)?;
-
-                    resulting_type =
-                        Some(add_optional_union_type(get_void(), resulting_type.as_ref(), context.codebase));
-
-                    continue;
-                }
-                _ => {}
-            }
-        }
-
-        if let Some(identifier) = target.get_function_like_identifier() {
-            match identifier {
-                FunctionLikeIdentifier::Function(function_name) => {
-                    let normalized_name = ascii_lowercase_word(function_name.as_ref());
-                    artifacts.symbol_references.add_reference_to_symbol(&block_context.scope, normalized_name, false);
-                }
-                FunctionLikeIdentifier::Method(class_name, method_name) => {
-                    artifacts.symbol_references.add_reference_for_method_call(
-                        &block_context.scope,
-                        &MethodIdentifier::new(*class_name, *method_name),
-                    );
-                }
-                _ => {
-                    // Closures don't need reference tracking for invalidation
-                }
-            }
-        }
-
-        let mut invocation: Invocation<'ctx, 'ast, 'arena> = Invocation::new(target, invocation_arguments, call_span);
-        let mut argument_types = WordMap::default();
-
-        analyze_invocation(
-            context,
-            block_context,
-            artifacts,
-            &mut invocation,
-            None,
-            class_related_argument_variables.as_ref(),
-            &mut template_result,
-            &mut argument_types,
-        )?;
-
-        let return_type = fetch_invocation_return_type(
-            context,
-            block_context,
-            artifacts,
-            &invocation,
-            &template_result,
-            &argument_types,
-        )?;
-
+        let return_type = return_type?;
         all_targets_non_nullable_return &= !return_type.is_nullable();
         resulting_type = Some(add_optional_union_type(return_type, resulting_type.as_ref(), context.codebase));
-
-        post_invocation_process(
-            context,
-            block_context,
-            artifacts,
-            &invocation,
-            this_variable.as_ref().map(Word::as_bytes),
-            &template_result,
-            &argument_types,
-            true,
-        )?;
     }
 
     let resulting_type = if let Some(resulting_type) = resulting_type {
@@ -298,6 +248,86 @@ where
     artifacts.set_expression_type(&call_span, resulting_type);
 
     Ok(())
+}
+
+fn analyze_invocation_target<'ctx, 'ast, 'arena, A>(
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+    template_result: &mut TemplateResult,
+    target: InvocationTarget<'ctx>,
+    invocation_arguments: InvocationArgumentsSource<'ast, 'arena>,
+    call_span: Span,
+    this_variable: Option<Word>,
+    class_related_argument_variables: Option<&WordSet>,
+) -> Result<TUnion, AnalysisError>
+where
+    A: Arena,
+{
+    if let InvocationTarget::FunctionLike { metadata, .. } = &target {
+        let name = metadata.name;
+        match true {
+            _ if name.as_bytes().eq_ignore_ascii_case(b"mago\\inspect") => {
+                inspect_arguments(context, block_context, artifacts, &target, &invocation_arguments)?;
+
+                return Ok(get_void());
+            }
+            _ if name.as_bytes().eq_ignore_ascii_case(b"mago\\confirm") => {
+                confirm_argument_type(context, block_context, artifacts, &target, &invocation_arguments)?;
+
+                return Ok(get_void());
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(identifier) = target.get_function_like_identifier() {
+        match identifier {
+            FunctionLikeIdentifier::Function(function_name) => {
+                let normalized_name = ascii_lowercase_word(function_name.as_ref());
+                artifacts.symbol_references.add_reference_to_symbol(&block_context.scope, normalized_name, false);
+            }
+            FunctionLikeIdentifier::Method(class_name, method_name) => {
+                artifacts.symbol_references.add_reference_for_method_call(
+                    &block_context.scope,
+                    &MethodIdentifier::new(*class_name, *method_name),
+                );
+            }
+            _ => {
+                // Closures don't need reference tracking for invalidation
+            }
+        }
+    }
+
+    let mut invocation: Invocation<'ctx, 'ast, 'arena> = Invocation::new(target, invocation_arguments, call_span);
+    let mut argument_types = WordMap::default();
+
+    analyze_invocation(
+        context,
+        block_context,
+        artifacts,
+        &mut invocation,
+        None,
+        class_related_argument_variables,
+        template_result,
+        &mut argument_types,
+    )?;
+
+    let return_type =
+        fetch_invocation_return_type(context, block_context, artifacts, &invocation, template_result, &argument_types)?;
+
+    post_invocation_process(
+        context,
+        block_context,
+        artifacts,
+        &invocation,
+        this_variable.as_ref().map(Word::as_bytes),
+        template_result,
+        &argument_types,
+        true,
+    )?;
+
+    Ok(return_type)
 }
 
 /// Applies active method call assertions to narrow the return type.

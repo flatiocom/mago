@@ -10,4 +10,5 @@ final class ClassesInstanceOnStatic
     }
 }
 
+// @mago-expect analysis:dynamic-static-method-call
 echo (new ClassesInstanceOnStatic())->staticOnly();

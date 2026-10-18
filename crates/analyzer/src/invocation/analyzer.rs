@@ -10,6 +10,7 @@ use mago_bytes::BytesDisplay;
 use mago_bytes::trim_start_byte;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
 use mago_codex::metadata::class_like::ClassLikeMetadata;
+use mago_codex::misc::GenericParent;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::TypeRef;
 use mago_codex::ttype::add_union_type;
@@ -25,6 +26,8 @@ use mago_codex::ttype::atomic::scalar::class_like_string::TClassLikeString;
 use mago_codex::ttype::atomic::scalar::string::TString;
 use mago_codex::ttype::atomic::scalar::string::TStringLiteral;
 use mago_codex::ttype::combiner::CombinerOptions;
+use mago_codex::ttype::comparator::ComparisonResult;
+use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::expander;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
@@ -938,6 +941,8 @@ where
     }
 
     if let Some(template_types) = function_template_types {
+        let mut unresolved_templates = Vec::new();
+
         for (template_name, template) in template_types {
             if template_result.has_lower_bound(*template_name, &template.defining_entity) {
                 continue;
@@ -946,10 +951,23 @@ where
             let fallback = if let Some(default) = &template.default {
                 inferred_type_replacer::replace(default, template_result, context.codebase)
             } else {
+                unresolved_templates.push((*template_name, template.defining_entity));
+
                 template.constraint.clone()
             };
 
             template_result.add_lower_bound(*template_name, template.defining_entity, fallback);
+        }
+
+        for (template_name, defining_entity) in unresolved_templates {
+            report_unresolvable_template(
+                context,
+                invocation,
+                template_result,
+                parameter_types,
+                template_name,
+                defining_entity,
+            );
         }
     }
 
@@ -1514,6 +1532,159 @@ where
         }
         _ => false,
     })
+}
+
+fn report_unresolvable_template<A>(
+    context: &mut Context<'_, '_, A>,
+    invocation: &Invocation<'_, '_, '_>,
+    template_result: &TemplateResult,
+    parameter_types: &WordMap<TUnion>,
+    template_name: Word,
+    defining_entity: GenericParent,
+) where
+    A: Arena,
+{
+    if !matches!(defining_entity, GenericParent::FunctionLike(_))
+        || matches!(invocation.arguments_source, InvocationArgumentsSource::PartialArgumentList(_))
+    {
+        return;
+    }
+
+    let Some(metadata) =
+        invocation.target.get_function_like_metadata().filter(|metadata| !metadata.flags.is_built_in())
+    else {
+        return;
+    };
+
+    let mentions_template = |union: &TUnion| {
+        union.any_child_node(|node| match node {
+            TypeRef::Atomic(TAtomic::GenericParameter(parameter)) => {
+                parameter.parameter_name == template_name && parameter.defining_entity == defining_entity
+            }
+            TypeRef::Atomic(TAtomic::Scalar(TScalar::ClassLikeString(TClassLikeString::Generic {
+                parameter_name,
+                defining_entity: class_string_entity,
+                ..
+            }))) => *parameter_name == template_name && *class_string_entity == defining_entity,
+            _ => false,
+        })
+    };
+
+    let in_parameter_type = metadata
+        .parameters
+        .iter()
+        .filter_map(|parameter| parameter.get_type_metadata())
+        .any(|metadata| mentions_template(&metadata.type_union));
+
+    let in_return_type = metadata.return_type_metadata.as_ref().is_some_and(|metadata| {
+        taken_return_branches(context, template_result, parameter_types, &metadata.type_union)
+            .iter()
+            .any(mentions_template)
+    });
+
+    if !in_parameter_type || !in_return_type {
+        return;
+    }
+
+    let target_kind = invocation.target.guess_kind();
+    let target_name = invocation.target.guess_name(context);
+
+    context.collector.report_with_code(
+        IssueCode::UnresolvableTemplateType,
+        Issue::error(format!(
+            "Unable to resolve the template type `{template_name}` in call to {target_kind} `{target_name}`."
+        ))
+        .with_annotation(Annotation::primary(invocation.span).with_message("No argument binds this template type"))
+        .with_note("The template falls back to its constraint, so the return type loses the precision it promises.")
+        .with_help("Pass an argument whose type binds the template, or declare a default for it."),
+    );
+}
+
+fn taken_return_branches<A>(
+    context: &Context<'_, '_, A>,
+    template_result: &TemplateResult,
+    parameter_types: &WordMap<TUnion>,
+    return_type: &TUnion,
+) -> Vec<TUnion>
+where
+    A: Arena,
+{
+    let mut branches = Vec::new();
+
+    for atomic in return_type.types.iter() {
+        let TAtomic::Conditional(conditional) = atomic else {
+            branches.push(TUnion::from_atomic(atomic.clone()));
+            continue;
+        };
+
+        let subject = match conditional.subject.types.as_ref() {
+            [TAtomic::Variable(parameter_name)] => parameter_types.get(parameter_name),
+            _ => None,
+        };
+
+        let (then_type, otherwise_type) = if conditional.negated {
+            (&conditional.otherwise, &conditional.then)
+        } else {
+            (&conditional.then, &conditional.otherwise)
+        };
+
+        let taken_branches: Vec<&TUnion> = match subject {
+            Some(subject) if !subject.is_never() => {
+                let target = inferred_type_replacer::replace(&conditional.target, template_result, context.codebase);
+
+                if names_no_class_like_for_class_string(context, subject, &target)
+                    || !union_comparator::can_expression_types_be_identical(
+                        context.codebase,
+                        subject,
+                        &target,
+                        false,
+                        false,
+                    )
+                {
+                    vec![otherwise_type]
+                } else if union_comparator::is_contained_by(
+                    context.codebase,
+                    subject,
+                    &target,
+                    false,
+                    false,
+                    true,
+                    &mut ComparisonResult::new(),
+                ) {
+                    vec![then_type]
+                } else {
+                    vec![then_type, otherwise_type]
+                }
+            }
+            _ => vec![then_type, otherwise_type],
+        };
+
+        for branch in taken_branches {
+            branches.extend(taken_return_branches(context, template_result, parameter_types, branch));
+        }
+    }
+
+    branches
+}
+
+fn names_no_class_like_for_class_string<A>(context: &Context<'_, '_, A>, subject: &TUnion, target: &TUnion) -> bool
+where
+    A: Arena,
+{
+    let subject_names_no_class_like = subject.types.iter().all(|atomic| match atomic {
+        TAtomic::Scalar(scalar) => scalar
+            .get_known_literal_string_value()
+            .is_some_and(|value| !context.codebase.class_like_exists(trim_start_byte(value, b'\\'))),
+        _ => false,
+    });
+
+    let target_accepts_only_class_strings = target.types.iter().all(|atomic| match atomic {
+        TAtomic::Scalar(TScalar::ClassLikeString(_)) => true,
+        TAtomic::Scalar(_) | TAtomic::Mixed(_) => false,
+        _ => true,
+    });
+
+    subject_names_no_class_like && target_accepts_only_class_strings
 }
 
 fn remove_template_bounds_from_argument(template_result: &mut TemplateResult, argument_offset: usize) {

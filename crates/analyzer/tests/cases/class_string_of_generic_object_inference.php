@@ -39,6 +39,7 @@ function takeUserEntity(UserEntity $entity): void
     unset($entity);
 }
 
+// @mago-expect analysis:unresolvable-template-type
 configureEntity(null);
 
 // `UserRepository` specializes `TEntity` through its `@extends`, so the argument is

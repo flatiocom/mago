@@ -658,6 +658,16 @@ where
                     );
                 }
             }
+        } else if function_like_metadata.method_metadata.as_ref().is_some_and(|method| method.is_static)
+            && !is_closure_or_generator_method(&method_id)
+        {
+            report_dynamic_call_to_static_method(
+                context,
+                object.span(),
+                selector.span(),
+                method_id.get_class_name(),
+                method_name,
+            );
         }
 
         candidates.push(MethodCandidate {
@@ -1216,6 +1226,39 @@ pub(super) fn report_dynamic_static_method_call<A>(
     context.collector.report_with_code(
         IssueCode::DynamicStaticMethodCall,
         issue.with_help(format!("Call this method statically instead: `{classname}::{method_name}`.")),
+    );
+}
+
+fn is_closure_or_generator_method(method_id: &MethodIdentifier) -> bool {
+    let class_name = method_id.get_class_name();
+    let class_name: &[u8] = class_name.as_ref();
+
+    class_name.eq_ignore_ascii_case(b"Closure") || class_name.eq_ignore_ascii_case(b"Generator")
+}
+
+fn report_dynamic_call_to_static_method<A>(
+    context: &mut Context<'_, '_, A>,
+    obj_span: Span,
+    selector_span: Span,
+    classname: Word,
+    method_name: Word,
+) where
+    A: Arena,
+{
+    let classname = display_class_like_name(context, classname);
+    let method_name = display_method_name(context, classname, method_name);
+
+    context.collector.report_with_code(
+        IssueCode::DynamicStaticMethodCall,
+        Issue::error(format!("Dynamic call to static method `{classname}::{method_name}()`."))
+            .with_annotation(
+                Annotation::primary(selector_span)
+                    .with_message("This method is static and should be called statically"),
+            )
+            .with_annotation(
+                Annotation::secondary(obj_span).with_message(format!("Called on an instance of `{classname}`")),
+            )
+            .with_help(format!("Call this method statically instead: `{classname}::{method_name}()`.")),
     );
 }
 
