@@ -972,7 +972,7 @@ where
         tracing::trace!(file = %String::from_utf8_lossy(context.source_file.name.as_ref()), offset = loop_scope.span.start.offset, converged_passes, "Loop convergence skips");
 
         for issue in first_iteration_issues {
-            if !is_iteration_dependent_truthiness_issue(issue.code.as_deref())
+            if !is_iteration_dependent_issue(issue.code.as_deref())
                 && !recorded_issues.iter().any(|existing| existing == &issue)
             {
                 recorded_issues.push(issue);
@@ -1272,7 +1272,7 @@ fn mark_array_keys_definite(union: &mut TUnion) -> bool {
 /// iteration remain relevant because a do-while body always executes once. A claim that
 /// a condition or comparison is always true or false, however, is only valid when it is
 /// also found after the loop types stabilize.
-fn is_iteration_dependent_truthiness_issue(code: Option<&str>) -> bool {
+fn is_iteration_dependent_issue(code: Option<&str>) -> bool {
     let Some(code) = code else {
         return false;
     };
@@ -1282,7 +1282,8 @@ fn is_iteration_dependent_truthiness_issue(code: Option<&str>) -> bool {
         Ok(IssueCode::ImpossibleCondition
             | IssueCode::RedundantComparison
             | IssueCode::RedundantCondition
-            | IssueCode::RedundantTypeComparison)
+            | IssueCode::RedundantTypeComparison
+            | IssueCode::ShipmonkVariableTypeOverwritten)
     )
 }
 

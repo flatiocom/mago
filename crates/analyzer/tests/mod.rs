@@ -70,6 +70,11 @@ test_case!(switch_case_only_variable_is_possibly_defined_after_switch);
 test_case!(loop_body_variable_keeps_its_type_on_the_next_pass);
 test_case!(loop_body_only_variable_keeps_its_type_after_the_loop);
 test_case!(collator_sort_keeps_value_type);
+test_case!(shipmonk_variable_type_overwritten, {
+    let mut settings = default_test_settings();
+    settings.check_variable_type_overwrite = true;
+    settings
+});
 test_case!(generic_docblock_native_return);
 test_case!(message_quality);
 test_case!(ds_map_defaults);
@@ -3046,6 +3051,11 @@ test_case!(trait_method_inherits_host_docblock);
 test_case!(imprecise_signature_type_on_declaration_line, crate::framework::check_missing_type_hints_settings());
 test_case!(trait_reads_properties_every_user_declares);
 test_case!(trait_calls_methods_every_user_declares);
+test_case!(variable_type_overwrite_list_drops_known_elements, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_variable_type_overwrite = true;
+    s
+});
 test_case!(key_of_non_empty_array_like_phpstan);
 test_case!(clone_drops_non_object_like_phpstan);
 test_case!(debug_backtrace_shape_like_phpstan);

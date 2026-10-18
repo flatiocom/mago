@@ -324,6 +324,11 @@ pub struct Settings {
     /// Defaults to `false`.
     pub check_name_casing: bool,
 
+    /// Report assignments that overwrite a variable with an unrelated type.
+    ///
+    /// Defaults to `false`.
+    pub check_variable_type_overwrite: bool,
+
     /// Type a read of an `ArrayAccess` offset with the value last assigned to it in the same scope,
     /// instead of the `offsetGet()` return type. Unsound when `offsetSet()` transforms the value.
     ///
@@ -493,6 +498,7 @@ impl Settings {
             check_use_statements: false,
             check_experimental: false,
             check_name_casing: false,
+            check_variable_type_overwrite: false,
             remember_array_access_assignments: false,
             allow_side_effects_in_conditions: true,
             saturation_complexity_threshold: default_thresholds.saturation_complexity,

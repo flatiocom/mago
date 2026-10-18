@@ -68,6 +68,7 @@ use crate::utils::misc::unwrap_expression;
 mod array_assignment;
 mod property_assignment;
 mod static_property_assignment;
+mod variable_type_overwrite;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PropertyWriteKind {
@@ -87,6 +88,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Assignment<'arena> {
     where
         A: Arena,
     {
+        let overwritten_variable = variable_type_overwrite::find_overwritten_variable(self, context, block_context);
+
         analyze_assignment(
             context,
             block_context,
@@ -96,7 +99,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Assignment<'arena> {
             Some(&self.operator),
             Some(self.rhs),
             None,
-        )
+        )?;
+
+        if let Some(overwritten_variable) = overwritten_variable {
+            variable_type_overwrite::report_type_change(self, overwritten_variable, context, artifacts);
+        }
+
+        Ok(())
     }
 }
 

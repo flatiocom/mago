@@ -107,6 +107,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `allow-array-truthy-operand` | `false` | Accept arrays as operands of `&&`, `\|\|`, and `xor` without `invalid-operand`. Standalone `if ($array)` is unaffected and never warns. |
 | `allow-operator-overloading` | `false` | Accept operators that `BcMath\Number` and `GMP` overload (arithmetic, bitwise, shifts, `-`, `+`, `~`, `++`, `--`) without `invalid-operand`. The result type is inferred either way; comparisons are unaffected. |
 | `no-boolean-literal-comparison` | `false` | Disallow direct comparisons to boolean literals like `$a === true`. |
+| `check-variable-type-overwrite` | `false` | Report an assignment that gives a defined variable a type unrelated to its previous one as `shipmonk-variable-type-overwritten`. Literals compare by their general type, and `null` or `mixed` on either side is never reported. |
 | `check-missing-type-hints` | `false` | Report missing type hints on parameters, properties, and return types. |
 | `check-closure-missing-type-hints` | `false` | Extend the type-hint check to closures (requires `check-missing-type-hints`). |
 | `check-arrow-function-missing-type-hints` | `false` | Extend the type-hint check to arrow functions (requires `check-missing-type-hints`). |

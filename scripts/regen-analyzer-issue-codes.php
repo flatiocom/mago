@@ -352,6 +352,7 @@ final class AnalyzerCodeModuleGenerator
         'unavailable-constant',
         'unavailable-class-constant',
         'unavailable-enum-case',
+        'shipmonk-variable-type-overwritten',
         'missing-callable-signature',
         'unused-property-type',
         'overly-wide-bool-property-type',
