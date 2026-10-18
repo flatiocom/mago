@@ -66,6 +66,8 @@ where
     pub(super) external_analysis_session: Option<&'ctx ExternalAnalysisSession>,
     pub(super) additional_symbol_references: Option<&'ctx SymbolReferences>,
     pub(super) property_types: HashMap<(Word, bool), PropertyTypes>,
+    /// Types come from native declarations only, like PHPStan's scope with promoted native types.
+    pub(super) native_types_only: bool,
     class_initializers: WordMap<WordSet>,
     pub(crate) constructor_initialized_properties: WordMap<WordSet>,
 }
@@ -103,9 +105,16 @@ where
             external_analysis_session,
             additional_symbol_references,
             property_types: HashMap::default(),
+            native_types_only: false,
             class_initializers: WordMap::default(),
             constructor_initialized_properties: WordMap::default(),
         }
+    }
+
+    #[must_use]
+    pub(crate) fn with_native_types_only(mut self) -> Self {
+        self.native_types_only = true;
+        self
     }
 
     pub(crate) fn prepare_class_initializers(

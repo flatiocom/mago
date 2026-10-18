@@ -102,6 +102,10 @@ fn report_redundant_isset<A>(
         return;
     };
 
+    if matches!(unwrap_expression(value), Expression::Access(Access::Property(_))) {
+        context.collector.confirm_code_at(IssueCode::RedundantIssetCheck.as_str(), value.span());
+    }
+
     context.collector.report_with_code(
         IssueCode::RedundantIssetCheck,
         Issue::warning(format!("{subject} is not nullable."))

@@ -3084,6 +3084,21 @@ test_case!(nested_write_into_possibly_missing_array, {
     s.pollute_scope_with_block = false;
     s
 });
+test_case!(docblock_types_uncertain_isset, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});
+test_case!(docblock_types_uncertain_redundant, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});
+test_case!(docblock_types_uncertain_impossible, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});
 test_case!(array_merge_renumbers_int_keys);
 test_case!(unsealed_shape_missing_key_read, {
     let mut s = crate::framework::default_test_settings();
@@ -3126,6 +3141,11 @@ test_case!(imprecise_signature_type_on_declaration_line, crate::framework::check
 test_case!(trait_reads_properties_every_user_declares);
 test_case!(trait_calls_methods_every_user_declares);
 test_case!(offset_write_drops_scalar_members);
+test_case!(docblock_types_uncertain_null_comparison, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});
 test_case!(offset_write_into_mixed_forgets_narrowed_keys);
 test_case!(foreach_entry_link_needs_array_iteratee);
 test_case!(variable_type_overwrite_list_drops_known_elements, {

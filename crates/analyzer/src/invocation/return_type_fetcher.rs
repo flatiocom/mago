@@ -1,7 +1,9 @@
 use mago_allocator::Arena;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
+use mago_codex::metadata::function_like::FunctionLikeMetadata;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::get_mixed;
+use mago_codex::ttype::get_never;
 use mago_codex::ttype::template::TemplateResult;
 use mago_codex::ttype::union::TUnion;
 use mago_word::WordMap;
@@ -93,7 +95,11 @@ pub(crate) fn fetch_declared_invocation_return_type<A>(
 where
     A: Arena,
 {
-    let target_return_type = if let Some(function_like_metadata) = invocation.target.get_function_like_metadata()
+    let target_return_type = if context.native_types_only
+        && let Some(function_like_metadata) = invocation.target.get_function_like_metadata()
+    {
+        get_native_return_type(function_like_metadata)
+    } else if let Some(function_like_metadata) = invocation.target.get_function_like_metadata()
         && let Some(docblock_return) = function_like_metadata.return_type_metadata.as_ref()
         && docblock_return.from_docblock
         && !docblock_return.type_union.has_template_types()
@@ -134,4 +140,14 @@ where
     }
 
     resulting_type
+}
+
+/// The native return declaration; a docblock `never` still ends the flow, as it does in PHPStan's native scope.
+fn get_native_return_type(function_like_metadata: &FunctionLikeMetadata) -> Option<TUnion> {
+    if function_like_metadata.return_type_metadata.as_ref().is_some_and(|return_type| return_type.type_union.is_never())
+    {
+        return Some(get_never());
+    }
+
+    function_like_metadata.return_type_declaration_metadata.as_ref().map(|return_type| return_type.type_union.clone())
 }

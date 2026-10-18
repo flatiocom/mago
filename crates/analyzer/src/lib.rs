@@ -7,6 +7,9 @@
 
 use std::sync::Arc;
 
+use foldhash::HashMap;
+use foldhash::HashSet;
+
 use mago_allocator::Arena;
 
 use mago_codex::context::ScopeContext;
@@ -17,12 +20,14 @@ use mago_collector::Collector;
 use mago_database::file::File;
 use mago_names::ResolvedNames;
 use mago_span::HasSpan;
+use mago_span::Span;
 use mago_syntax::cst::Node;
 use mago_syntax::cst::Program;
 use mago_word::word;
 
 use crate::analysis_result::AnalysisResult;
 use crate::artifacts::AnalysisArtifacts;
+use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
@@ -59,6 +64,22 @@ mod utils;
 mod visibility;
 
 const COLLECTOR_CATEGORIES: &[&str] = &["analysis", "analyzer", "analyser"];
+
+/// Codes PHPStan reports under `treatPhpDocTypesAsCertain: false` only when the native types prove them.
+const NATIVE_TYPE_CODES: &[IssueCode] = &[
+    IssueCode::RedundantCast,
+    IssueCode::RedundantCondition,
+    IssueCode::RedundantTypeComparison,
+    IssueCode::RedundantNullCoalesce,
+    IssueCode::RedundantComparison,
+    IssueCode::RedundantLogicalOperation,
+    IssueCode::RedundantNullsafeOperator,
+    IssueCode::UnreachableElseClause,
+    IssueCode::ImpossibleCondition,
+    IssueCode::ImpossibleTypeComparison,
+    IssueCode::ImpossibleNullTypeComparison,
+    IssueCode::RedundantIssetCheck,
+];
 
 #[derive(Debug)]
 pub struct Analyzer<'ctx, 'ast, 'arena, A>
@@ -200,9 +221,16 @@ where
 
         #[cfg(not(target_arch = "wasm32"))]
         let setup_start = trace_enabled.then(std::time::Instant::now);
+        let native_type_spans =
+            if self.settings.treat_docblock_types_as_certain { None } else { Some(self.native_type_spans(program)?) };
+
         let mut collector = Collector::new(self.arena, self.source_file, program, COLLECTOR_CATEGORIES);
         if self.settings.diff {
             collector.set_skip_unfulfilled_expect(true);
+        }
+
+        for (code, spans) in native_type_spans.into_iter().flatten() {
+            collector.report_code_only_at(code, spans);
         }
 
         let mut context = Context::new(
@@ -309,6 +337,51 @@ where
         }
 
         Ok(artifacts)
+    }
+
+    /// Analyzes `program` again with native types only, as PHPStan's rules do under
+    /// `treatPhpDocTypesAsCertain: false`, and returns where each of [`NATIVE_TYPE_CODES`] fires.
+    fn native_type_spans(
+        &self,
+        program: &'ast Program<'arena>,
+    ) -> Result<HashMap<&'static str, HashSet<Span>>, AnalysisError> {
+        let statements = program.statements.as_slice();
+        let plugin_registry = PluginRegistry::new();
+        let mut context = Context::new(
+            self.arena,
+            self.codebase,
+            self.source_file,
+            self.resolved_names,
+            &self.settings,
+            statements[0].span(),
+            program.trivia.as_slice(),
+            Collector::new(self.arena, self.source_file, program, &[]),
+            &plugin_registry,
+            None,
+            None,
+        )
+        .with_native_types_only();
+
+        let mut block_context = BlockContext::new(
+            ScopeContext::new(ReferenceOrigin::File(word(context.source_file.name.as_ref()))),
+            context.settings.register_super_globals,
+        );
+
+        analyze_statements(statements, &mut context, &mut block_context, &mut AnalysisArtifacts::new())?;
+
+        let mut spans: HashMap<&'static str, HashSet<Span>> =
+            NATIVE_TYPE_CODES.iter().map(|code| (code.as_str(), HashSet::default())).collect();
+
+        for issue in context.collector.finish() {
+            if let Some(code) = issue.code.as_deref()
+                && let Some(code_spans) = spans.get_mut(code)
+                && let Some(span) = issue.primary_span()
+            {
+                code_spans.insert(span);
+            }
+        }
+
+        Ok(spans)
     }
 }
 

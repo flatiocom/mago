@@ -19,6 +19,7 @@ use mago_codex::ttype::atomic::array::key::ArrayKey;
 use mago_codex::ttype::atomic::array::keyed::TKeyedArray;
 use mago_codex::ttype::atomic::array::list::TList;
 use mago_codex::ttype::atomic::generic::TGenericParameter;
+use mago_codex::ttype::atomic::mixed::TMixed;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::combiner::CombinerOptions;
@@ -291,6 +292,11 @@ pub fn reconcile_keyed_types<'ctx, A>(
         }
 
         let result_type = result_type.map(Cow::into_owned).unwrap_or_else(get_never);
+        let unproven_entry_keys = if !context.settings.treat_docblock_types_as_certain && result_type.is_never() {
+            get_entry_keys_ruled_out_by_shape(new_type_parts, before_adjustment.as_deref())
+        } else {
+            Vec::new()
+        };
 
         if !did_type_exist && result_type.is_never() {
             // Even when the type doesn't exist and result is never, we still need to
@@ -466,6 +472,15 @@ pub fn reconcile_keyed_types<'ctx, A>(
             block_context.locals.insert(*key, Rc::new(result_type));
         }
 
+        for entry_key in unproven_entry_keys {
+            let entry_var_id = word(format!("{key}[{entry_key}]"));
+            changed_var_ids.insert(entry_var_id);
+            block_context.locals.insert(
+                entry_var_id,
+                Rc::new(TUnion::from_atomic(TAtomic::Mixed(TMixed::new().with_is_non_null(true)))),
+            );
+        }
+
         if !did_type_exist && !reference_graph.is_empty() {
             let mut key_parts = borrow_path_parts(key_str);
             let key_parts_0_atom = word(key_parts[0]);
@@ -480,6 +495,47 @@ pub fn reconcile_keyed_types<'ctx, A>(
                     block_context.locals.insert(reference_key, Rc::clone(&existing_type));
                 }
             }
+        }
+    }
+}
+
+fn get_entry_keys_ruled_out_by_shape(assertions: &AssertionSet, before: Option<&TUnion>) -> Vec<ArrayKey> {
+    let Some(before) = before else {
+        return Vec::new();
+    };
+
+    assertions
+        .iter()
+        .filter_map(|assertion| match assertion.as_slice() {
+            [Assertion::HasNonnullEntryForKey(entry_key)] => Some(*entry_key),
+            _ => None,
+        })
+        .filter(|entry_key| {
+            let mut arrays = before.types.iter().filter_map(|atomic| match atomic {
+                TAtomic::Array(array) => Some(array),
+                _ => None,
+            });
+
+            arrays.clone().next().is_some() && arrays.all(|array| is_entry_ruled_out_by_shape(array, entry_key))
+        })
+        .collect()
+}
+
+fn is_entry_ruled_out_by_shape(array: &TArray, entry_key: &ArrayKey) -> bool {
+    match array {
+        TArray::Keyed(keyed) => {
+            keyed.parameters.is_none() && !keyed.known_items.as_ref().is_some_and(|items| items.contains_key(entry_key))
+        }
+        TArray::List(list) => {
+            let ArrayKey::Integer(index) = entry_key else {
+                return true;
+            };
+
+            list.element_type.is_never()
+                && !list
+                    .known_elements
+                    .as_ref()
+                    .is_some_and(|elements| usize::try_from(*index).is_ok_and(|index| elements.contains_key(&index)))
         }
     }
 }

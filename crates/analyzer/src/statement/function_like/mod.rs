@@ -588,6 +588,13 @@ where
             declared_parameter_type
         };
 
+        if context.native_types_only {
+            final_parameter_type =
+                parameter_metadata.get_type_declaration_metadata().map_or_else(get_mixed, |native| {
+                    expand_type_metadata(context, block_context, artifacts, function_like_metadata, native)
+                });
+        }
+
         if parameter_metadata.flags.is_by_reference() {
             final_parameter_type.set_by_reference(parameter_metadata.flags.is_by_reference());
 
@@ -795,7 +802,11 @@ where
             continue;
         }
 
-        let mut property_type = resolution.declared_type_borrowed(context.codebase);
+        let mut property_type = if context.native_types_only {
+            Cow::Owned(resolution.native_type())
+        } else {
+            resolution.declared_type_borrowed(context.codebase)
+        };
 
         let property_name_bytes = property_name.as_bytes();
         let raw_property_name = property_name_bytes.strip_prefix(b"$").unwrap_or(property_name_bytes);

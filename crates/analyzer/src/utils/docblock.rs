@@ -262,6 +262,10 @@ pub fn get_docblock_variables<'ctx, A>(
 where
     A: Arena,
 {
+    if context.native_types_only {
+        return Vec::new();
+    }
+
     context.get_parsed_docblocks()
         .into_iter()
         // Filter out non-tag elements

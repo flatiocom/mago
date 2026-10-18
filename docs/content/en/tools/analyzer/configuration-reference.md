@@ -127,6 +127,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `check-experimental` | `false` | Report use of `@experimental` symbols from non-experimental contexts. Available since 1.19.0. |
 | `allow-side-effects-in-conditions` | `true` | When `false`, report calls to impure functions inside `if`, `while`, `for`, ternary, or `match` conditions. |
 | `remember-array-access-assignments` | `false` | Type a read of an `ArrayAccess` offset with the value last assigned to it in the same scope. Unsound when `offsetSet()` transforms the value. |
+| `treat-docblock-types-as-certain` | `true` | When `false`, a docblock type does not rule out a runtime value, like PHPStan's `treatPhpDocTypesAsCertain: false`: an offset that `isset()` or `!empty()` checks on a sealed shape or list lacking it reads as `mixed` instead of `never`, and `redundant-cast`, `redundant-condition`, `redundant-type-comparison`, `redundant-null-coalesce`, `redundant-comparison`, `redundant-logical-operation`, `redundant-nullsafe-operator`, `unreachable-else-clause`, `impossible-condition`, `impossible-type-comparison` and `redundant-isset-check` are reported only where native types alone prove them, except `isset()` on a property, which reads its docblock type. Each file is then analyzed twice. |
 
 ## Property initialization
 

@@ -348,6 +348,8 @@ pub struct Settings {
     /// Defaults to `false`.
     pub remember_array_access_assignments: bool,
 
+    pub treat_docblock_types_as_certain: bool,
+
     /// Whether to allow calls to impure functions inside conditions.
     ///
     /// When set to `false`, any call to a function not marked `@pure` or
@@ -514,6 +516,7 @@ impl Settings {
             check_name_casing: false,
             check_variable_type_overwrite: false,
             remember_array_access_assignments: false,
+            treat_docblock_types_as_certain: true,
             allow_side_effects_in_conditions: true,
             saturation_complexity_threshold: default_thresholds.saturation_complexity,
             disjunction_complexity_threshold: default_thresholds.disjunction_complexity,

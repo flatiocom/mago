@@ -228,8 +228,13 @@ where
                     report_deprecated_property(context, required_declaring_metadata, prop_meta, variable.span());
                 }
 
+                let type_metadata = if context.native_types_only {
+                    &prop_meta.type_declaration_metadata
+                } else {
+                    &prop_meta.type_metadata
+                };
                 let mut property_type =
-                    prop_meta.type_metadata.as_ref().map_or_else(get_mixed, |metadata| metadata.type_union.clone());
+                    type_metadata.as_ref().map_or_else(get_mixed, |metadata| metadata.type_union.clone());
 
                 expander::expand_union(
                     context.codebase,
@@ -301,8 +306,12 @@ where
         report_deprecated_property(context, declaring_class_metadata, property_metadata, variable.span());
     }
 
-    let mut property_type =
-        property_metadata.type_metadata.as_ref().map_or_else(get_mixed, |metadata| metadata.type_union.clone());
+    let type_metadata = if context.native_types_only {
+        &property_metadata.type_declaration_metadata
+    } else {
+        &property_metadata.type_metadata
+    };
+    let mut property_type = type_metadata.as_ref().map_or_else(get_mixed, |metadata| metadata.type_union.clone());
 
     expander::expand_union(
         context.codebase,

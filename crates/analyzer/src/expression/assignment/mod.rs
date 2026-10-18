@@ -1398,6 +1398,10 @@ fn handle_assignment_with_boolean_logic<'ctx, 'arena, A>(
 ) where
     A: Arena,
 {
+    if context.native_types_only {
+        return;
+    }
+
     let Some(right_clauses) = get_formula(
         source_expression.span(),
         source_expression.span(),

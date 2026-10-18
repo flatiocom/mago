@@ -77,6 +77,8 @@ where
     /// If true, skip reporting unfulfilled-expect warnings.
     /// Used during incremental/diff analysis where some symbols are skipped.
     skip_unfulfilled_expect: bool,
+    /// Issue codes that are reported only at the primary spans listed for them.
+    confirmed_spans: HashMap<&'static str, HashSet<Span>>,
 }
 
 /// Owned pragma state retained while diagnostics may still arrive after a file's
@@ -144,6 +146,7 @@ where
             aliases: HashMap::default(),
             link_template: None,
             skip_unfulfilled_expect: false,
+            confirmed_spans: HashMap::default(),
         };
 
         attach_pragma_scopes(&mut collector, program);
@@ -176,6 +179,20 @@ where
     #[inline]
     pub fn set_skip_unfulfilled_expect(&mut self, skip: bool) {
         self.skip_unfulfilled_expect = skip;
+    }
+
+    /// Reports `code` only at the given primary spans and drops it everywhere else.
+    #[inline]
+    pub fn report_code_only_at(&mut self, code: &'static str, spans: HashSet<Span>) {
+        self.confirmed_spans.insert(code, spans);
+    }
+
+    /// Adds `span` to the spans [`Self::report_code_only_at`] listed for `code`, if it listed any.
+    #[inline]
+    pub fn confirm_code_at(&mut self, code: &'static str, span: Span) {
+        if let Some(spans) = self.confirmed_spans.get_mut(code) {
+            spans.insert(span);
+        }
     }
 
     /// Overwrites the list of disabled issue codes.
@@ -244,6 +261,12 @@ where
         if let Some(code) = issue.code.as_deref() {
             if self.disabled_codes.contains(&code) {
                 // This code is disabled, do not report it.
+                return false;
+            }
+
+            if let Some(spans) = self.confirmed_spans.get(code)
+                && !primary_span.is_some_and(|span| spans.contains(&span))
+            {
                 return false;
             }
             // Code is enabled; fall through to the suppression checks below.
@@ -807,6 +830,7 @@ impl DeferredPragmas {
             aliases: self.aliases,
             link_template: self.link_template,
             skip_unfulfilled_expect: self.skip_unfulfilled_expect,
+            confirmed_spans: HashMap::default(),
         }
     }
 }

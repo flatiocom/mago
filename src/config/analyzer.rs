@@ -338,6 +338,8 @@ pub struct AnalyzerConfiguration {
     #[serde(default)]
     pub remember_array_access_assignments: bool,
 
+    pub treat_docblock_types_as_certain: bool,
+
     /// Enforce that concrete classes are declared `final`.
     ///
     /// When enabled, the analyzer reports a warning for any class that is not
@@ -567,6 +569,7 @@ impl AnalyzerConfiguration {
             check_name_casing: self.check_name_casing,
             check_variable_type_overwrite: self.check_variable_type_overwrite,
             remember_array_access_assignments: self.remember_array_access_assignments,
+            treat_docblock_types_as_certain: self.treat_docblock_types_as_certain,
             allow_side_effects_in_conditions: self.allow_side_effects_in_conditions,
             saturation_complexity_threshold: self.performance.saturation_complexity_threshold,
             disjunction_complexity_threshold: self.performance.disjunction_complexity_threshold,
@@ -634,6 +637,7 @@ impl Default for AnalyzerConfiguration {
             check_name_casing: defaults.check_name_casing,
             check_variable_type_overwrite: defaults.check_variable_type_overwrite,
             remember_array_access_assignments: defaults.remember_array_access_assignments,
+            treat_docblock_types_as_certain: defaults.treat_docblock_types_as_certain,
             allow_side_effects_in_conditions: defaults.allow_side_effects_in_conditions,
             perform_heuristic_checks: None,
             performance: PerformanceConfiguration::default(),

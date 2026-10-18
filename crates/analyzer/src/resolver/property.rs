@@ -401,6 +401,10 @@ where
                     .add_reference_for_method_call(&block_context.scope, &magic_method_identifier);
             }
 
+            if context.native_types_only && !for_assignment {
+                resolved_property.property_type = get_native_property_type(context.codebase, &resolved_property);
+            }
+
             if let Some(declaring_class_id) = resolved_property.declaring_class_id {
                 if for_assignment {
                     artifacts.symbol_references.add_reference_for_property_write(
@@ -438,6 +442,29 @@ where
     }
 
     Ok(result)
+}
+
+/// The type PHPStan's native scope reads: the property's declaration, `mixed` for an untyped or magic property.
+fn get_native_property_type(codebase: &CodebaseMetadata, resolved_property: &ResolvedProperty) -> TUnion {
+    let declaration = resolved_property
+        .declaring_class_id
+        .filter(|_| !resolved_property.is_magic)
+        .and_then(|class| codebase.get_property(class.as_bytes(), resolved_property.property_name.as_bytes()))
+        .and_then(|property| property.type_declaration_metadata.as_ref());
+
+    let Some(declaration) = declaration else {
+        return get_mixed();
+    };
+
+    let mut native_type = declaration.type_union.clone();
+    expander::expand_union(
+        codebase,
+        &mut native_type,
+        &TypeExpansionOptions { self_class: resolved_property.declaring_class_id, ..Default::default() },
+    );
+    native_type.set_possibly_undefined(resolved_property.property_type.possibly_undefined(), None);
+
+    native_type
 }
 
 enum ExternalPropertyResolution {
@@ -654,6 +681,16 @@ impl DeclaredProperty<'_> {
     /// same type [`Self::declared_type`] returns.
     pub(crate) fn declared_write_type(&self, codebase: &CodebaseMetadata) -> TUnion {
         self.declared_type_impl(codebase, true).into_owned()
+    }
+
+    /// The type PHPStan's native scope reads: the real declaration, `mixed` for an untyped or magic property.
+    pub(crate) fn native_type(&self) -> TUnion {
+        match self.kind {
+            DeclaredPropertyKind::Magic => get_mixed(),
+            DeclaredPropertyKind::Real { .. } => {
+                self.property.type_declaration_metadata.as_ref().map_or_else(get_mixed, |tm| tm.type_union.clone())
+            }
+        }
     }
 
     /// [`Self::declared_write_type`] when `for_assignment`, otherwise [`Self::declared_type`].
