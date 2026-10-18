@@ -43,17 +43,30 @@ class Collator
     public function compare(string $string1, string $string2): int|false {}
 
     /**
-     * @param array<string> &$array
+     * @template T
+     *
+     * @param array<T> &$array
+     *
+     * @param-out ($array is non-empty-array|non-empty-list ? non-empty-list<T> : list<T>) $array
      */
     public function sort(array &$array, int $flags = 0): bool {}
 
     /**
-     * @param array<string> &$array
+     * @template T
+     *
+     * @param array<T> &$array
+     *
+     * @param-out ($array is non-empty-array|non-empty-list ? non-empty-list<T> : list<T>) $array
      */
     public function sortWithSortKeys(array &$array): bool {}
 
     /**
-     * @param array<string> &$array
+     * @template K as array-key
+     * @template V
+     *
+     * @param array<K, V> &$array
+     *
+     * @param-out ($array is non-empty-array|non-empty-list ? non-empty-array<K, V> : array<K, V>) $array
      */
     public function asort(array &$array, int $flags = 0): bool {}
 

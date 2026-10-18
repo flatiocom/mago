@@ -69,6 +69,8 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
         let mut any_argument_non_empty = false;
         let mut all_arguments_are_lists = true;
         let mut all_lists_are_closed = true;
+        let mut list_indices_known = true;
+        let mut has_int_keys = false;
 
         for invocation_argument in arguments {
             let argument_expr = invocation_argument.value()?;
@@ -100,9 +102,8 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
                 match array {
                     TArray::Keyed(keyed) => {
                         let is_empty_array = keyed.known_items.is_none() && keyed.parameters.is_none();
-
-                        if !is_empty_array {
-                            all_arguments_are_lists = false;
+                        if is_empty_array {
+                            continue;
                         }
 
                         if keyed.non_empty {
@@ -110,19 +111,37 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
                         }
 
                         if let Some(items) = keyed.known_items.as_deref() {
-                            for (key, value) in items {
-                                merged_items.insert(*key, value.clone());
+                            for (key, (optional, value)) in items {
+                                if key.is_integer() {
+                                    has_int_keys = true;
+                                    has_parameters = true;
+                                    merged_value_type = Some(match merged_value_type {
+                                        Some(existing) => {
+                                            combine_union_types(&existing, value, codebase, CombinerOptions::default())
+                                        }
+                                        None => value.clone(),
+                                    });
+                                } else {
+                                    all_arguments_are_lists = false;
+                                    merged_items.insert(*key, (*optional, value.clone()));
+                                }
                             }
                         }
 
                         if let Some((key_type, value_type)) = &keyed.parameters {
                             has_parameters = true;
-                            merged_key_type = Some(match merged_key_type {
-                                Some(existing) => {
-                                    combine_union_types(&existing, key_type, codebase, CombinerOptions::default())
-                                }
-                                None => (**key_type).clone(),
-                            });
+                            if key_type.is_int() {
+                                has_int_keys = true;
+                            } else {
+                                all_arguments_are_lists = false;
+                                merged_key_type = Some(match merged_key_type {
+                                    Some(existing) => {
+                                        combine_union_types(&existing, key_type, codebase, CombinerOptions::default())
+                                    }
+                                    None => (**key_type).clone(),
+                                });
+                            }
+
                             merged_value_type = Some(match merged_value_type {
                                 Some(existing) => {
                                     combine_union_types(&existing, value_type, codebase, CombinerOptions::default())
@@ -130,11 +149,16 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
                                 None => (**value_type).clone(),
                             });
                         }
+
+                        all_lists_are_closed = false;
+                        list_indices_known = false;
                     }
                     TArray::List(list) => {
                         if list.non_empty {
                             any_argument_non_empty = true;
                         }
+
+                        has_int_keys = true;
 
                         let is_list_closed = list.element_type.is_never();
                         if !is_list_closed {
@@ -142,15 +166,23 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
                         }
 
                         if let Some(known_elements) = list.known_elements.as_deref() {
-                            for (idx, (optional, element_type)) in known_elements {
-                                let new_idx = next_list_index + idx;
-                                merged_list_elements.insert(new_idx, (*optional, element_type.clone()));
+                            if list_indices_known {
+                                for (idx, (optional, element_type)) in known_elements {
+                                    let new_idx = next_list_index + idx;
+                                    merged_list_elements.insert(new_idx, (*optional, element_type.clone()));
+                                }
+                                if let Some(max_idx) = known_elements.keys().max() {
+                                    next_list_index += max_idx + 1;
+                                }
+                            } else {
+                                all_lists_are_closed = false;
                             }
-                            if let Some(max_idx) = known_elements.keys().max() {
-                                next_list_index += max_idx + 1;
+
+                            if !is_list_closed || known_elements.values().any(|(optional, _)| *optional) {
+                                list_indices_known = false;
                             }
-                        } else if list.non_empty {
-                            next_list_index += 1; // At least one element
+                        } else if !is_list_closed {
+                            list_indices_known = false;
                         }
 
                         let (_, list_value_type) = get_array_parameters(&TArray::List(list.clone()), codebase);
@@ -162,16 +194,6 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
                             }
                             None => list_value_type,
                         });
-
-                        if !all_arguments_are_lists {
-                            let key_type = get_int();
-                            merged_key_type = Some(match merged_key_type {
-                                Some(existing) => {
-                                    combine_union_types(&existing, &key_type, codebase, CombinerOptions::default())
-                                }
-                                None => key_type,
-                            });
-                        }
                     }
                 }
             } else if let Some((iterable_key, iterable_value)) = get_iterable_parameters(iterable, codebase) {
@@ -215,6 +237,14 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
             }
 
             result_array.non_empty = any_argument_non_empty || has_merged_items;
+
+            if has_int_keys {
+                let key_type = get_int();
+                merged_key_type = Some(match merged_key_type {
+                    Some(existing) => combine_union_types(&existing, &key_type, codebase, CombinerOptions::default()),
+                    None => key_type,
+                });
+            }
 
             if has_parameters {
                 result_array.parameters = Some((

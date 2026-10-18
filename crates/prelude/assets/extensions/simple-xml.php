@@ -1,5 +1,11 @@
 <?php
 
+/**
+ * @implements Traversable<string, static>
+ * @implements ArrayAccess<int|string, static>
+ * @implements Iterator<string, static>
+ * @implements RecursiveIterator<string, static>
+ */
 class SimpleXMLElement implements Traversable, ArrayAccess, Countable, Iterator, Stringable, RecursiveIterator
 {
     /**
@@ -90,10 +96,7 @@ class SimpleXMLElement implements Traversable, ArrayAccess, Countable, Iterator,
 
     public function valid(): bool {}
 
-    /**
-     * @return SimpleXMLElement|null
-     */
-    public function current(): ?static {}
+    public function current(): static {}
 
     public function key(): string {}
 

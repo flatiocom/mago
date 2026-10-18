@@ -64,6 +64,7 @@ test_case!(array_access_assignment_is_remembered_on_read, {
 test_case!(array_access_assignment_is_not_remembered_by_default);
 test_case!(array_declared_with_mixed_key_has_array_key_keys);
 test_case!(class_constant_with_spread_has_inferred_type);
+test_case!(collator_sort_keeps_value_type);
 test_case!(generic_docblock_native_return);
 test_case!(message_quality);
 test_case!(ds_map_defaults);
@@ -1364,6 +1365,10 @@ test_case!(strings_strpos_arithmetic_with_false_warns);
 test_case!(strings_preg_replace_returns_nullable);
 test_case!(strings_preg_replace_with_null_check);
 test_case!(strings_str_replace_with_array_returns_array);
+test_case!(strings_str_replace_with_non_array_subject_returns_string);
+test_case!(functions_fgetcsv_returns_list_of_nullable_strings);
+test_case!(simple_xml_as_xml_return_depends_on_filename);
+test_case!(strings_mb_convert_encoding_false_only_when_detecting);
 test_case!(strings_lowercase_string_passed_to_string);
 test_case!(strings_string_to_lowercase_fails);
 test_case!(strings_string_to_uppercase_fails);
@@ -2660,6 +2665,7 @@ test_case!(issue_1679);
 test_case!(issue_1682);
 test_case!(issue_1682_php90, crate::framework::php_90_settings());
 test_case!(issue_1680, crate::framework::check_name_casing_settings());
+test_case!(date_interval_days_after_diff_is_int);
 test_case!(issue_1678);
 test_case!(issue_1686);
 test_case!(issue_1688);
@@ -2899,6 +2905,7 @@ test_case!(issue_2563);
 test_case!(issue_2585);
 test_case!(simplexml_truthiness);
 test_case!(traversable_static_template_binds_to_iterated_class);
+test_case!(simple_xml_element_iterates_as_static);
 test_case!(closure_capture_by_reference_array);
 test_case!(nullable_receiver_method_call);
 test_case!(enum_case_constant_array_isset);
@@ -2933,6 +2940,7 @@ test_case!(foreach_empty_array_analyze_dead_code, {
 });
 test_case!(deferred_constant_int_folding);
 test_case!(inherited_param_out);
+test_case!(array_merge_renumbers_int_keys);
 test_case!(class_constant_keys_of_constant_array);
 test_case!(array_access_offset_isset_then_type_check);
 test_case!(array_access_union_offset_write_remembered, {
@@ -2940,6 +2948,8 @@ test_case!(array_access_union_offset_write_remembered, {
     s.remember_array_access_assignments = true;
     s
 });
+test_case!(key_of_non_empty_array_like_phpstan);
+test_case!(debug_backtrace_shape_like_phpstan);
 
 #[test]
 fn issue_2478_without_property_memoization() {

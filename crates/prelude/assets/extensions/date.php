@@ -188,6 +188,9 @@ function date_timezone_set(DateTime $object, DateTimeZone $timezone): DateTime {
 
 function date_offset_get(DateTimeInterface $object): int {}
 
+/**
+ * @return DateInterval&object{days: int}
+ */
 function date_diff(
     DateTimeInterface $baseObject,
     DateTimeInterface $targetObject,
@@ -352,6 +355,9 @@ interface DateTimeInterface
 
     public function getMicrosecond(): int;
 
+    /**
+     * @return DateInterval&object{days: int}
+     */
     public function diff(DateTimeInterface $targetObject, bool $absolute = false): DateInterval;
 
     public function __wakeup(): void;
@@ -435,6 +441,9 @@ class DateTime implements DateTimeInterface
 
     public function getTimestamp(): int {}
 
+    /**
+     * @return DateInterval&object{days: int}
+     */
     public function diff(DateTimeInterface $targetObject, bool $absolute = false): DateInterval {}
 }
 
@@ -508,7 +517,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @param bool $absolute
      *
-     * @return DateInterval
+     * @return DateInterval&object{days: int}
      */
     public function diff(DateTimeInterface $targetObject, bool $absolute = false): DateInterval {}
 

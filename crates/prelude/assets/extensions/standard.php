@@ -1444,9 +1444,7 @@ function rtrim(string $string, string $characters = " \n\r\t\v\0"): string {}
  * @param string|array<string> $replace
  * @param string|array<string> $subject
  *
- * @return ($subject is string ? string : (
- *   $subject is array<string> ? array<string> : string|array<string>
- * ))
+ * @return ($subject is array ? array<string> : string)
  *
  * @pure
  */
@@ -1462,9 +1460,7 @@ function str_replace(
  * @param string|array<string> $replace
  * @param string|array<string> $subject
  *
- * @return ($subject is string ? string : (
- *   $subject is array<string> ? array<string> : string|array<string>
- * ))
+ * @return ($subject is array ? array<string> : string)
  *
  * @pure
  */
@@ -3169,6 +3165,8 @@ function stream_supports_lock($stream): bool {}
 
 /**
  * @param resource $stream
+ *
+ * @return non-empty-list<string|null>|false
  */
 function fgetcsv(
     $stream,
@@ -4297,7 +4295,7 @@ function current(object|array $array): mixed {}
  *
  * @param object|array<K, mixed> $array
  *
- * @return K|null
+ * @return ($array is non-empty-list|non-empty-array ? K : K|null)
  *
  * @pure
  */

@@ -24,6 +24,7 @@ use mago_codex::ttype::expander;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
 use mago_codex::ttype::get_mixed;
+use mago_codex::ttype::intersect_union_types;
 use mago_codex::ttype::template::TemplateResult;
 use mago_codex::ttype::template::inferred_type_replacer;
 use mago_codex::ttype::union::TUnion;
@@ -1107,6 +1108,14 @@ where
     }
 
     if !for_assignment
+        && let TObject::Named(named_object) = object
+        && let Some(shaped_type) = shaped_property_type_in_intersection_types(named_object, prop_name)
+        && let Some(narrowed_type) = intersect_union_types(&property_type, shaped_type, context.codebase)
+    {
+        property_type = narrowed_type;
+    }
+
+    if !for_assignment
         && property_metadata.type_declaration_metadata.is_some()
         && !property_metadata.flags.has_default()
         && !property_metadata.flags.is_promoted_property()
@@ -1846,6 +1855,18 @@ fn find_property_in_single_mixin(
     // Mixin access is always external, so a non-public real property defers to a magic
     // `@property*` annotation when the mixin class documents one.
     resolve_property_for_external_access(codebase, mixin_metadata, prop_name)
+}
+
+fn shaped_property_type_in_intersection_types(named_object: &TNamedObject, prop_name: Word) -> Option<&TUnion> {
+    let key = word(trim_start_byte(prop_name.as_bytes(), b'$'));
+
+    named_object.get_intersection_types()?.iter().find_map(|atomic| match atomic {
+        TAtomic::Object(TObject::WithProperties(shaped)) => match shaped.known_properties.get(&key) {
+            Some((false, property_type)) => Some(property_type),
+            _ => None,
+        },
+        _ => None,
+    })
 }
 
 /// Searches for a property in intersection types of a named object.

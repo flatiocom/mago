@@ -14,30 +14,28 @@ function first_example(): void {
 
 function second_example(): void {
     if (isset($_SERVER['argv'])) {
-        foreach ($_SERVER['argv'] as $argument) {
-            echo "Argument: " . $argument . "\n";
+        foreach ($_SERVER['argv'] as $argument) { // @mago-expect analysis:invalid-iterator,mixed-assignment
+            echo "Argument: " . $argument . "\n"; // @mago-expect analysis:mixed-operand
         }
     }
 }
 
-// @mago-expect analysis:redundant-logical-operation
 function third_example(): void {
     // force $_SERVER to be registered in block context - works
     $_ =  $_SERVER['argv'] ?? [];
 
     if (isset($_SERVER['argv']) && is_array($_SERVER['argv'])) {
-        foreach ($_SERVER['argv'] as $argument) {
-            echo "Argument: " . $argument . "\n";
+        foreach ($_SERVER['argv'] as $argument) { // @mago-expect analysis:mixed-assignment
+            echo "Argument: " . $argument . "\n"; // @mago-expect analysis:mixed-operand
         }
     }
 }
 
 
-// @mago-expect analysis:redundant-logical-operation
 function forth_example(): void {
     if (isset($_SERVER['argv']) && is_array($_SERVER['argv'])) {
-        foreach ($_SERVER['argv'] as $argument) {
-            echo "Argument: " . $argument . "\n";
+        foreach ($_SERVER['argv'] as $argument) { // @mago-expect analysis:mixed-assignment
+            echo "Argument: " . $argument . "\n"; // @mago-expect analysis:mixed-operand
         }
     }
 }

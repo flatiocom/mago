@@ -12,6 +12,7 @@ pub mod pcre;
 pub mod random;
 pub mod reflection;
 pub mod session;
+pub mod simple_xml;
 pub mod spl;
 pub mod string;
 pub mod url;
@@ -39,6 +40,7 @@ impl Plugin for StdlibPlugin {
     fn register(&self, registry: &mut PluginRegistry) {
         registry.register_function_provider(string::StrlenProvider);
         registry.register_function_provider(string::SprintfProvider);
+        registry.register_function_provider(string::MbConvertEncodingProvider);
         registry.register_function_provider(json::JsonEncodeProvider);
         registry.register_function_provider(random::RandProvider);
         registry.register_function_provider(random::RandomIntProvider);
@@ -72,6 +74,7 @@ impl Plugin for StdlibPlugin {
 
         registry.register_method_provider(closure::ClosureGetCurrentProvider);
         registry.register_method_provider(r#enum::EnumCasesProvider);
+        registry.register_method_provider(simple_xml::SimpleXmlElementAsXmlProvider);
         registry.register_method_provider(reflection::ReflectionMethodGetNameProvider);
         registry.register_method_provider(reflection::ReflectionMethodInvokeProvider);
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-if (isset($_SESSION)) {
+if (isset($_SESSION)) { // @mago-expect analysis:redundant-condition
     /** @mago-expect analysis:mixed-assignment */
     $value = $_SESSION['key'] ?? null;
     if (is_string($value)) {

@@ -1042,6 +1042,8 @@ function get_extension_funcs(string $extension): array|false {}
 function get_defined_constants(bool $categorize = false): array {}
 
 /**
+ * @return list<array{function: string, line?: int, file?: string, class?: class-string, type?: '::'|'->', args?: list<mixed>, object?: object}>
+ *
  * @pure
  */
 function debug_backtrace(int $options = DEBUG_BACKTRACE_PROVIDE_OBJECT, int $limit = 0): array {}
