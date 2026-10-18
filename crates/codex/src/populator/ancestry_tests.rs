@@ -218,3 +218,45 @@ fn targeted_population_rebuilds_inherited_constants_without_rescanning_descendan
         check_update(&mut codebase, &before, rescanned, invalidated);
     }
 }
+
+#[test]
+fn a_trait_without_require_extends_requires_the_class_its_users_share() {
+    let mut codebase = scan(
+        "<?php
+        abstract class Page {}
+        class Panel extends Page {}
+        final class Home extends Panel { use Titles, Solo; }
+        final class About extends Panel { use Titles; }
+        final class Contact extends Page { use Shared; }
+        final class Legal extends Panel { use Shared; }
+        final class Lone { use Unrelated; }
+        trait Titles {}
+        trait Solo {}
+        trait Shared {}
+        trait Unrelated {}
+        /** @mixin Home */
+        trait Narrowed {}
+        final class Faq extends Panel { use Narrowed; }
+        final class Terms extends Panel { use Narrowed; }
+        /** @require-extends Page */
+        trait Declared {}
+        final class Imprint extends Panel { use Declared; }
+        trait Unused {}",
+    );
+    populate_full(&mut codebase);
+
+    let required = |name: &str| {
+        let mut required: Vec<_> =
+            codebase.class_likes[&word(name)].require_extends.iter().map(|class| class.to_string()).collect();
+        required.sort_unstable();
+        required
+    };
+
+    assert_eq!(required("titles"), ["page", "panel"]);
+    assert_eq!(required("solo"), ["home", "page", "panel"]);
+    assert_eq!(required("shared"), ["page"]);
+    assert_eq!(required("unrelated"), ["lone"]);
+    assert!(required("narrowed").is_empty());
+    assert_eq!(required("declared"), ["page"]);
+    assert!(required("unused").is_empty());
+}

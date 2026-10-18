@@ -18,6 +18,8 @@ use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::object::r#enum::TEnum;
 use mago_codex::ttype::atomic::object::named::TNamedObject;
 use mago_codex::ttype::atomic::scalar::TScalar;
+use mago_codex::ttype::combine_union_types;
+use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::expander;
@@ -832,6 +834,57 @@ pub(crate) fn resolve_property_for_external_access<'ctx>(
     }
 }
 
+fn find_property_in_trait_users(
+    codebase: &CodebaseMetadata,
+    block_context: &BlockContext<'_>,
+    artifacts: &mut AnalysisArtifacts,
+    trait_metadata: &ClassLikeMetadata,
+    prop_name: Word,
+    for_assignment: bool,
+) -> Option<ResolvedProperty> {
+    let scope = block_context.scope.get_class_like_name();
+    let mut users = codebase
+        .all_class_like_descendants
+        .get(&trait_metadata.name)?
+        .iter()
+        .filter_map(|user| codebase.get_class_like_by_name(*user))
+        .filter(|user| !user.kind.is_trait())
+        .collect::<Vec<_>>();
+    users.sort_unstable_by_key(|user| user.name);
+
+    let mut resolutions = Vec::with_capacity(users.len());
+    for user in users {
+        resolutions.push(resolve_declared_property(codebase, user, prop_name, true, scope)?);
+    }
+
+    let (first, rest) = resolutions.split_first()?;
+    let mut resolved = get_resolved_declared_property(codebase, first, prop_name, for_assignment);
+    for resolution in rest {
+        resolved.property_type = combine_union_types(
+            &resolved.property_type,
+            &resolution.declared_type_for(codebase, for_assignment),
+            codebase,
+            CombinerOptions::default(),
+        );
+
+        if for_assignment {
+            artifacts.symbol_references.add_reference_for_property_write(
+                &block_context.scope,
+                resolution.declaring_class.name,
+                prop_name,
+            );
+        } else {
+            artifacts.symbol_references.add_reference_for_property_read(
+                &block_context.scope,
+                resolution.declaring_class.name,
+                prop_name,
+            );
+        }
+    }
+
+    Some(resolved)
+}
+
 /// Finds a property in a class, gets its type, and handles template localization.
 fn find_property_in_class<'ctx, 'ast, 'arena, A>(
     context: &mut Context<'ctx, 'arena, A>,
@@ -868,7 +921,11 @@ where
     );
 
     let Some(resolution) = resolution else {
-        for required_class in class_metadata.require_extends.iter().chain(class_metadata.require_implements.iter()) {
+        for required_class in context
+            .codebase
+            .get_required_classes(class_metadata)
+            .chain(context.codebase.get_required_interfaces(class_metadata))
+        {
             let Some(required_metadata) = context.codebase.get_class_like(required_class.as_bytes()) else {
                 continue;
             };
@@ -908,6 +965,19 @@ where
                     },
                 });
             }
+        }
+
+        if class_metadata.kind.is_trait()
+            && let Some(resolved) = find_property_in_trait_users(
+                context.codebase,
+                block_context,
+                artifacts,
+                class_metadata,
+                prop_name,
+                for_assignment,
+            )
+        {
+            return Some(resolved);
         }
 
         // Check mixins.

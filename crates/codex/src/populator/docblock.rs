@@ -309,7 +309,14 @@ fn collect_inheritance_work(
     codebase: &CodebaseMetadata,
     inheritance_work: &mut Vec<(usize, Word, Word, Word, Word)>,
 ) {
-    let depth = class_metadata.all_parent_classes.len() + class_metadata.all_parent_interfaces.len();
+    let depth = class_metadata.all_parent_classes.len()
+        + class_metadata.all_parent_interfaces.len()
+        + class_metadata.require_extends.len()
+        + class_metadata.require_implements.len();
+    if class_metadata.kind.is_trait() {
+        collect_trait_host_inheritance_work(depth, class_name, class_metadata, codebase, inheritance_work);
+    }
+
     for (method_name, method_ids) in &class_metadata.overridden_method_ids {
         if !codebase.function_likes.contains_key(&(class_name, *method_name)) {
             continue;
@@ -352,6 +359,51 @@ fn collect_inheritance_work(
 
         if let Some((parent_class, parent_method)) = parent_method_id {
             inheritance_work.push((depth, class_name, *method_name, parent_class, parent_method));
+        }
+    }
+}
+
+/// A trait method overrides the method of its `@require-extends` class, as it does in every class using the trait.
+fn collect_trait_host_inheritance_work(
+    depth: usize,
+    trait_name: Word,
+    trait_metadata: &crate::metadata::class_like::ClassLikeMetadata,
+    codebase: &CodebaseMetadata,
+    inheritance_work: &mut Vec<(usize, Word, Word, Word, Word)>,
+) {
+    let Some(host) =
+        codebase.get_required_classes(trait_metadata).next().and_then(|name| codebase.class_likes.get(&name))
+    else {
+        return;
+    };
+
+    let overridden_class = if host.used_traits.contains(&trait_name) {
+        host.direct_parent_class.and_then(|parent| codebase.class_likes.get(&parent))
+    } else {
+        Some(host)
+    };
+    let Some(overridden_class) = overridden_class else {
+        return;
+    };
+
+    for method_name in &trait_metadata.methods {
+        if trait_metadata.overridden_method_ids.contains_key(method_name) {
+            continue;
+        }
+
+        if let Some(parent_method_id) = overridden_class.declaring_method_ids.get(method_name)
+            && codebase
+                .class_likes
+                .get(&parent_method_id.get_class_name())
+                .is_some_and(|parent| !parent.kind.is_trait())
+        {
+            inheritance_work.push((
+                depth,
+                trait_name,
+                *method_name,
+                parent_method_id.get_class_name(),
+                parent_method_id.get_method_name(),
+            ));
         }
     }
 }

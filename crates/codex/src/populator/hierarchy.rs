@@ -166,6 +166,14 @@ fn populate_class_like_metadata(
     }
 
     for required_interface in sorted_atoms(metadata.require_implements.iter().copied()) {
+        let implemented_by_required_class = metadata
+            .require_extends
+            .iter()
+            .any(|required_class| codebase.class_implements(required_class.as_bytes(), required_interface.as_bytes()));
+        if implemented_by_required_class {
+            continue;
+        }
+
         merge_metadata_from_required_interface(metadata, codebase, required_interface, symbol_references, seeds);
     }
 

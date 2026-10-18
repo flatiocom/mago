@@ -413,10 +413,12 @@ where
         Some(fl) => (declaring_method_id, fl),
         None => {
             let mut found = None;
-            for required_class in
-                defining_class_metadata.require_extends.iter().chain(defining_class_metadata.require_implements.iter())
+            for required_class in context
+                .codebase
+                .get_required_classes(defining_class_metadata)
+                .chain(context.codebase.get_required_interfaces(defining_class_metadata))
             {
-                let Some(required_metadata) = context.codebase.get_class_like_by_name(*required_class) else {
+                let Some(required_metadata) = context.codebase.get_class_like_by_name(required_class) else {
                     continue;
                 };
                 let req_method_id = MethodIdentifier::new(required_metadata.original_name, method_name);
@@ -539,7 +541,7 @@ where
     }
 
     let mut intersections = vec![];
-    for required_interface in &class_like_metadata.require_implements {
+    for required_interface in context.codebase.get_required_interfaces(class_like_metadata) {
         let Some(interface_metadata) = context.codebase.get_interface(required_interface.as_bytes()) else {
             continue;
         };
@@ -560,8 +562,8 @@ where
         }
     }
 
-    for required_class in &class_like_metadata.require_extends {
-        let Some(parent_class_metadata) = context.codebase.get_class_like_by_name(*required_class) else {
+    for required_class in context.codebase.get_required_classes(class_like_metadata) {
+        let Some(parent_class_metadata) = context.codebase.get_class_like_by_name(required_class) else {
             continue;
         };
 

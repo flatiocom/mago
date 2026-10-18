@@ -672,7 +672,9 @@ fn expand_object(object: &mut TObject, codebase: &CodebaseMetadata, options: &Ty
     };
 
     if has_required_intersections && let Some(class_metadata) = class_metadata {
-        for &required in class_metadata.require_extends.iter().chain(&class_metadata.require_implements) {
+        for required in
+            codebase.get_required_classes(class_metadata).chain(codebase.get_required_interfaces(class_metadata))
+        {
             named.add_intersection_type(TAtomic::Object(TObject::Named(TNamedObject::new(required))));
         }
     }

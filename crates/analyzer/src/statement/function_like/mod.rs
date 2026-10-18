@@ -866,7 +866,7 @@ where
     }
 
     let mut intersections = vec![];
-    for required_interface in &class_like_metadata.require_implements {
+    for required_interface in context.codebase.get_required_interfaces(class_like_metadata) {
         let Some(interface_metadata) = context.codebase.get_interface(required_interface.as_bytes()) else {
             continue;
         };
@@ -886,7 +886,7 @@ where
         }
     }
 
-    for required_class in &class_like_metadata.require_extends {
+    for required_class in context.codebase.get_required_classes(class_like_metadata) {
         let Some(parent_class_metadata) = context.codebase.get_class_like(required_class.as_bytes()) else {
             continue;
         };

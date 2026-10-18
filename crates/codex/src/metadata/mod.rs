@@ -761,6 +761,32 @@ impl CodebaseMetadata {
             .is_some_and(|actual| metadata.all_parent_interfaces.contains(actual))
     }
 
+    /// The classes a class-like requires to be extended, without those another requirement already extends.
+    pub fn get_required_classes<'meta>(
+        &'meta self,
+        metadata: &'meta ClassLikeMetadata,
+    ) -> impl Iterator<Item = Word> + 'meta {
+        metadata.require_extends.iter().copied().filter(|&required| !self.is_implied_requirement(metadata, required))
+    }
+
+    /// The interfaces a class-like requires to be implemented, without those another requirement already implements.
+    pub fn get_required_interfaces<'meta>(
+        &'meta self,
+        metadata: &'meta ClassLikeMetadata,
+    ) -> impl Iterator<Item = Word> + 'meta {
+        metadata.require_implements.iter().copied().filter(|&required| !self.is_implied_requirement(metadata, required))
+    }
+
+    /// The populator adds every ancestor of a required class to the requirements. A member looked up on
+    /// such an ancestor misses the required class's own declaration, so lookups skip them.
+    fn is_implied_requirement(&self, metadata: &ClassLikeMetadata, required: Word) -> bool {
+        metadata.require_extends.iter().chain(&metadata.require_implements).any(|&other| {
+            other != required
+                && self.is_instance_of(other.as_bytes(), required.as_bytes())
+                && !self.is_instance_of(required.as_bytes(), other.as_bytes())
+        })
+    }
+
     /// Checks if a class uses a trait (case-insensitive).
     #[inline]
     #[must_use]

@@ -27,6 +27,7 @@ mod properties;
 mod signatures;
 mod sorter;
 mod templates;
+mod trait_hosts;
 
 #[cfg(test)]
 mod ancestry_tests;
@@ -188,6 +189,9 @@ fn populate_codebase_inner(
             }
         }
 
+        let used_traits = trait_hosts::traits_used_by(codebase, &class_likes_to_repopulate);
+        class_likes_to_repopulate.extend(used_traits);
+
         for class_like_name in &class_likes_to_repopulate {
             if let Some(classlike_info) = codebase.class_likes.get_mut(class_like_name) {
                 if classlike_info.flags.is_populated() {
@@ -202,13 +206,21 @@ fn populate_codebase_inner(
             }
         }
     } else {
+        for (name, metadata) in &codebase.class_likes {
+            if !metadata.flags.is_populated() || (!metadata.flags.is_built_in() && !safe_symbols.contains(name)) {
+                class_likes_to_repopulate.insert(*name);
+            }
+        }
+
+        let used_traits = trait_hosts::traits_used_by(codebase, &class_likes_to_repopulate);
+        class_likes_to_repopulate.extend(used_traits);
+
         let mut pending = Vec::new();
         for (name, metadata) in &mut codebase.class_likes {
-            if metadata.flags.is_populated() && (metadata.flags.is_built_in() || safe_symbols.contains(name)) {
+            if !class_likes_to_repopulate.contains(name) {
                 continue;
             }
 
-            class_likes_to_repopulate.insert(*name);
             if metadata.flags.is_populated() {
                 for method_name in &metadata.methods {
                     if let Some(method) = codebase.function_likes.get_mut(&(*name, *method_name)) {
@@ -238,6 +250,7 @@ fn populate_codebase_inner(
             hierarchy::populate_class_like_metadata_iterative(class_name, codebase, symbol_references, &mut seeds);
         }
     }
+    trait_hosts::require_shared_host_classes(codebase, &class_likes_to_repopulate, symbol_references);
     trace_phase!("hierarchy");
 
     let incremental = !safe_symbols.is_empty() || !safe_symbol_members.is_empty();

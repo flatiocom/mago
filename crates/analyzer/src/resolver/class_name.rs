@@ -309,7 +309,24 @@ where
                     found_parent = true;
                 }
 
-                if !found_parent && self_meta.kind.is_trait() && !self_meta.require_extends.is_empty() {
+                let using_host = self_meta.kind.is_trait().then(|| {
+                    context
+                        .codebase
+                        .get_required_classes(self_meta)
+                        .filter_map(|required| context.codebase.get_class_like(required.as_bytes()))
+                        .find(|required| {
+                            context.codebase.class_uses_trait(required.name.as_bytes(), self_meta.name.as_bytes())
+                        })
+                });
+                if !found_parent && let Some(host) = using_host.flatten() {
+                    if let Some(parent_metadata) =
+                        host.direct_parent_class.as_ref().and_then(|id| context.codebase.get_class_like(id.as_bytes()))
+                    {
+                        let origin = ResolutionOrigin::Named { is_parent: true, is_self: false };
+                        possible_types.push(ResolvedClassname::new(Some(parent_metadata.original_name), origin, false));
+                        found_parent = true;
+                    }
+                } else if !found_parent && self_meta.kind.is_trait() && !self_meta.require_extends.is_empty() {
                     let mut intersections = get_intersections_from_metadata(context, self_meta);
                     // SAFETY: we know that there is at least one intersection here.
                     let mut parent_classname = unsafe { intersections.pop().unwrap_unchecked() };
@@ -548,7 +565,7 @@ where
     }
 
     let mut intersections = vec![];
-    for required_interface in &metadata.require_implements {
+    for required_interface in context.codebase.get_required_interfaces(metadata) {
         let Some(interface_metadata) = context.codebase.get_interface(required_interface.as_bytes()) else {
             continue;
         };
@@ -561,7 +578,7 @@ where
         ));
     }
 
-    for required_class in &metadata.require_extends {
+    for required_class in context.codebase.get_required_classes(metadata) {
         let Some(parent_class_metadata) = context.codebase.get_class_like(required_class.as_bytes()) else {
             continue;
         };

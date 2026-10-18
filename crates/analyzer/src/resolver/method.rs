@@ -669,8 +669,12 @@ where
             receiver_object: None,
         });
     } else if !class_metadata.require_extends.is_empty() || !class_metadata.require_implements.is_empty() {
-        for required_class in class_metadata.require_extends.iter().chain(class_metadata.require_implements.iter()) {
-            let Some(required_metadata) = context.codebase.get_class_like_by_name(*required_class) else {
+        for required_class in context
+            .codebase
+            .get_required_classes(class_metadata)
+            .chain(context.codebase.get_required_interfaces(class_metadata))
+        {
+            let Some(required_metadata) = context.codebase.get_class_like_by_name(required_class) else {
                 continue;
             };
 
@@ -685,7 +689,7 @@ where
                     metadata: required_metadata,
                     method_identifier: required_method_id,
                     object: outer_object.clone(),
-                    classname: *required_class,
+                    classname: required_class,
                     mixin_without_magic_method: None,
                     receiver_object: None,
                 });
@@ -748,6 +752,11 @@ where
         }
     }
 
+    if candidates.is_empty() && class_metadata.kind.is_trait() {
+        candidates =
+            get_method_candidates_from_trait_users(context.codebase, class_metadata, method_name, outer_object);
+    }
+
     if let Some(intersection_types) = object_type.get_intersection_types() {
         for intersected_atomic in intersection_types {
             match intersected_atomic {
@@ -796,6 +805,46 @@ where
     if candidates.len() > 1 {
         let mut seen = HashSet::default();
         candidates.retain(|candidate| seen.insert(candidate.method_identifier));
+    }
+
+    candidates
+}
+
+fn get_method_candidates_from_trait_users<'ctx>(
+    codebase: &'ctx CodebaseMetadata,
+    trait_metadata: &ClassLikeMetadata,
+    method_name: Word,
+    outer_object: &TObject,
+) -> Vec<MethodCandidate<'ctx>> {
+    let Some(users) = codebase.all_class_like_descendants.get(&trait_metadata.name) else {
+        return vec![];
+    };
+
+    let mut users = users
+        .iter()
+        .filter_map(|user| codebase.get_class_like_by_name(*user))
+        .filter(|user| !user.kind.is_trait())
+        .collect::<Vec<_>>();
+    users.sort_unstable_by_key(|user| user.name);
+
+    let mut candidates = Vec::with_capacity(users.len());
+    for user in users {
+        let mut method_id = MethodIdentifier::new(user.original_name, method_name);
+        if codebase.get_method_by_id(&method_id).is_none() {
+            method_id = codebase.get_declaring_method_identifier(&method_id);
+            if codebase.get_method_by_id(&method_id).is_none() {
+                return vec![];
+            }
+        }
+
+        candidates.push(MethodCandidate {
+            metadata: user,
+            method_identifier: method_id,
+            object: outer_object.clone(),
+            classname: user.name,
+            mixin_without_magic_method: None,
+            receiver_object: None,
+        });
     }
 
     candidates

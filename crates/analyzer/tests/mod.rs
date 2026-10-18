@@ -940,6 +940,7 @@ test_case!(interface_property_hook);
 test_case!(trait_require_implements_self_return);
 test_case!(trait_require_extends_self_return);
 test_case!(trait_require_combined);
+test_case!(trait_require_extends_resolves_members_on_required_class);
 test_case!(interface_assertion);
 test_case!(nullsafe_chain_bug);
 test_case!(class_string_instantiation);
@@ -3040,7 +3041,11 @@ test_case!(array_access_union_offset_write_remembered, {
     s
 });
 test_case!(conditional_return_empty_array_is_not_non_empty);
+test_case!(trait_this_is_the_class_its_users_share);
+test_case!(trait_method_inherits_host_docblock);
 test_case!(imprecise_signature_type_on_declaration_line, crate::framework::check_missing_type_hints_settings());
+test_case!(trait_reads_properties_every_user_declares);
+test_case!(trait_calls_methods_every_user_declares);
 test_case!(key_of_non_empty_array_like_phpstan);
 test_case!(clone_drops_non_object_like_phpstan);
 test_case!(debug_backtrace_shape_like_phpstan);

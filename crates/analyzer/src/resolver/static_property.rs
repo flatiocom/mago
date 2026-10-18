@@ -204,8 +204,10 @@ where
     };
 
     let Some(property_metadata) = declaring_class_metadata.properties.get(&property_name) else {
-        for required_class in
-            declaring_class_metadata.require_extends.iter().chain(declaring_class_metadata.require_implements.iter())
+        for required_class in context
+            .codebase
+            .get_required_classes(declaring_class_metadata)
+            .chain(context.codebase.get_required_interfaces(declaring_class_metadata))
         {
             let Some(required_metadata) = context.codebase.get_class_like(required_class.as_bytes()) else {
                 continue;
@@ -213,7 +215,7 @@ where
             let required_declaring_id = context
                 .codebase
                 .get_declaring_property_class(required_class.as_bytes(), property_name.as_bytes())
-                .unwrap_or(*required_class);
+                .unwrap_or(required_class);
             let required_declaring_metadata =
                 context.codebase.get_class_like(required_declaring_id.as_bytes()).unwrap_or(required_metadata);
 

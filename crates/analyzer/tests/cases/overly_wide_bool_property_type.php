@@ -8,7 +8,6 @@ trait SetsFlag
 {
     public function raise(): void
     {
-        // @mago-expect analysis:non-existent-property
         $this->flag = true;
     }
 }

@@ -406,7 +406,9 @@ where
         });
     }
 
-    for required_class in metadata.require_extends.iter().chain(metadata.require_implements.iter()) {
+    for required_class in
+        context.codebase.get_required_classes(metadata).chain(context.codebase.get_required_interfaces(metadata))
+    {
         let Some(required_metadata) = context.codebase.get_class_like(required_class.as_bytes()) else {
             continue;
         };

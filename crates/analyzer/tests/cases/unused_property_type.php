@@ -143,7 +143,6 @@ trait WritesHostValue
 {
     public function useText(): void
     {
-        // @mago-expect analysis:non-existent-property
         $this->value = 'text';
     }
 }
