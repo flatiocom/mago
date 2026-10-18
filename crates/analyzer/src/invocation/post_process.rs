@@ -14,9 +14,11 @@ use mago_algebra::find_satisfying_assignments;
 use mago_algebra::saturate_clauses;
 use mago_codex::assertion::Assertion;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
+use mago_codex::metadata::function_like::FunctionLikeMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
+use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::resource::TResource;
 use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::atomic::scalar::bool::TBool;
@@ -43,6 +45,7 @@ use mago_word::concat_word;
 use mago_word::word;
 
 use crate::artifacts::AnalysisArtifacts;
+use crate::artifacts::CallThrowPoint;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
@@ -146,31 +149,13 @@ where
         }
     }
 
+    let external_throw_types = (context.settings.check_throws || context.settings.check_dead_catch)
+        .then(|| get_external_thrown_exceptions(context, artifacts, invoication, identifier))
+        .flatten();
+
     if context.settings.check_throws {
-        let external_throw_types = match identifier {
-            FunctionLikeIdentifier::Function(name) => context.plugin_registry.get_external_function_thrown_exceptions(
-                context.codebase,
-                context.source_file,
-                artifacts,
-                name.as_bytes(),
-                invoication,
-                context.external_analysis_session,
-            ),
-            FunctionLikeIdentifier::Method(class_name, method_name) => {
-                context.plugin_registry.get_external_method_thrown_exceptions(
-                    context.codebase,
-                    context.source_file,
-                    artifacts,
-                    class_name.as_bytes(),
-                    method_name.as_bytes(),
-                    invoication,
-                    context.external_analysis_session,
-                )
-            }
-            FunctionLikeIdentifier::Closure(_) => None,
-        };
-        if let Some(exceptions) = external_throw_types {
-            for exception in exceptions {
+        if let Some(exceptions) = &external_throw_types {
+            for &exception in exceptions {
                 block_context.possibly_thrown_exceptions.entry(exception).or_default().insert(invoication.span);
             }
         } else {
@@ -205,6 +190,16 @@ where
             collect_plugin_throw_types(context, block_context, artifacts, invoication, identifier);
         }
     }
+
+    let call_throw_point = match external_throw_types {
+        Some(exceptions) => {
+            let mut exceptions = exceptions.into_iter().collect::<Vec<_>>();
+            exceptions.sort();
+            CallThrowPoint::Classes(exceptions)
+        }
+        None => get_call_throw_point(context, invoication, identifier, metadata, template_result, parameters),
+    };
+    artifacts.record_call_throw_point(invoication.span, call_throw_point);
 
     if !apply_assertions {
         return Ok(());
@@ -1546,6 +1541,98 @@ where
     };
 
     (Some(argument_expression), argument_id)
+}
+
+fn get_external_thrown_exceptions<'ctx, 'arena, A>(
+    context: &Context<'ctx, 'arena, A>,
+    artifacts: &AnalysisArtifacts,
+    invocation: &Invocation<'ctx, '_, 'arena>,
+    identifier: &FunctionLikeIdentifier,
+) -> Option<WordSet>
+where
+    A: Arena,
+{
+    match identifier {
+        FunctionLikeIdentifier::Function(name) => context.plugin_registry.get_external_function_thrown_exceptions(
+            context.codebase,
+            context.source_file,
+            artifacts,
+            name.as_bytes(),
+            invocation,
+            context.external_analysis_session,
+        ),
+        FunctionLikeIdentifier::Method(class_name, method_name) => {
+            context.plugin_registry.get_external_method_thrown_exceptions(
+                context.codebase,
+                context.source_file,
+                artifacts,
+                class_name.as_bytes(),
+                method_name.as_bytes(),
+                invocation,
+                context.external_analysis_session,
+            )
+        }
+        FunctionLikeIdentifier::Closure(_) => None,
+    }
+}
+
+fn get_call_throw_point<'ctx, 'arena, A>(
+    context: &Context<'ctx, 'arena, A>,
+    invocation: &Invocation<'ctx, '_, 'arena>,
+    identifier: &FunctionLikeIdentifier,
+    metadata: &FunctionLikeMetadata,
+    template_result: &TemplateResult,
+    parameters: &WordMap<TUnion>,
+) -> CallThrowPoint
+where
+    A: Arena,
+{
+    if metadata.flags.is_built_in() {
+        let is_argumentless_function_call = matches!(identifier, FunctionLikeIdentifier::Function(_))
+            && metadata
+                .parameters
+                .iter()
+                .all(|parameter| parameter.flags.has_default() || parameter.flags.is_variadic())
+            && invocation.arguments_source.argument_count() == 0;
+
+        return if is_argumentless_function_call {
+            CallThrowPoint::Classes(vec![])
+        } else {
+            CallThrowPoint::AnyThrowable
+        };
+    }
+
+    if matches!(identifier, FunctionLikeIdentifier::Closure(_))
+        || metadata.name.as_bytes() == b"__call"
+        || metadata.name.as_bytes() == b"__callstatic"
+    {
+        return CallThrowPoint::AnyThrowable;
+    }
+
+    let thrown_types = context.codebase.get_function_like_thrown_types(
+        invocation.target.get_method_context().map(|context| context.class_like_metadata),
+        metadata,
+    );
+
+    if thrown_types.is_empty() {
+        return CallThrowPoint::AnyThrowable;
+    }
+
+    let mut thrown_classes = vec![];
+    for thrown_type in thrown_types {
+        let resolved_thrown_type =
+            resolve_invocation_type(context, invocation, template_result, parameters, thrown_type.type_union.clone());
+
+        for thrown_atomic in resolved_thrown_type.types.iter() {
+            match thrown_atomic {
+                TAtomic::Object(TObject::Named(_)) => thrown_classes.extend(thrown_atomic.get_all_object_names()),
+                TAtomic::Void | TAtomic::Never => {}
+                _ => return CallThrowPoint::AnyThrowable,
+            }
+        }
+    }
+
+    CallThrowPoint::Classes(thrown_classes)
 }
 
 fn collect_plugin_throw_types<'ctx, 'arena, A>(

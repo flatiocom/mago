@@ -99,7 +99,7 @@ These flags toggle individual analyses. Defaults are tuned for everyday use; fli
 | `memoize-properties` | `true` | Track literal property values for sharper inference, at the cost of some memory. |
 | `allow-possibly-undefined-array-keys` | `true` | **Deprecated.** Allow accessing keys that may be missing without flagging it. Setting this to `false` warns on `array<K, V>` reads with a single literal key but does not widen the type to `T\|null`. Use `strict-array-index-existence` instead. |
 | `check-throws` | `false` | Report exceptions that are not caught and not declared with `@throws`. |
-| `check-dead-catch` | `false` | Report catch clauses that match no known exception from their `try` block. Requires `check-throws`; undocumented code may still throw exceptions the analyzer cannot see. |
+| `check-dead-catch` | `false` | Report catch clauses that match no known exception from their `try` block. With `check-throws` it uses the tracked exceptions; without it, like PHPStan `catch.neverThrown`, a call without `@throws` may throw anything. Undocumented code may still throw exceptions the analyzer cannot see. |
 | `check-missing-override` | `false` | Report missing `#[Override]` attributes on overriding methods (PHP 8.3+). |
 | `find-unused-parameters` | `false` | Report parameters that are never read. |
 | `strict-list-index-checks` | `false` | Require any integer used as a list index to be provably non-negative. |

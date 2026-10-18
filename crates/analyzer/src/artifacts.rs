@@ -57,6 +57,28 @@ pub struct ResolvedMethodCall {
     pub method: Word,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CallThrowPoint {
+    AnyThrowable,
+    Classes(Vec<Word>),
+}
+
+impl CallThrowPoint {
+    fn merge(&mut self, other: CallThrowPoint) {
+        match (self, other) {
+            (CallThrowPoint::AnyThrowable, _) => {}
+            (this, CallThrowPoint::AnyThrowable) => *this = CallThrowPoint::AnyThrowable,
+            (CallThrowPoint::Classes(classes), CallThrowPoint::Classes(other_classes)) => {
+                for class in other_classes {
+                    if !classes.contains(&class) {
+                        classes.push(class);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ShortCircuitAssignmentTypes {
     pub when_true: WordMap<Rc<TUnion>>,
@@ -84,6 +106,7 @@ pub struct AnalysisArtifacts {
     pub method_calls_parent_initializer: HashMap<(Word, Word), Word>,
     pub closure_bind_scope: Option<ClosureBindScope>,
     pub resolved_method_calls: Vec<ResolvedMethodCall>,
+    pub(crate) call_throw_points: HashMap<(u32, u32), CallThrowPoint>,
     pub suppressed_issues: Vec<Issue>,
     pub(crate) editor: Option<EditorArtifacts>,
     pub(crate) variable_definedness: HashMap<(u32, u32), WordMap<VariableDefinedness>>,
@@ -124,6 +147,7 @@ impl AnalysisArtifacts {
             method_calls_parent_initializer: HashMap::default(),
             closure_bind_scope: None,
             resolved_method_calls: Vec::new(),
+            call_throw_points: HashMap::default(),
             suppressed_issues: Vec::new(),
             editor: None,
             variable_definedness: HashMap::default(),
@@ -276,6 +300,22 @@ impl AnalysisArtifacts {
         T: HasSpan,
     {
         self.set_rc_expression_type(expression, Rc::new(t));
+    }
+
+    pub(crate) fn record_call_throw_point(&mut self, span: Span, throw_point: CallThrowPoint) {
+        match self.call_throw_points.entry((span.start.offset, span.end.offset)) {
+            std::collections::hash_map::Entry::Occupied(mut existing) => existing.get_mut().merge(throw_point),
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(throw_point);
+            }
+        }
+    }
+
+    pub(crate) fn get_call_throw_point<T>(&self, call: &T) -> Option<&CallThrowPoint>
+    where
+        T: HasSpan,
+    {
+        self.call_throw_points.get(&get_expression_range(call))
     }
 
     /// Get the type of expression `expression`.

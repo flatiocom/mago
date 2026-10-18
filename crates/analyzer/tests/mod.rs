@@ -3019,6 +3019,7 @@ test_case!(foreach_empty_array_analyze_dead_code, {
     settings
 });
 test_case!(object_compared_with_number);
+test_case!(dead_catch, mago_analyzer::settings::Settings { check_dead_catch: true, ..Default::default() });
 test_case!(mixed_operand_reported_once_per_operation);
 test_case!(concat_operand_reported_at_operation_start);
 test_case!(imprecise_var_tag_type, {

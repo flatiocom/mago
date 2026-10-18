@@ -65,8 +65,9 @@ pub struct Settings {
 
     /// Check whether each catch clause can catch a known exception from its try block.
     ///
-    /// This check only runs when `check_throws` is enabled. It is disabled by default
-    /// because exceptions from undocumented code cannot be ruled out statically.
+    /// With `check_throws` it uses the tracked exceptions; without it, like PHPStan `catch.neverThrown`,
+    /// a call without `@throws` may throw anything. It is disabled by default because exceptions from
+    /// undocumented code cannot be ruled out statically.
     pub check_dead_catch: bool,
 
     /// Exceptions to ignore including all subclasses (hierarchy-aware).

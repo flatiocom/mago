@@ -39,6 +39,9 @@ use crate::context::scope::loop_scope::LoopScope;
 use crate::context::utils::inherit_branch_context_properties;
 use crate::error::AnalysisError;
 use crate::statement::analyze_statements;
+use crate::statement::r#try::dead_catch::DeadCatchCheck;
+
+mod dead_catch;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
     fn analyze<'ctx, A>(
@@ -203,6 +206,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
             }
         }
 
+        let mut dead_catch_check = (context.settings.check_dead_catch && !context.settings.check_throws)
+            .then(|| DeadCatchCheck::new(self.block.statements.as_slice(), context, artifacts));
         let mut original_block_context = try_block_context.clone();
         let mut definitely_newly_assigned_var_ids = newly_assigned_variable_ids;
         let mut previously_caught_types = WordSet::default();
@@ -212,6 +217,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
             catch_block_context.flags.set_has_returned(false);
             let (caught_classes, has_valid_caught_classes) =
                 get_caught_classes(context, &catch_block_context, artifacts, &catch_clause.hint);
+            if let Some(dead_catch_check) = &mut dead_catch_check {
+                dead_catch_check.check_catch_clause(context, catch_clause, &caught_classes);
+            }
 
             for (variable_id, variable_type) in &mut catch_block_context.locals {
                 if let Some(old_type) = old_block_context_locals.get(variable_id) {

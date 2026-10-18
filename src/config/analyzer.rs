@@ -126,8 +126,9 @@ pub struct AnalyzerConfiguration {
 
     /// Whether to report catch clauses that cannot catch any known exception.
     ///
-    /// This check only runs when `check_throws` is enabled and defaults to `false`,
-    /// since undocumented code may still throw exceptions that static analysis cannot see.
+    /// With `check_throws` it uses the tracked exceptions; without it, like PHPStan `catch.neverThrown`,
+    /// a call without `@throws` may throw anything. It defaults to `false`, since undocumented code may
+    /// still throw exceptions that static analysis cannot see.
     pub check_dead_catch: bool,
 
     /// Exceptions to ignore including all subclasses (hierarchy-aware).
