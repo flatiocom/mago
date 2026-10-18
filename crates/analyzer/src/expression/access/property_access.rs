@@ -278,6 +278,9 @@ where
             is_null_safe || !resolution_result.has_literal_name,
         );
         block_context.locals.insert(property_access_id, Rc::clone(&resulting_type));
+        if artifacts.get_expression_type(object).is_some_and(|receiver| receiver.is_mixed()) {
+            block_context.mixed_receiver_reads.insert(property_access_id, Rc::clone(&resulting_type));
+        }
         if !resolution_result.undeclared_properties.is_empty() {
             artifacts
                 .read_memoized_undeclared_properties

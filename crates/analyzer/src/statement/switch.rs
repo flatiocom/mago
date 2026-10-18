@@ -6,6 +6,7 @@ use foldhash::HashSet;
 use mago_algebra::AssertionMap;
 use mago_algebra::clause::Clause;
 use mago_allocator::Arena;
+use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::combine_union_types;
 use mago_codex::ttype::combine_union_types_rc;
@@ -217,6 +218,10 @@ where
             previous_empty_cases = vec![];
         }
 
+        if is_synthetic {
+            self.artifacts.set_rc_expression_type(switch.expression, subject_type);
+        }
+
         let mut fallthrough_exits = false;
         let mut all_options_exit = true;
         for case_index in (0..self.case_actions.len()).rev() {
@@ -296,6 +301,10 @@ where
                 self.block_context.locals.extend(new_locals);
             } else {
                 for (var_id, var_type) in new_locals {
+                    if is_access_path(var_id.as_bytes()) {
+                        continue;
+                    }
+
                     let mut var_type = Rc::unwrap_or_clone(var_type);
                     var_type.set_possibly_undefined(true, None);
                     self.block_context.locals.insert(var_id, Rc::new(var_type));
@@ -332,7 +341,7 @@ where
                     var_id,
                     combine_union_types_rc(&var_type, &context_type, self.context.codebase, CombinerOptions::default()),
                 );
-            } else {
+            } else if !is_access_path(var_id.as_bytes()) {
                 let mut var_type = Rc::unwrap_or_clone(var_type);
                 var_type.set_possibly_undefined(true, None);
                 self.block_context.locals.insert(var_id, Rc::new(var_type));
@@ -738,32 +747,22 @@ where
         if self.has_fallthrough {
             self.has_fallthrough = false;
 
-            for (leftover_statements, has_direct_entry) in std::mem::take(&mut self.leftover_statement_groups) {
-                if has_direct_entry {
+            let leftover_statement_groups = std::mem::take(&mut self.leftover_statement_groups);
+            for (group_index, (leftover_statements, has_direct_entry)) in leftover_statement_groups.iter().enumerate() {
+                if *has_direct_entry {
                     case_block_context.flags.set_has_returned(false);
+                    if group_index > 0 {
+                        merge_direct_entry(self.context.codebase, &mut case_block_context, original_block_context);
+                    }
                 }
 
-                analyze_statements(&leftover_statements, self.context, &mut case_block_context, self.artifacts)?;
+                analyze_statements(leftover_statements, self.context, &mut case_block_context, self.artifacts)?;
             }
 
             if case_has_direct_entry {
                 case_block_context.flags.set_has_returned(false);
             }
-            for (var_id, original_type) in &original_block_context.locals {
-                if let Some(current_type) = case_block_context.locals.get(var_id)
-                    && current_type != original_type
-                {
-                    case_block_context.locals.insert(
-                        *var_id,
-                        Rc::new(combine_union_types(
-                            current_type,
-                            original_type,
-                            self.context.codebase,
-                            CombinerOptions::default(),
-                        )),
-                    );
-                }
-            }
+            merge_direct_entry(self.context.codebase, &mut case_block_context, original_block_context);
 
             analyze_statements(switch_case.statements(), self.context, &mut case_block_context, self.artifacts)?;
         } else {
@@ -1145,6 +1144,23 @@ where
             (_, false, _, _, true) => Some(ControlAction::Break),
             (len, true, _, _, _) if len > 1 => Some(ControlAction::Break),
             _ => None,
+        }
+    }
+}
+
+fn merge_direct_entry(
+    codebase: &CodebaseMetadata,
+    case_block_context: &mut BlockContext<'_>,
+    original_block_context: &BlockContext<'_>,
+) {
+    for (var_id, original_type) in &original_block_context.locals {
+        if let Some(current_type) = case_block_context.locals.get(var_id)
+            && current_type != original_type
+        {
+            case_block_context.locals.insert(
+                *var_id,
+                Rc::new(combine_union_types(current_type, original_type, codebase, CombinerOptions::default())),
+            );
         }
     }
 }

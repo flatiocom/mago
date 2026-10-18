@@ -768,6 +768,8 @@ where
         block_context.assigned_variable_ids.extend(right_block_context.assigned_variable_ids.clone());
     }
 
+    block_context.stable_method_calls.extend(right_block_context.stable_method_calls.iter().copied());
+
     if let Some(if_body_context) = &block_context.if_body_context {
         let mut if_body_context_inner = if_body_context.borrow_mut();
         for (var_id, right_type) in &right_block_context.locals {
@@ -790,6 +792,7 @@ where
         if_body_context_inner
             .assigned_variable_ids
             .extend(block_context.assigned_variable_ids.iter().map(|(k, v)| (*k, *v)));
+        if_body_context_inner.stable_method_calls.extend(block_context.stable_method_calls.iter().copied());
     }
 
     let has_right_assignments =

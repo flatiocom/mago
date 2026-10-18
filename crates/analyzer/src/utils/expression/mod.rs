@@ -25,6 +25,7 @@ use mago_syntax::cst::FunctionCall;
 use mago_syntax::cst::Literal;
 use mago_syntax::cst::MethodCall;
 use mago_syntax::cst::NullSafeMethodCall;
+use mago_syntax::cst::PropertyAccess;
 use mago_syntax::cst::StaticMethodCall;
 use mago_syntax::cst::UnaryPostfixOperator;
 use mago_syntax::cst::UnaryPrefix;
@@ -332,11 +333,18 @@ fn get_extended_expression_id<'ast, 'arena>(
             ..
         })) if argument_list.arguments.is_empty() => {
             let object = get_expression_id(object, this_class_name, resolved_names, codebase)?;
-            if object.as_bytes().ends_with(b"()") {
-                return None;
-            }
 
             concat_word!(object.as_bytes(), b"->", method.value, b"()")
+        }
+        Expression::Call(Call::NullSafeMethod(NullSafeMethodCall {
+            object,
+            method: ClassLikeMemberSelector::Identifier(method),
+            argument_list,
+            ..
+        })) if argument_list.arguments.is_empty() => {
+            let object = get_expression_id(object, this_class_name, resolved_names, codebase)?;
+
+            concat_word!(object.as_bytes(), b"?->", method.value, b"()")
         }
         Expression::Self_(_) => {
             if let Some(class_name) = this_class_name {
@@ -467,6 +475,13 @@ pub fn get_index_id<'ast, 'arena>(
         {
             literal_id
         }
+        Expression::Access(Access::Property(property_access))
+            if let Some(literal_id) = codebase.and_then(|codebase| {
+                get_literal_enum_value_index_id(property_access, this_class_name, resolved_names, codebase)
+            }) =>
+        {
+            literal_id
+        }
         _ => return get_expression_id(expression, this_class_name, resolved_names, codebase),
     })
 }
@@ -487,6 +502,42 @@ fn get_literal_class_constant_index_id(
     resolved_names: &ResolvedNames<'_>,
     codebase: &CodebaseMetadata,
 ) -> Option<Word> {
+    let (class_name, constant_name) =
+        get_class_constant_target(class_constant_access, this_class_name, resolved_names)?;
+    let constant_type = codebase.get_class_constant_type(class_name.as_bytes(), constant_name)?;
+    if !constant_type.is_single() {
+        return None;
+    }
+
+    get_literal_index_id(constant_type.get_single())
+}
+
+fn get_literal_enum_value_index_id(
+    property_access: &PropertyAccess<'_>,
+    this_class_name: Option<Word>,
+    resolved_names: &ResolvedNames<'_>,
+    codebase: &CodebaseMetadata,
+) -> Option<Word> {
+    let ClassLikeMemberSelector::Identifier(property) = &property_access.property else {
+        return None;
+    };
+    let Expression::Access(Access::ClassConstant(case_access)) = property_access.object else {
+        return None;
+    };
+    if property.value != b"value" {
+        return None;
+    }
+
+    let (enum_name, case_name) = get_class_constant_target(case_access, this_class_name, resolved_names)?;
+
+    get_literal_index_id(codebase.get_enum_case(enum_name.as_bytes(), case_name)?.value_type.as_ref()?)
+}
+
+fn get_class_constant_target<'ast>(
+    class_constant_access: &'ast ClassConstantAccess<'_>,
+    this_class_name: Option<Word>,
+    resolved_names: &ResolvedNames<'_>,
+) -> Option<(Word, &'ast [u8])> {
     let class_name = match class_constant_access.class {
         Expression::Identifier(identifier) => word(resolved_names.get(&identifier)),
         Expression::Self_(_) => this_class_name?,
@@ -497,12 +548,15 @@ fn get_literal_class_constant_index_id(
         return None;
     };
 
-    let constant_type = codebase.get_class_constant_type(class_name.as_bytes(), constant_name.value)?;
-    if let Some(value) = constant_type.get_single_literal_int_value() {
+    Some((class_name, constant_name.value))
+}
+
+fn get_literal_index_id(value: &TAtomic) -> Option<Word> {
+    if let Some(value) = value.get_literal_int_value() {
         return Some(word(value.to_string().as_bytes()));
     }
 
-    let value = constant_type.get_single_literal_string_value()?;
+    let value = value.get_literal_string_value()?;
     if value.iter().any(|byte| matches!(byte, b'\'' | b'\\' | b'[' | b']')) {
         return None;
     }

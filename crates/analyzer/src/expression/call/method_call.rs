@@ -1,6 +1,7 @@
 use mago_allocator::Arena;
 use mago_word::Word;
 use mago_word::WordMap;
+use mago_word::concat_word;
 
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
 use mago_codex::identifier::method::MethodIdentifier;
@@ -31,6 +32,7 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::expression::call::analyze_invocation_targets;
+use crate::expression::call::narrow_by_assertions;
 use crate::expression::call::record_external_method_call;
 use crate::expression::call::record_external_method_call_targets;
 use crate::invocation::Invocation;
@@ -413,6 +415,17 @@ where
             is_null_safe && method_resolution.encountered_null,
             artifacts.get_expression_type(object).is_some_and(|t| t.has_nullsafe_null()),
         )?;
+    }
+
+    if is_null_safe
+        && let (Some(receiver_id), ClassLikeMemberSelector::Identifier(method)) = (this_variable, selector)
+        && let Some(assertions) = block_context
+            .stable_method_call_assertions
+            .get(&concat_word!(receiver_id, "?->", method.value, "()"))
+            .cloned()
+        && let Some(call_type) = artifacts.get_expression_type(&span).cloned()
+    {
+        artifacts.set_expression_type(&span, narrow_by_assertions(context, block_context, &assertions, call_type));
     }
 
     if !method_resolution.undocumented_methods.is_empty() {

@@ -13,4 +13,4 @@ if (!isset($x['id']) || !is_int($x['id'])) { // @mago-expect analysis:mixed-arra
     die("missing or invalid 'id'");
 }
 
-takes_array_with_int_id($x); // @mago-expect analysis:less-specific-nested-argument-type
+takes_array_with_int_id($x); // @mago-expect analysis:mixed-argument

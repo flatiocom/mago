@@ -93,13 +93,6 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
         } = if_conditional_scope;
         let pre_if_body_locals = if_block_context.locals.clone();
 
-        let mut mixed_variables = vec![];
-        for (variable_id, variable_type) in &if_block_context.locals {
-            if variable_type.is_mixed() && block_context.locals.contains_key(variable_id) {
-                mixed_variables.push(*variable_id);
-            }
-        }
-
         let mut if_clauses = formula::get_formula(
             self.condition.span(),
             self.condition.span(),
@@ -133,37 +126,6 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
 
             vec![]
         });
-
-        for clause in &mut if_clauses {
-            let keys: WordSet = clause.possibilities.keys().copied().collect();
-            mixed_variables.retain(|i| !keys.contains(i));
-
-            'outer: for key in keys.iter().copied() {
-                for mixed_var_id in &mixed_variables {
-                    if is_derived_access_path(key, *mixed_var_id) {
-                        let has_explicit_type_assertion = clause
-                            .possibilities
-                            .get(&key)
-                            .is_some_and(|assertions| assertions.values().any(|a| !matches!(a, Assertion::Truthy)));
-
-                        if has_explicit_type_assertion {
-                            continue;
-                        }
-
-                        *clause = Clause::new(
-                            AssertionMap::default(),
-                            self.condition.span(),
-                            self.condition.span(),
-                            Some(true),
-                            Some(true),
-                            Some(false),
-                        );
-
-                        break 'outer;
-                    }
-                }
-            }
-        }
 
         check_for_paradox(
             &mut context.collector,
@@ -220,6 +182,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             find_satisfying_assignments(all_negated_clauses.iter().as_slice(), None, &mut WordSet::default()).0;
 
         let mut temporary_else_context = post_if_block_context.clone();
+        temporary_else_context.stable_method_calls.extend(if_block_context.stable_method_calls.iter().copied());
         let mut changed_variable_ids: WordSet = WordSet::default();
 
         if !if_scope.negated_types.is_empty() {
@@ -567,6 +530,7 @@ where
 
     if !reconcilable_if_types.is_empty() {
         let mut changed_variable_ids = WordSet::default();
+        let mixed_before_reconciling = mixed_variable_ids(&if_block_context);
 
         reconcile_keyed_types(
             context,
@@ -589,8 +553,12 @@ where
 
             let mut variables_to_remove = vec![];
             for changed_variable_id in &changed_variable_ids {
+                let narrows_mixed = mixed_before_reconciling.contains(changed_variable_id);
                 for variable_id in if_block_context.locals.keys() {
+                    let outlives_narrowing = narrows_mixed && if_block_context.outlives_narrowing(*variable_id);
                     if is_derived_access_path(*variable_id, *changed_variable_id)
+                        && !outlives_narrowing
+                        && !is_offset_under_mixed(&if_block_context, *variable_id, *changed_variable_id)
                         && !changed_variable_ids.contains(variable_id)
                         && !conditionally_referenced_variable_ids.contains(variable_id)
                     {
@@ -749,14 +717,7 @@ where
     let mut conditionally_referenced_variable_ids = if_conditional_scope.conditionally_referenced_variable_ids;
     let assigned_in_conditional_variable_ids = if_conditional_scope.assigned_in_conditional_variable_ids;
 
-    let mut mixed_variables = vec![];
-    for (variable_id, variable_type) in &else_if_block_context.locals {
-        if variable_type.is_mixed() && outer_block_context.locals.contains_key(variable_id) {
-            mixed_variables.push(*variable_id);
-        }
-    }
-
-    let mut else_if_clauses = formula::get_formula(
+    let else_if_clauses = formula::get_formula(
         else_if_clause.0.span(),
         else_if_clause.0.span(),
         else_if_clause.0,
@@ -796,30 +757,6 @@ where
 
         vec![]
     });
-
-    for clause in &mut else_if_clauses {
-        let keys: WordSet = clause.possibilities.keys().copied().collect();
-        mixed_variables.retain(|i| !keys.contains(i));
-
-        'outer: for key in keys.iter().copied() {
-            for mixed_var_id in &mixed_variables {
-                if !is_derived_access_path(key, *mixed_var_id) {
-                    continue;
-                }
-
-                *clause = Clause::new(
-                    AssertionMap::default(),
-                    else_if_clause.0.span(),
-                    else_if_clause.0.span(),
-                    Some(true),
-                    Some(true),
-                    Some(false),
-                );
-
-                break 'outer;
-            }
-        }
-    }
 
     let mut entry_clauses = vec![];
     for mut clause in if_conditional_scope.entry_clauses {
@@ -927,6 +864,7 @@ where
 
     let mut newly_reconciled_variable_ids = WordSet::default();
     if !reconcilable_else_if_types.is_empty() {
+        let mixed_before_reconciling = mixed_variable_ids(&else_if_block_context);
         reconcile_keyed_types(
             context,
             &reconcilable_else_if_types,
@@ -947,8 +885,12 @@ where
 
             let mut variables_to_remove = vec![];
             for (changed_variable_id, _) in &reconcilable_else_if_types {
+                let narrows_mixed = mixed_before_reconciling.contains(changed_variable_id);
                 for variable_id in else_if_block_context.locals.keys() {
+                    let outlives_narrowing = narrows_mixed && else_if_block_context.outlives_narrowing(*variable_id);
                     if is_derived_access_path(*variable_id, *changed_variable_id)
+                        && !outlives_narrowing
+                        && !is_offset_under_mixed(&else_if_block_context, *variable_id, *changed_variable_id)
                         && !newly_reconciled_variable_ids.contains(variable_id)
                         && !conditionally_referenced_variable_ids.contains(variable_id)
                     {
@@ -1148,12 +1090,17 @@ where
 
         let mut variables_to_remove = vec![];
         for changed_variable_id in &changed_variable_ids {
+            let narrows_mixed =
+                original_context.locals.get(changed_variable_id).is_some_and(|before_type| before_type.is_mixed());
             for variable_id in else_block_context.locals.keys() {
                 if variable_id.eq(changed_variable_id) {
                     continue;
                 }
 
+                let outlives_narrowing = narrows_mixed && else_block_context.outlives_narrowing(*variable_id);
                 if is_derived_access_path(*variable_id, *changed_variable_id)
+                    && !outlives_narrowing
+                    && !is_offset_under_mixed(else_block_context, *variable_id, *changed_variable_id)
                     && !changed_variable_ids.contains(variable_id)
                 {
                     variables_to_remove.push(*variable_id);
@@ -1512,7 +1459,17 @@ fn update_if_scope<'ctx, A>(
     }
 }
 
+fn mixed_variable_ids(block_context: &BlockContext<'_>) -> WordSet {
+    block_context.locals.iter().filter(|(_, variable_type)| variable_type.is_mixed()).map(|(id, _)| *id).collect()
+}
+
 /// An impure call in a branch drops its property and index narrowings; the outer type then stays as it was.
+fn is_offset_under_mixed(block_context: &BlockContext<'_>, variable_id: Word, mixed_variable_id: Word) -> bool {
+    block_context.locals.get(&mixed_variable_id).is_some_and(|mixed_type| mixed_type.is_mixed())
+        && variable_id.as_bytes()[mixed_variable_id.as_bytes().len()..].starts_with(b"[")
+        && memchr::memmem::find(variable_id.as_bytes(), b"->").is_none()
+}
+
 fn updates_from_branch(variable_id: &Word, branch_context: &BlockContext<'_>, has_leaving_statements: bool) -> bool {
     has_leaving_statements || branch_context.locals.contains_key(variable_id) || !is_access_path(variable_id.as_bytes())
 }

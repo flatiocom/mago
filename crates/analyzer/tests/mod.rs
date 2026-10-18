@@ -67,6 +67,7 @@ test_case!(nested_array_write_with_mixed_key_has_array_key_keys);
 test_case!(array_declared_with_mixed_key_has_array_key_keys);
 test_case!(class_constant_with_spread_has_inferred_type);
 test_case!(closure_keeps_declared_return_over_wider_inferred_return);
+test_case!(get_class_comparison_narrows_the_argument);
 test_case!(property_narrowing_dropped_in_branch_keeps_the_outer_type);
 test_case!(switch_case_only_variable_is_possibly_defined_after_switch);
 test_case!(loop_body_variable_keeps_its_type_on_the_next_pass);
@@ -744,6 +745,8 @@ test_case!(missing_constructor);
 test_case!(missing_property_type, crate::framework::check_missing_type_hints_settings());
 test_case!(missing_callable_signature, crate::framework::check_missing_type_hints_settings());
 test_case!(missing_callable_signature_disabled);
+test_case!(identical_to_sole_truthy_return_value);
+test_case!(count_and_truthy_narrowing_of_sealed_shapes);
 test_case!(missing_template_arguments, crate::framework::check_missing_type_hints_settings());
 test_case!(missing_template_arguments_are_left_alone_without_missing_type_hints);
 test_case!(var_tag_missing_template_arguments, crate::framework::check_missing_type_hints_settings());
@@ -3049,6 +3052,7 @@ test_case!(foreach_empty_array_analyze_dead_code, {
 });
 test_case!(object_compared_with_number);
 test_case!(dead_catch, mago_analyzer::settings::Settings { check_dead_catch: true, ..Default::default() });
+test_case!(while_assignment_condition_may_skip_body);
 test_case!(mixed_operand_reported_once_per_operation);
 test_case!(possibly_invalid_array_index);
 test_case!(mixed_access_inside_isset);
@@ -3065,6 +3069,7 @@ test_case!(narrowing_survives_calls_like_phpstan);
 test_case!(memoized_property_read_reports_receiver);
 test_case!(coalesce_throw_narrows_property_bases);
 test_case!(branch_invalidation_reaches_merged_scope);
+test_case!(property_forgotten_in_one_branch_is_not_always_true);
 test_case!(literal_union_key_never_exists_in_isset);
 test_case!(literal_union_key_all_defined_read, {
     let mut s = crate::framework::default_test_settings();
@@ -3080,6 +3085,7 @@ test_case!(mixed_operand_arithmetic_result);
 test_case!(conditional_parent_return_covariance);
 test_case!(deferred_constant_int_folding);
 test_case!(class_constant_index_narrowing);
+test_case!(enum_value_index_narrowing);
 test_case!(by_reference_argument_possibly_undefined);
 test_case!(int_exponentiation_result);
 test_case!(inherited_param_out);
@@ -3125,6 +3131,12 @@ test_case!(map_key_narrowing_like_phpstan, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(concat_key_narrowing_like_phpstan, {
+    let mut s = crate::framework::default_test_settings();
+    s.allow_possibly_undefined_array_keys = false;
+    s.strict_array_index_existence = true;
+    s
+});
 test_case!(array_plus_shape_accepted_like_phpstan);
 test_case!(dynamic_property_name_on_universal_object_crate, {
     let mut s = crate::framework::default_test_settings();
@@ -3133,7 +3145,15 @@ test_case!(dynamic_property_name_on_universal_object_crate, {
 });
 test_case!(class_constant_keys_of_constant_array);
 test_case!(generic_first_class_callable_argument);
+test_case!(loop_continue_keeps_pre_loop_type, {
+    let mut s = crate::framework::default_test_settings();
+    s.check_variable_type_overwrite = true;
+    s
+});
 test_case!(for_without_condition_never_exits);
+test_case!(nullsafe_not_identical_to_non_null_narrows_base);
+test_case!(isset_after_array_key_exists_keeps_the_entry);
+test_case!(if_or_condition_assignment_survives_elseif);
 test_case!(array_access_offset_isset_then_type_check);
 test_case!(array_access_union_offset_write_remembered, {
     let mut s = crate::framework::default_test_settings();
@@ -3156,7 +3176,9 @@ test_case!(magic_property_narrows_native_type);
 test_case!(trait_reads_properties_every_user_declares);
 test_case!(trait_calls_methods_every_user_declares);
 test_case!(receiver_checks_like_phpstan);
+test_case!(null_coalesce_chain_narrows_shared_base);
 test_case!(offset_write_drops_scalar_members);
+test_case!(stable_method_in_array_narrowing);
 test_case!(untyped_property_null_comparison);
 test_case!(docblock_types_uncertain_null_comparison, {
     let mut s = crate::framework::default_test_settings();
@@ -3164,12 +3186,23 @@ test_case!(docblock_types_uncertain_null_comparison, {
     s
 });
 test_case!(null_coalesce_on_magic_property);
+test_case!(catch_forgets_narrowing);
+test_case!(switch_fallthrough_merges_direct_entry);
+test_case!(mixed_path_conditions_narrow_like_phpstan);
 test_case!(narrowed_mixed_receiver_reported_on_every_read);
+test_case!(offset_write_on_mixed_reported_once);
 test_case!(offset_write_into_mixed_forgets_narrowed_keys);
 test_case!(foreach_entry_link_needs_array_iteratee);
+test_case!(isset_dynamic_key_keeps_mixed_base);
 test_case!(variable_type_overwrite_list_drops_known_elements, {
     let mut s = crate::framework::default_test_settings();
     s.check_variable_type_overwrite = true;
+    s
+});
+test_case!(count_upper_bound_negation);
+test_case!(count_narrows_list_to_size, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
     s
 });
 test_case!(list_index_below_required_element_is_set);
@@ -3178,10 +3211,44 @@ test_case!(list_index_outside_known_elements, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(foreach_write_back_after_value_reassignment, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
 test_case!(key_of_non_empty_array_like_phpstan);
 test_case!(clone_drops_non_object_like_phpstan);
 test_case!(debug_backtrace_shape_like_phpstan);
+test_case!(isset_on_mixed_array_keeps_mixed_like_phpstan);
+test_case!(switch_forgets_a_property_set_in_one_case_like_phpstan);
+test_case!(isset_on_mixed_object_has_property_like_phpstan);
 test_case!(memoized_property_read_checks_the_receiver_like_phpstan);
+test_case!(chained_and_nullsafe_method_results_narrow_like_phpstan);
+test_case!(unset_offset_of_mixed_is_forgotten_like_phpstan);
+test_case!(isset_remembers_a_non_constant_key_like_phpstan);
+test_case!(by_reference_array_item_keeps_its_type_like_phpstan);
+test_case!(isset_narrows_the_chain_of_a_dynamic_property_like_phpstan);
+test_case!(comparison_narrows_null_operands_like_phpstan);
+test_case!(strlen_of_a_coalesce_narrows_its_left_side_like_phpstan);
+test_case!(true_inequality_keeps_the_other_types_like_phpstan);
+test_case!(negated_isset_drops_a_shape_that_always_has_the_key_like_phpstan);
+test_case!(assigned_conditional_remembers_its_condition_like_phpstan);
+test_case!(repeated_method_call_keeps_the_or_narrowing_like_phpstan);
+test_case!(narrowing_a_mixed_variable_keeps_its_property_memos_like_phpstan);
+test_case!(by_reference_array_item_takes_the_var_type_of_its_array_like_phpstan);
+test_case!(isset_on_a_mixed_method_result_remembers_the_offset_like_phpstan);
+test_case!(chained_nullsafe_call_narrows_like_phpstan);
+test_case!(nullsafe_call_compared_to_null_is_null_like_phpstan);
+test_case!(comparison_of_a_coalesce_narrows_its_left_side_like_phpstan, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(foreach_value_narrowing_narrows_the_array_like_phpstan, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
 
 #[test]
 fn issue_2478_without_property_memoization() {

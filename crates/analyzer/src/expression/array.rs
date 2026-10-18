@@ -146,6 +146,7 @@ where
         return Ok(());
     }
 
+    let mut by_reference_items = Vec::new();
     let mut array_creation_info = ArrayCreationInfo {
         item_key_atomic_types: Vec::new(),
         item_value_atomic_types: Vec::new(),
@@ -370,12 +371,24 @@ where
         {
             let variable_id = get_block_expression_id(operand, context, block_context);
             if let Some(variable_id) = variable_id {
-                if let Some(existing_type) = block_context.locals.remove(&variable_id) {
-                    block_context.remove_descendants(context, variable_id, &existing_type, None);
-                }
+                let referenced_type = match block_context.locals.remove(&variable_id) {
+                    Some(existing_type) => {
+                        block_context.remove_descendants(context, variable_id, &existing_type, None);
+                        existing_type
+                    }
+                    None => Rc::new(get_mixed()),
+                };
 
-                block_context.locals.insert(variable_id, Rc::new(get_mixed()));
+                block_context.locals.insert(variable_id, referenced_type);
+                by_reference_items.push((vec![item_key_value], variable_id));
             }
+        } else if let Some(nested_items) =
+            artifacts.by_reference_items.remove(&(value.span().start.offset, value.span().end.offset))
+        {
+            by_reference_items.extend(nested_items.into_iter().map(|(mut path, variable_id)| {
+                path.insert(0, item_key_value);
+                (path, variable_id)
+            }));
         }
 
         match artifacts.get_expression_type(value) {
@@ -528,6 +541,12 @@ where
             parameters_are_shape_tail: false,
         }))])
     };
+
+    if !by_reference_items.is_empty() {
+        artifacts
+            .by_reference_items
+            .insert((expression_span.start.offset, expression_span.end.offset), by_reference_items);
+    }
 
     artifacts.set_expression_type(&expression_span, array_type);
 

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use mago_allocator::Arena;
 use mago_bytes::BytesDisplay;
+use mago_codex::assertion::Assertion;
 use mago_codex::operator_overloading::OperandAcceptance;
 use mago_codex::operator_overloading::OperandSide;
 use mago_codex::operator_overloading::OverloadedOperator;
@@ -21,6 +22,7 @@ use mago_syntax::cst::Access;
 use mago_syntax::cst::ArrayElement;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
+use mago_syntax::cst::Call;
 use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::Literal;
@@ -31,6 +33,8 @@ use mago_word::word;
 
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
+use crate::assertion::OtherValuePosition;
+use crate::assertion::has_null_variable;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
@@ -72,6 +76,28 @@ where
     binary.lhs.analyze(context, block_context, artifacts)?;
     binary.rhs.analyze(context, block_context, artifacts)?;
     block_context.flags.set_inside_general_use(was_inside_general_use);
+
+    if matches!(binary.operator, BinaryOperator::Identical(_))
+        && let Some(position) = has_null_variable(binary.lhs, binary.rhs, artifacts)
+    {
+        let operand = match position {
+            OtherValuePosition::Left => binary.rhs,
+            OtherValuePosition::Right => binary.lhs,
+        };
+
+        if let Expression::Call(Call::NullSafeMethod(_)) = unwrap_expression(operand)
+            && let Some(operand_id) = get_block_expression_id(operand, context, block_context)
+        {
+            block_context.stable_method_calls.insert(operand_id);
+            artifacts
+                .true_branch_only_assertions
+                .entry((binary.span().start.offset, binary.span().end.offset))
+                .or_default()
+                .entry(operand_id)
+                .or_default()
+                .push(vec![Assertion::IsType(TAtomic::Null)]);
+        }
+    }
 
     let fallback_type = Rc::new(get_mixed());
     let lhs_type = artifacts.get_rc_expression_type(&binary.lhs).unwrap_or(&fallback_type);

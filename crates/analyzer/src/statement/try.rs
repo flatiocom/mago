@@ -35,6 +35,7 @@ use crate::context::block::BlockContext;
 use crate::context::scope::control_action::ControlAction;
 use crate::context::scope::control_action::ControlActionSet;
 use crate::context::scope::finally_scope::FinallyScope;
+use crate::context::scope::is_access_path;
 use crate::context::scope::loop_scope::LoopScope;
 use crate::context::utils::inherit_branch_context_properties;
 use crate::error::AnalysisError;
@@ -402,6 +403,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
                         );
                     }
                 }
+
+                block_context.locals.retain(|variable_id, _| {
+                    !is_access_path(variable_id.as_bytes()) || catch_block_context.locals.contains_key(variable_id)
+                });
+                block_context.stable_method_call_assertions.retain(|method_call, _| {
+                    catch_block_context.stable_method_call_assertions.contains_key(method_call)
+                });
 
                 block_context.variables_possibly_in_scope.extend(catch_block_context.variables_possibly_in_scope);
             } else if self.finally_clause.is_some() {

@@ -62,6 +62,7 @@ pub(crate) fn analyze<'ctx, 'arena, A>(
     array_target: ArrayTarget<'_, 'arena>,
     assign_value_type: &TUnion,
     index_read_first: bool,
+    target_was_narrowed: bool,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
@@ -135,6 +136,7 @@ where
         &mut root_array_type,
         &mut current_type,
         index_read_first,
+        target_was_narrowed,
     )?;
 
     let root_is_string = root_array_type.has_string();
@@ -741,6 +743,7 @@ pub(crate) fn analyze_nested_array_assignment<'ctx, 'ast, 'arena, A>(
     root_type: &mut Rc<TUnion>,
     last_array_expr_type: &mut Rc<TUnion>,
     index_read_first: bool,
+    target_was_narrowed: bool,
 ) -> Result<Option<&'ast Expression<'arena>>, AnalysisError>
 where
     A: Arena,
@@ -823,22 +826,36 @@ where
                 .get_index()
                 .is_some_and(|index| artifacts.reported_array_index_offsets.contains(&index.span().start.offset));
 
+        let target_is_narrowed = (is_last && target_was_narrowed)
+            || (full_var_id
+                && root_var_id
+                    .map(|root_var_id| mago_word::word(format!("{}{}", root_var_id, var_id_additions.join(""))))
+                    .and_then(|target_id| block_context.locals.get(&target_id))
+                    .is_some_and(|target_type| !target_type.possibly_undefined()));
+
         block_context.flags.set_inside_assignment(true);
 
-        let (array_expr_type, index_rejected) = get_array_target_type_given_index(
-            context,
-            block_context,
-            array_target.span(),
-            array_target.get_array().span(),
-            array_target.get_index().map(mago_span::HasSpan::span),
-            &array_expression_type,
-            &new_index_type,
-            true,
-            extended_var_id,
-            if is_last { Some(assign_value_type) } else { None },
-            false,
-            !index_reported_on_read,
-        );
+        let ((array_expr_type, index_rejected), recorded_issues) = context.record(|context| {
+            get_array_target_type_given_index(
+                context,
+                block_context,
+                array_target.span(),
+                array_target.get_array().span(),
+                array_target.get_index().map(mago_span::HasSpan::span),
+                &array_expression_type,
+                &new_index_type,
+                true,
+                extended_var_id,
+                if is_last { Some(assign_value_type) } else { None },
+                false,
+                !index_reported_on_read,
+            )
+        });
+
+        let container_reported_on_read = index_read_first || target_is_narrowed;
+        context.collector.extend(recorded_issues.into_iter().filter(|issue| {
+            !container_reported_on_read || issue.code.as_deref() != Some(IssueCode::MixedArrayAssignment.as_str())
+        }));
 
         block_context.flags.set_inside_assignment(false);
 

@@ -847,6 +847,8 @@ fn write_assertion(writer: &mut PayloadWriter, assertion: &Assertion) -> Result<
         Assertion::NotCountable(_) => 44,
         Assertion::StringLengthLessThan(_) => 45,
         Assertion::StringLengthGreaterThanOrEqual(_) => 46,
+        Assertion::NotNullFromComparison => 3,
+        Assertion::NotNullWhenComparisonFails => 1,
     };
     writer.write_u8(kind);
 
@@ -857,6 +859,7 @@ fn write_assertion(writer: &mut PayloadWriter, assertion: &Assertion) -> Result<
         | Assertion::IsNotIdentical(atomic)
         | Assertion::IsEqual(atomic)
         | Assertion::IsNotEqual(atomic) => write_atomic(writer, atomic)?,
+        Assertion::NotNullFromComparison => write_atomic(writer, &TAtomic::Null)?,
         Assertion::InArray(union) | Assertion::NotInArray(union) => write_union(writer, union)?,
         Assertion::HasArrayKey(key)
         | Assertion::DoesNotHaveArrayKey(key)

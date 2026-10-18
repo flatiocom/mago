@@ -133,7 +133,7 @@ final class NarrowedMixedWrite
             return;
         }
 
-        // @mago-expect analysis:mixed-property-access
+        // @mago-expect analysis:ambiguous-object-property-access
         $values->value = 1;
         echo $this->value;
     }

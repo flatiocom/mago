@@ -9,6 +9,7 @@ use mago_algebra::disjoin_clauses;
 use mago_algebra::negate_formula;
 use mago_codex::assertion::Assertion;
 use mago_codex::ttype::atomic::TAtomic;
+use mago_codex::ttype::union::TUnion;
 use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::cst::*;
@@ -20,6 +21,7 @@ use crate::artifacts::AnalysisArtifacts;
 use crate::assertion::OtherValuePosition;
 use crate::assertion::has_null_variable;
 use crate::assertion::scrape_assertions;
+use crate::assertion::scrape_coalesce_comparison_assertions;
 use crate::context::assertion::AssertionContext;
 use crate::context::scope::var_has_root;
 use crate::utils::expression::expression_is_nullsafe;
@@ -107,6 +109,62 @@ where
     if should_negate { negate_formula(&formula, algebra_thresholds) } else { Some(formula) }
 }
 
+fn get_coalesce_comparison_formula<A>(
+    conditional_object_id: Span,
+    creating_object_id: Span,
+    binary: &Binary,
+    assertion_context: AssertionContext<'_, '_, A>,
+    artifacts: &AnalysisArtifacts,
+) -> Option<Vec<Clause>>
+where
+    A: Arena,
+{
+    let comparison = scrape_coalesce_comparison_assertions(binary, artifacts, assertion_context)?;
+    let coalesced_id = comparison.coalesced_id;
+    let default_branch_id = Word::from(format!("*coalesce-{}-{}", binary.start_offset(), binary.end_offset()).as_str());
+    let clause = |possibilities: Vec<(Word, Vec<Assertion>)>| {
+        let has_equality = possibilities.iter().flat_map(|(_, assertions)| assertions).any(Assertion::has_equality);
+        let possibilities = possibilities
+            .into_iter()
+            .map(|(id, assertions)| (id, assertions.into_iter().map(|a| (a.to_hash(), a)).collect()))
+            .collect();
+
+        Clause::new(
+            possibilities,
+            conditional_object_id,
+            creating_object_id,
+            Some(false),
+            Some(true),
+            Some(has_equality),
+        )
+    };
+
+    if comparison.default_passes {
+        return Some(
+            comparison
+                .assertions
+                .into_iter()
+                .map(|mut assertions| {
+                    if comparison.is_array_access {
+                        assertions.push(Assertion::ArrayKeyDoesNotExist);
+                    }
+
+                    clause(vec![(coalesced_id, assertions), (default_branch_id, vec![Assertion::Falsy])])
+                })
+                .collect(),
+        );
+    }
+
+    let mut formula: Vec<Clause> =
+        comparison.assertions.into_iter().map(|assertions| clause(vec![(coalesced_id, assertions)])).collect();
+    if comparison.is_array_access {
+        formula.push(clause(vec![(coalesced_id, vec![Assertion::ArrayKeyExists])]));
+    }
+    formula.push(clause(vec![(default_branch_id, vec![Assertion::Truthy])]));
+
+    Some(formula)
+}
+
 pub fn get_formula<A>(
     conditional_object_id: Span,
     creating_object_id: Span,
@@ -157,6 +215,16 @@ where
     let expression = unwrap_expression(conditional);
 
     if let Expression::Binary(binary) = expression {
+        if let Some(formula) = get_coalesce_comparison_formula(
+            conditional_object_id,
+            creating_object_id,
+            binary,
+            assertion_context,
+            artifacts,
+        ) {
+            return Some(formula);
+        }
+
         if binary.operator.is_null_coalesce()
             && artifacts.get_expression_type(binary.rhs).is_some_and(|ty| ty.is_always_falsy())
         {
@@ -668,16 +736,21 @@ fn collect_conditional_assertions_inner(
                 }
             };
 
+            let is_equality = matches!(binary.operator, BinaryOperator::Equal(_) | BinaryOperator::Identical(_));
+            let is_strict = matches!(binary.operator, BinaryOperator::Identical(_) | BinaryOperator::NotIdentical(_));
+
             let (other, literal) = if let Some(literal) = boolean_literal(binary.lhs) {
                 (binary.rhs, literal)
             } else if let Some(literal) = boolean_literal(binary.rhs) {
                 (binary.lhs, literal)
+            } else if is_strict && is_call_with_sole_truthy_value(binary.lhs, binary.rhs, artifacts) {
+                (binary.lhs, true)
+            } else if is_strict && is_call_with_sole_truthy_value(binary.rhs, binary.lhs, artifacts) {
+                (binary.rhs, true)
             } else {
                 return WordMap::default();
             };
 
-            let is_equality = matches!(binary.operator, BinaryOperator::Equal(_) | BinaryOperator::Identical(_));
-            let is_strict = matches!(binary.operator, BinaryOperator::Identical(_) | BinaryOperator::NotIdentical(_));
             let other_is_bool = artifacts.get_expression_type(other).is_some_and(|ty| ty.is_bool());
             if !is_strict && !other_is_bool {
                 return WordMap::default();
@@ -697,6 +770,31 @@ fn collect_conditional_assertions_inner(
         }
         _ => WordMap::default(),
     }
+}
+
+fn is_call_with_sole_truthy_value(call: &Expression, value: &Expression, artifacts: &AnalysisArtifacts) -> bool {
+    if !matches!(unwrap_expression(call), Expression::Call(_)) {
+        return false;
+    }
+
+    let Some(value) = artifacts.get_expression_type(value).and_then(TUnion::get_single_literal_int_value) else {
+        return false;
+    };
+
+    value != 0
+        && artifacts.get_expression_type(call).is_some_and(|call_type| {
+            !call_type.types.is_empty()
+                && call_type.types.iter().all(|atomic| {
+                    atomic.is_falsy()
+                        || match (atomic.get_minimum_int_value(), atomic.get_maximum_int_value()) {
+                            (Some(minimum), Some(maximum)) => {
+                                maximum - minimum <= 1
+                                    && [minimum, maximum].iter().all(|bound| *bound == 0 || *bound == value)
+                            }
+                            _ => false,
+                        }
+                })
+        })
 }
 
 fn extend_conditional_assertions(target: &mut WordMap<AssertionSet>, assertions: WordMap<AssertionSet>) {
@@ -931,7 +1029,11 @@ fn get_formula_from_assertions(
         }
     }
 
-    if !clauses.is_empty() {
+    let has_negatable_clause = clauses.iter().any(|clause| {
+        clause.possibilities.values().flat_map(|assertions| assertions.values()).all(Assertion::is_negatable)
+    });
+
+    if has_negatable_clause {
         return if clauses.len() > usize::from(formula_size_threshold) { None } else { Some(clauses) };
     }
 
@@ -939,7 +1041,7 @@ fn get_formula_from_assertions(
     let conditional_ref =
         Word::from(format!("*{}-{}", conditional_span.start.offset, conditional_span.end.offset).as_str());
 
-    Some(vec![Clause::new(
+    clauses.push(Clause::new(
         {
             let mut map = AssertionMap::default();
             map.insert(conditional_ref, AssertionMap::from_iter([(Assertion::Truthy.to_hash(), Assertion::Truthy)]));
@@ -950,7 +1052,9 @@ fn get_formula_from_assertions(
         None,
         None,
         None,
-    )])
+    ));
+
+    Some(clauses)
 }
 
 pub fn negate_or_synthesize<A>(

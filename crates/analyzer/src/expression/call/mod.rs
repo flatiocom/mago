@@ -1,5 +1,6 @@
 use foldhash::HashSet;
 use mago_allocator::Arena;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use mago_algebra::assertion_set::AssertionSet;
@@ -42,6 +43,7 @@ use crate::invocation::post_process::has_side_effects;
 use crate::invocation::post_process::post_invocation_process;
 use crate::invocation::return_type_fetcher::fetch_invocation_return_type;
 use crate::reconciler::assertion_reconciler;
+use crate::utils::expression::get_non_nullsafe_expression_id;
 use crate::utils::names::display_function_like_identifier;
 
 pub mod function_call;
@@ -227,7 +229,12 @@ where
     if method_call_is_stable
         && let (Some(this_variable), Some(method_name)) = (this_variable, method_name_for_assertions)
     {
-        block_context.stable_method_calls.insert(concat_word!(this_variable, "->", method_name, "()"));
+        let receiver_id = get_non_nullsafe_expression_id(this_variable).unwrap_or(this_variable);
+        let method_call_id = concat_word!(receiver_id, "->", method_name, "()");
+        block_context.stable_method_calls.insert(method_call_id);
+        if block_context.flags.inside_isset() && resulting_type.is_mixed() {
+            block_context.locals.entry(method_call_id).or_insert_with(|| Rc::new(resulting_type.clone()));
+        }
     }
 
     let resulting_type = apply_method_call_assertions(
@@ -363,29 +370,45 @@ where
 
     let method_call_key = concat_word!(this_var, "->", method, "()");
 
-    let mut apply_assertions = |assertions: &AssertionSet| {
-        for clause in assertions {
-            for assertion in clause {
-                return_type = assertion_reconciler::reconcile(
-                    context,
-                    assertion,
-                    Some(&return_type),
-                    None,
-                    block_context.flags.inside_loop(),
-                    None,
-                    false,
-                    false,
-                );
-            }
-        }
-    };
-
     if method_is_stable && let Some(assertions) = block_context.stable_method_call_assertions.get(&method_call_key) {
-        apply_assertions(assertions);
+        return_type = narrow_by_assertions(context, block_context, assertions, return_type);
     }
 
     if let Some(assertions) = block_context.active_method_call_assertions.get(&method_call_key) {
-        apply_assertions(assertions);
+        return_type = narrow_by_assertions(context, block_context, assertions, return_type);
+    }
+
+    return_type
+}
+
+pub(super) fn narrow_by_assertions<'ctx, A>(
+    context: &mut Context<'ctx, '_, A>,
+    block_context: &BlockContext<'ctx>,
+    assertions: &AssertionSet,
+    mut return_type: TUnion,
+) -> TUnion
+where
+    A: Arena,
+{
+    for clause in assertions {
+        let mut orred_type: Option<TUnion> = None;
+        for assertion in clause {
+            let candidate = assertion_reconciler::reconcile(
+                context,
+                assertion,
+                Some(&return_type),
+                None,
+                block_context.flags.inside_loop(),
+                None,
+                false,
+                false,
+            );
+            orred_type = Some(add_optional_union_type(candidate, orred_type.as_ref(), context.codebase));
+        }
+
+        if let Some(orred_type) = orred_type {
+            return_type = orred_type;
+        }
     }
 
     return_type

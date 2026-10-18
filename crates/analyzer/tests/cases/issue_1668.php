@@ -2,9 +2,6 @@
 
 declare(strict_types=1);
 
-/**
- * @mago-expect analysis:possibly-undefined-int-array-index(4)
- */
 function issue_1668_table(): void
 {
     $ia = [];

@@ -702,7 +702,7 @@ where
                         }
 
                         let combined = combine_loop_types(
-                            &continue_context_type,
+                            continue_context.locals.get(&variable_id).unwrap_or(&continue_context_type),
                             loop_context_type,
                             codebase,
                             CombinerOptions::default(),
@@ -1352,12 +1352,14 @@ fn can_condition_be_initially_false(pre_condition: &Expression<'_>, artifacts: &
         _ => {}
     }
 
+    let condition_can_be_false = artifacts.get_expression_type(pre_condition).is_none_or(|ct| !ct.is_always_truthy());
+
     let Some(left_type) = artifacts.get_expression_type(binary.lhs) else {
-        return false;
+        return condition_can_be_false;
     };
 
     let Some(right_type) = artifacts.get_expression_type(binary.rhs) else {
-        return false;
+        return condition_can_be_false;
     };
 
     let left_int = left_type.types.iter().find_map(|a| match a {
@@ -1371,7 +1373,7 @@ fn can_condition_be_initially_false(pre_condition: &Expression<'_>, artifacts: &
     });
 
     let (Some(left_int), Some(right_int)) = (left_int, right_int) else {
-        return false;
+        return condition_can_be_false;
     };
 
     let (left_lb, left_ub) = left_int.get_bounds();

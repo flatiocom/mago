@@ -64,6 +64,8 @@ pub enum Assertion {
     IsLessThanOrEqualFromBound(i64),
     IsGreaterThanFromBound(i64),
     IsGreaterThanOrEqualFromBound(i64),
+    NotNullFromComparison,
+    NotNullWhenComparisonFails,
     /// An exact comparison with another tracked expression.
     ///
     /// Unlike bound-derived facts, these retain the relationship so consumers
@@ -130,6 +132,8 @@ impl Assertion {
             Assertion::IsGreaterThanOrEqualFromBound(number) => {
                 concat_word!(b"is-greater-than-or-equal-from-bound-", i64_word(*number))
             }
+            Assertion::NotNullFromComparison => word("not-null-from-comparison"),
+            Assertion::NotNullWhenComparisonFails => word("not-null-when-comparison-fails"),
             Assertion::IsLessThanVariable(variable) => concat_word!(b"is-less-than-variable-", variable),
             Assertion::IsLessThanOrEqualVariable(variable) => {
                 concat_word!(b"is-less-than-or-equal-variable-", variable)
@@ -173,6 +177,7 @@ impl Assertion {
             Self::IsNotEqual(atomic) => concat_word!(b"~", atomic.get_id()),
             Self::InArray(union) => concat_word!(b"!=in-array-", union.get_id()),
             Self::NotInArray(union) => concat_word!(b"=in-array-", union.get_id()),
+            Self::NotNullFromComparison | Self::NotNullWhenComparisonFails => concat_word!(b"!", self.to_atom()),
             _ => self.get_negation().to_atom(),
         };
 
@@ -401,11 +406,11 @@ impl Assertion {
                 _ => false,
             },
             Assertion::HasAtLeastCount(number) => match other {
-                Assertion::DoesNotHasAtLeastCount(other_number) => other_number == number,
+                Assertion::DoesNotHasAtLeastCount(other_number) => other_number + 1 == *number,
                 _ => false,
             },
             Assertion::DoesNotHasAtLeastCount(number) => match other {
-                Assertion::HasAtLeastCount(other_number) => other_number == number,
+                Assertion::HasAtLeastCount(other_number) => *other_number == number + 1,
                 _ => false,
             },
             Assertion::IsLessThan(number) => match other {
@@ -427,7 +432,9 @@ impl Assertion {
             Assertion::IsLessThanFromBound(_)
             | Assertion::IsLessThanOrEqualFromBound(_)
             | Assertion::IsGreaterThanFromBound(_)
-            | Assertion::IsGreaterThanOrEqualFromBound(_) => false,
+            | Assertion::IsGreaterThanOrEqualFromBound(_)
+            | Assertion::NotNullFromComparison
+            | Assertion::NotNullWhenComparisonFails => false,
             Assertion::IsLessThanVariable(variable) => match other {
                 Assertion::IsGreaterThanOrEqualVariable(other_variable) => other_variable == variable,
                 _ => false,
@@ -487,8 +494,8 @@ impl Assertion {
             Assertion::NotInArray(union) => Assertion::InArray(union.clone()),
             Assertion::HasExactCount(size) => Assertion::DoesNotHaveExactCount(*size),
             Assertion::DoesNotHaveExactCount(size) => Assertion::HasExactCount(*size),
-            Assertion::HasAtLeastCount(size) => Assertion::DoesNotHasAtLeastCount(*size),
-            Assertion::DoesNotHasAtLeastCount(size) => Assertion::HasAtLeastCount(*size),
+            Assertion::HasAtLeastCount(size) => Assertion::DoesNotHasAtLeastCount(size.saturating_sub(1)),
+            Assertion::DoesNotHasAtLeastCount(size) => Assertion::HasAtLeastCount(size + 1),
             Assertion::HasArrayKey(str) => Assertion::DoesNotHaveArrayKey(*str),
             Assertion::DoesNotHaveArrayKey(str) => Assertion::HasArrayKey(*str),
             Assertion::HasNonnullEntryForKey(str) => Assertion::DoesNotHaveNonnullEntryForKey(*str),
@@ -503,7 +510,9 @@ impl Assertion {
             Assertion::IsLessThanFromBound(_)
             | Assertion::IsLessThanOrEqualFromBound(_)
             | Assertion::IsGreaterThanFromBound(_)
-            | Assertion::IsGreaterThanOrEqualFromBound(_) => Assertion::Any,
+            | Assertion::IsGreaterThanOrEqualFromBound(_)
+            | Assertion::NotNullFromComparison => Assertion::Any,
+            Assertion::NotNullWhenComparisonFails => Assertion::NotNullFromComparison,
             Assertion::IsLessThanVariable(variable) => Assertion::IsGreaterThanOrEqualVariable(*variable),
             Assertion::IsLessThanOrEqualVariable(variable) => Assertion::IsGreaterThanVariable(*variable),
             Assertion::IsGreaterThanVariable(variable) => Assertion::IsLessThanOrEqualVariable(*variable),
@@ -530,7 +539,14 @@ impl Assertion {
                 | Self::IsLessThanOrEqualFromBound(_)
                 | Self::IsGreaterThanFromBound(_)
                 | Self::IsGreaterThanOrEqualFromBound(_)
+                | Self::NotNullFromComparison
         )
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_comparison_null_fact(&self) -> bool {
+        matches!(self, Self::NotNullFromComparison | Self::NotNullWhenComparisonFails)
     }
 
     /// Returns the expression referenced by a relational assertion.

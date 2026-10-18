@@ -46,6 +46,7 @@ namespace {
         $class = get_class($value);
         switch ($class) {
             case B::class:
+                // @mago-expect analysis:non-existent-method
                 $value->barBar();
                 break;
         }
@@ -211,7 +212,7 @@ namespace StackedCasePreserveUnion {
         switch ($class) {
             case A::class:
             case B::class:
-                // @mago-expect analysis:non-existent-method
+                // @mago-expect analysis:non-existent-method(2)
                 $value->onlyA();
                 break;
         }

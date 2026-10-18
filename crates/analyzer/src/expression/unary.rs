@@ -880,6 +880,7 @@ where
         false,
         PropertyWriteKind::Mutation,
         true,
+        false,
     )?;
 
     if !successful {
@@ -1129,6 +1130,7 @@ where
         false,
         PropertyWriteKind::Mutation,
         true,
+        false,
     )?;
 
     if !successful {

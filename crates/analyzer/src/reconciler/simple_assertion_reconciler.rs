@@ -270,11 +270,16 @@ where
 
     match assertion {
         Assertion::Any
+        | Assertion::NotNullWhenComparisonFails
         | Assertion::IsLessThanVariable(_)
         | Assertion::IsLessThanOrEqualVariable(_)
         | Assertion::IsGreaterThanVariable(_)
         | Assertion::IsGreaterThanOrEqualVariable(_) => Some(existing_var_type.clone()),
         Assertion::StringLengthLessThan(_) => Some(existing_var_type.clone()),
+        Assertion::NotNullFromComparison if existing_var_type.has_mixed() => Some(existing_var_type.clone()),
+        Assertion::NotNullFromComparison => {
+            Some(subtract_null(context, assertion, existing_var_type, key, negated, None))
+        }
         Assertion::StringLengthGreaterThanOrEqual(length) => {
             Some(reconcile_string_length_greater_than_or_equal(existing_var_type, *length))
         }
@@ -1449,7 +1454,7 @@ where
     let possibly_undefined_from_try = new_var_type.possibly_undefined_from_try();
 
     for atomic in new_var_type.types.to_mut().drain(..) {
-        if atomic.is_falsy() {
+        if atomic.is_falsy() || is_sealed_empty_array(&atomic) {
             did_remove_type = true;
         } else if !atomic.is_truthy() || possibly_undefined_from_try {
             did_remove_type = true;
@@ -1680,8 +1685,33 @@ where
 
     let existing_var_types = existing_var_type.types.as_ref();
     let mut existing_var_type = existing_var_type.clone();
+    let some_type_holds_count = existing_var_types.iter().any(|atomic| match atomic {
+        TAtomic::Array(TArray::List(list)) if list.element_type.is_never() => {
+            narrow_sealed_list_to_count(list, count, exact).is_some()
+        }
+        TAtomic::Array(TArray::Keyed(keyed_array)) if keyed_array.parameters.is_none() => {
+            keyed_array.known_items.as_ref().map_or(0, |items| items.len()) >= count
+        }
+        _ => true,
+    });
 
     for atomic in existing_var_types {
+        if let TAtomic::Array(TArray::List(list)) = atomic
+            && list.element_type.is_never()
+        {
+            let narrowed = narrow_sealed_list_to_count(list, count, exact);
+            if narrowed.as_ref() != Some(list) {
+                existing_var_type.remove_type(atomic);
+                if let Some(narrowed) = narrowed {
+                    existing_var_type.types.to_mut().push(TAtomic::Array(TArray::List(narrowed)));
+                }
+
+                did_remove_type = true;
+            }
+
+            continue;
+        }
+
         if let TAtomic::Array(TArray::List(TList { non_empty, known_count, element_type, known_elements })) = atomic {
             let needs_replacement = match known_count {
                 Some(existing_count) => !*non_empty || *existing_count < count,
@@ -1693,13 +1723,15 @@ where
                 existing_var_type.remove_type(atomic);
                 if !element_type.is_never() {
                     let new_known_count = if exact { Some(count) } else { known_count.map(|_| count) };
+                    let truncated = truncate_list_to_count(element_type, known_elements.as_deref(), count, exact)
+                        .unwrap_or_else(|| TList {
+                            element_type: Arc::clone(element_type),
+                            known_elements: known_elements.clone(),
+                            known_count: new_known_count,
+                            non_empty: true,
+                        });
 
-                    existing_var_type.types.to_mut().push(TAtomic::Array(TArray::List(TList {
-                        element_type: Arc::clone(element_type),
-                        known_elements: known_elements.clone(),
-                        known_count: new_known_count,
-                        non_empty: true,
-                    })));
+                    existing_var_type.types.to_mut().push(TAtomic::Array(TArray::List(truncated)));
                 }
 
                 did_remove_type = true;
@@ -1714,10 +1746,16 @@ where
         {
             did_remove_type = true;
 
+            let holds_count = known_items.as_ref().map_or(0, |items| items.len()) >= count;
+            if parameters.is_none() && !holds_count && some_type_holds_count {
+                existing_var_type.remove_type(atomic);
+                continue;
+            }
+
             if !non_empty {
                 existing_var_type.remove_type(atomic);
 
-                if exact && parameters.is_none() && known_items.as_ref().map_or(0, |items| items.len()) < count {
+                if exact && parameters.is_none() && !holds_count {
                     continue;
                 }
 
@@ -1746,6 +1784,71 @@ where
     }
 
     existing_var_type
+}
+
+fn is_sealed_empty_array(atomic: &TAtomic) -> bool {
+    matches!(
+        atomic,
+        TAtomic::Array(TArray::Keyed(keyed_array))
+            if keyed_array.parameters.is_none() && keyed_array.known_items.as_ref().is_some_and(|items| items.is_empty())
+    )
+}
+
+fn truncate_list_to_count(
+    element_type: &Arc<TUnion>,
+    known_elements: Option<&BTreeMap<usize, (bool, TUnion)>>,
+    count: usize,
+    exact: bool,
+) -> Option<TList> {
+    const ARRAY_COUNT_LIMIT: usize = 256;
+    const MINIMUM_COUNT_LIMIT: usize = 10;
+
+    let mut elements = known_elements.cloned().unwrap_or_default();
+    if exact {
+        if count >= ARRAY_COUNT_LIMIT || elements.iter().any(|(index, (optional, _))| *index >= count && !optional) {
+            return None;
+        }
+
+        elements.retain(|index, _| *index < count);
+    }
+
+    let required = if exact { count } else { count.min(MINIMUM_COUNT_LIMIT) };
+    if required < if exact { 1 } else { 2 } {
+        return None;
+    }
+
+    for index in 0..required {
+        elements.entry(index).or_insert_with(|| (false, (**element_type).clone())).0 = false;
+    }
+
+    Some(TList {
+        element_type: if exact { Arc::new(get_never()) } else { Arc::clone(element_type) },
+        known_elements: Some(Arc::new(elements)),
+        known_count: exact.then_some(count),
+        non_empty: true,
+    })
+}
+
+fn narrow_sealed_list_to_count(list: &TList, count: usize, exact: bool) -> Option<TList> {
+    let known_elements = list.known_elements.as_deref().cloned().unwrap_or_default();
+    let size = known_elements.keys().next_back().map_or(0, |index| index + 1);
+    let required = known_elements.values().filter(|(optional, _)| !optional).count();
+    if size < count || (exact && required > count) {
+        return None;
+    }
+
+    let known_elements = known_elements
+        .into_iter()
+        .filter(|(index, _)| !exact || *index < count)
+        .map(|(index, (optional, element_type))| (index, (optional && index >= count, element_type)))
+        .collect();
+
+    Some(TList {
+        element_type: Arc::clone(&list.element_type),
+        known_elements: Some(Arc::new(known_elements)),
+        known_count: if exact { Some(count) } else { list.known_count },
+        non_empty: true,
+    })
 }
 
 fn reconcile_countable<A>(
@@ -1922,16 +2025,7 @@ where
 {
     let mut new_var_type = existing_var_type.clone();
 
-    if new_var_type.is_mixed() {
-        let mut result = get_mixed_keyed_array();
-        result.set_possibly_undefined(
-            new_var_type.possibly_undefined(),
-            Some(new_var_type.possibly_undefined_from_try()),
-        );
-        return result;
-    }
-
-    if new_var_type.has_template() {
+    if new_var_type.is_mixed() || new_var_type.has_template() {
         return new_var_type;
     }
 
@@ -2238,22 +2332,7 @@ where
                 acceptable_types.push(atomic);
             }
             TAtomic::Mixed(_) => {
-                // Narrow mixed to a keyed array with the specific key having a non-null value
-                let mut keyed_array = get_mixed_keyed_array();
-                keyed_array.types.to_mut()[0] = TAtomic::Array(TArray::Keyed(TKeyedArray {
-                    known_items: Some(
-                        BTreeMap::from([(
-                            key_name,
-                            (false, subtract_null(context, assertion, &get_mixed(), None, negated, None)),
-                        )])
-                        .into(),
-                    ),
-                    parameters: Some((Arc::new(get_arraykey()), Arc::new(get_mixed()))),
-                    non_empty: false,
-                    known_non_list: false,
-                    parameters_are_shape_tail: false,
-                }));
-                acceptable_types.extend(keyed_array.types.into_owned());
+                acceptable_types.push(atomic);
             }
             TAtomic::Object(TObject::Named(_)) => {
                 acceptable_types.push(atomic);
@@ -2429,9 +2508,16 @@ where
                 acceptable_types.push(TAtomic::Object(TObject::HasMethod(new_has_method)));
             }
             TAtomic::Object(TObject::HasProperty(has_property)) => {
-                let mut new_has_property = has_property.clone();
-                new_has_property.add_intersection_type(TAtomic::Object(TObject::new_has_property(property_name)));
-                acceptable_types.push(TAtomic::Object(TObject::HasProperty(new_has_property)));
+                let known_property = TAtomic::Object(TObject::new_has_property(property_name));
+                if has_property.has_property(property_name)
+                    || has_property.intersection_types.as_ref().is_some_and(|types| types.contains(&known_property))
+                {
+                    acceptable_types.push(atomic.clone());
+                } else {
+                    let mut new_has_property = has_property.clone();
+                    new_has_property.add_intersection_type(known_property);
+                    acceptable_types.push(TAtomic::Object(TObject::HasProperty(new_has_property)));
+                }
             }
             TAtomic::GenericParameter(generic_parameter) => {
                 did_remove_type = true;

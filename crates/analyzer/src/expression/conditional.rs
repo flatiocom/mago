@@ -102,12 +102,6 @@ where
     });
 
     let mut mixed_variables = WordSet::default();
-    for (variable_id, variable_type) in &block_context.locals {
-        if variable_type.is_mixed() {
-            mixed_variables.insert(*variable_id);
-        }
-    }
-
     for variable_id in &block_context.variables_possibly_in_scope {
         if !block_context.locals.contains_key(variable_id) {
             mixed_variables.insert(*variable_id);

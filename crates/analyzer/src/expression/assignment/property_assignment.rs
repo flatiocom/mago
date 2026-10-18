@@ -259,9 +259,11 @@ where
         resolved_property_type
     };
 
-    if resolution_result.has_ambiguous_path
-        || resolution_result.encountered_mixed
-        || resolution_result.has_possibly_defined_property
+    let receiver_is_mixed = artifacts.get_expression_type(property_access.object).is_some_and(TUnion::is_mixed);
+    if !receiver_is_mixed
+        && (resolution_result.has_ambiguous_path
+            || resolution_result.encountered_mixed
+            || resolution_result.has_possibly_defined_property)
     {
         resulting_type = Some(add_optional_union_type(get_mixed(), resulting_type.as_ref(), context.codebase));
     }

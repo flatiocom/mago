@@ -48,7 +48,6 @@ use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::scope::var_has_root;
-use crate::resolver::class_name::get_class_name_from_atomic;
 use crate::external::PropertyAccessKind;
 use crate::resolver::property::is_declared_untyped_property;
 use crate::resolver::property::resolve_declared_property;
@@ -374,6 +373,7 @@ pub fn reconcile_keyed_types<'ctx, A>(
                 );
             }
 
+            let narrows_mixed = before_adjustment.as_deref().is_some_and(TUnion::is_mixed);
             if is_real && key_str != b"$this" {
                 let mut removable_keys: Vec<Word> = Vec::new();
                 let local_keys = block_context.locals.keys().copied().collect::<Vec<_>>();
@@ -382,7 +382,10 @@ pub fn reconcile_keyed_types<'ctx, A>(
                         continue;
                     }
 
-                    if !new_types.contains_key(&new_key) && var_has_root(new_key, *key) {
+                    if !new_types.contains_key(&new_key)
+                        && var_has_root(new_key, *key)
+                        && !(narrows_mixed && block_context.outlives_narrowing(new_key))
+                    {
                         if let Some(references_map) = reference_graph.get(&new_key) {
                             let ref_count = references_map.len();
                             match ref_count {
@@ -442,37 +445,9 @@ pub fn reconcile_keyed_types<'ctx, A>(
             changed_var_ids.insert(*key);
         }
 
-        if !has_object_array_access {
-            if let Some(source_id) = block_context.class_string_sources.get(key).copied() {
-                let mut object_types = Vec::new();
-                let mut all_resolved = true;
-                for atomic in result_type.types.iter() {
-                    if let Some(resolved) = get_class_name_from_atomic(context.codebase, atomic)
-                        .filter(|resolved| !resolved.is_invalid() && !resolved.is_possibly_invalid())
-                    {
-                        object_types.push(resolved.get_object_type(context.codebase));
-                    } else {
-                        all_resolved = false;
-                        break;
-                    }
-                }
-
-                if all_resolved && !object_types.is_empty() {
-                    let object_union = TUnion::from_vec(object_types);
-                    let narrowed = block_context
-                        .locals
-                        .get(&source_id)
-                        .and_then(|current| intersect_union_types(current, &object_union, context.codebase));
-                    if let Some(narrowed) = narrowed.filter(|t| !t.is_never()) {
-                        let changed = block_context.locals.get(&source_id).is_none_or(|current| **current != narrowed);
-                        if changed {
-                            block_context.locals.insert(source_id, Rc::new(narrowed));
-                            changed_var_ids.insert(source_id);
-                        }
-                    }
-                }
-            }
-
+        if has_inverted_isset && is_offset_of_mixed_or_call(block_context, key_str) {
+            block_context.locals.remove(key);
+        } else if !has_object_array_access {
             block_context.locals.insert(*key, Rc::new(result_type));
         }
 
@@ -1010,6 +985,10 @@ fn add_nested_assertions(
         }
 
         let base_key_atom = word(&base_key);
+        let mut base_key_type = context.locals.get(&base_key_atom).cloned().or_else(|| {
+            (base_key.starts_with(b"$") && base_key != b"$this" && !base_key.contains(&b':'))
+                .then(|| Rc::new(get_mixed()))
+        });
         let base_key_set = if let Some(base_key_type) = context.locals.get(&base_key_atom) {
             !base_key_type.is_nullable()
                 && !base_key_type.possibly_undefined()
@@ -1054,13 +1033,21 @@ fn add_nested_assertions(
                     continue 'outer;
                 };
 
+                let parent_is_mixed = base_key_type.as_ref().is_some_and(|parent_type| parent_type.is_mixed());
+                if key_parts.is_empty()
+                    && parent_is_mixed
+                    && let Some(active_assertions) = active_new_types.get_mut(&nk)
+                {
+                    active_assertions.remove(&0);
+                }
+
                 if let Some(new_key) = new_key {
                     entry.push(vec![Assertion::HasNonnullEntryForKey(new_key)]);
 
                     if key_parts.is_empty() {
                         // Only remove the nested key if it contains ONLY isset-related assertions
                         // If it has other assertions (e.g., IsType from is_string()), keep them
-                        if only_isset_assertions {
+                        if only_isset_assertions && !parent_is_mixed {
                             keys_to_remove.push(nk);
 
                             if nesting == 0 && base_key_set && active_new_types.swap_remove(&nk).is_some() {
@@ -1074,6 +1061,9 @@ fn add_nested_assertions(
                     entry.push(vec![Assertion::HasIntOrStringArrayAccess]);
                 }
 
+                base_key_type = context.locals.get(&word(&new_base_key)).cloned().or_else(|| {
+                    base_key_type.as_ref().and_then(|parent_type| offset_value_type(parent_type, new_key.as_ref()))
+                });
                 base_key = new_base_key;
                 nesting += 1;
                 continue;
@@ -1094,6 +1084,21 @@ fn add_nested_assertions(
                     new_types.insert(base_key_atom, vec![vec![Assertion::IsIsset]]);
                 }
 
+                let parent_is_mixed = base_key_type.as_ref().is_some_and(|parent_type| parent_type.is_mixed());
+                if parent_is_mixed
+                    && is_literal_property_name(property_name)
+                    && memchr::memmem::find(nk_str, b"?->").is_none()
+                    && let Some(entry) = new_types.get_mut(&base_key_atom)
+                {
+                    entry
+                        .push(vec![Assertion::IsType(TAtomic::Object(TObject::new_has_property(word(property_name))))]);
+                }
+
+                base_key_type = context
+                    .locals
+                    .get(&word(&new_base_key))
+                    .cloned()
+                    .or_else(|| parent_is_mixed.then(|| Rc::new(get_mixed())));
                 base_key = new_base_key;
             } else {
                 break;
@@ -1106,6 +1111,67 @@ fn add_nested_assertions(
     }
 
     new_types.retain(|k, _| !keys_to_remove.contains(k));
+}
+
+fn is_offset_of_mixed_or_call(block_context: &BlockContext<'_>, key: &[u8]) -> bool {
+    if !key.ends_with(b"]") {
+        return false;
+    }
+
+    let mut depth = 0usize;
+    let Some(open) = key.iter().rposition(|byte| {
+        match byte {
+            b']' => depth += 1,
+            b'[' => depth -= 1,
+            _ => {}
+        }
+
+        depth == 0
+    }) else {
+        return false;
+    };
+
+    let parent = &key[..open];
+    match block_context.locals.get(&word(parent)) {
+        Some(parent_type) => parent_type.is_mixed(),
+        None => parent.ends_with(b"()"),
+    }
+}
+
+fn is_literal_property_name(property_name: &[u8]) -> bool {
+    property_name.iter().all(|byte| byte.is_ascii_alphanumeric() || *byte == b'_' || *byte >= 0x80)
+}
+
+fn offset_value_type(parent_type: &TUnion, key: Option<&ArrayKey>) -> Option<Rc<TUnion>> {
+    if parent_type.is_mixed() {
+        return Some(Rc::new(get_mixed()));
+    }
+
+    let mut value_types = parent_type.types.iter().filter(|atomic| !atomic.is_null()).map(|atomic| match atomic {
+        TAtomic::Array(TArray::Keyed(TKeyedArray { known_items, parameters, .. })) => key
+            .and_then(|key| known_items.as_ref().and_then(|items| items.get(key)))
+            .map(|(_, item_type)| item_type)
+            .or(parameters.as_ref().map(|(_, value_type)| value_type.as_ref())),
+        TAtomic::Array(TArray::List(TList { known_elements, element_type, .. })) => key
+            .and_then(|key| match key {
+                ArrayKey::Integer(index) => {
+                    known_elements.as_ref().and_then(|elements| elements.get(&(*index as usize)))
+                }
+                _ => None,
+            })
+            .map(|(_, element)| element)
+            .or(Some(element_type.as_ref())),
+        _ => None,
+    });
+
+    let first = value_types.next()??;
+    for value_type in value_types {
+        if value_type? != first {
+            return None;
+        }
+    }
+
+    Some(Rc::new(first.clone()))
 }
 
 #[cfg(test)]

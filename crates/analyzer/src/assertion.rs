@@ -20,6 +20,7 @@ use mago_codex::ttype::atomic::scalar::string::TStringCasing;
 use mago_codex::ttype::cast::cast_atomic_to_callable;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::atomic_comparator;
+use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::get_array_value_parameter;
 use mago_codex::ttype::get_arraykey;
 use mago_codex::ttype::get_bool;
@@ -34,6 +35,7 @@ use mago_codex::ttype::union::TUnion;
 use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::cst::Access;
+use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Call;
 use mago_syntax::cst::ClassConstantAccess;
@@ -59,6 +61,7 @@ use crate::resolver::class_name::get_class_name_from_atomic;
 use crate::resolver::function::BuiltinNarrowingFunction;
 use crate::resolver::function::get_builtin_get_class_or_gettype_call;
 use crate::utils::expression::expression_has_observable_side_effect;
+use crate::utils::expression::expression_is_nullsafe;
 use crate::utils::expression::get_expression_id;
 use crate::utils::expression::get_index_id;
 use crate::utils::expression::get_literal_array_key;
@@ -195,7 +198,6 @@ where
                     }
 
                     if let Expression::ArrayAccess(array_access) = value
-                        && matches!(unwrap_expression(array_access.index), Expression::Variable(_))
                         && let Some(key_id) = assertion_context.get_expression_id(array_access.index)
                         && let Some(array_type) = artifacts.get_expression_type(array_access.array)
                         && array_type.types.as_ref().iter().all(|atomic| matches!(atomic, TAtomic::Array(_)))
@@ -207,6 +209,16 @@ where
                             .all(|atomic| matches!(atomic, TAtomic::Scalar(TScalar::String(_) | TScalar::Integer(_))))
                         && let Some(key_type) =
                             get_possible_array_key_argument_type(array_type, input_key_type, assertion_context.codebase)
+                        && (key_type.has_literal_value()
+                            || !union_comparator::is_contained_by(
+                                assertion_context.codebase,
+                                input_key_type,
+                                &key_type,
+                                false,
+                                false,
+                                false,
+                                &mut ComparisonResult::new(),
+                            ))
                     {
                         if_types.entry(key_id).or_default().push(vec![Assertion::InArray(key_type)]);
                     }
@@ -214,62 +226,205 @@ where
             }
             _ => {}
         },
-        Expression::Binary(binary) => match binary.operator {
-            BinaryOperator::Equal(_) | BinaryOperator::Identical(_) => {
-                return scrape_equality_assertions(
-                    binary.lhs,
-                    binary.operator.is_identity(),
-                    binary.rhs,
-                    artifacts,
-                    assertion_context,
-                );
+        Expression::Binary(binary) => {
+            if let Some(assertions) =
+                scrape_comparison_assertions(binary.lhs, &binary.operator, binary.rhs, artifacts, assertion_context)
+            {
+                return assertions;
             }
-            BinaryOperator::NotEqual(_) | BinaryOperator::NotIdentical(_) | BinaryOperator::AngledNotEqual(_) => {
-                return scrape_inequality_assertions(
-                    binary.lhs,
-                    &binary.operator,
-                    binary.rhs,
-                    artifacts,
-                    assertion_context,
-                );
-            }
-            BinaryOperator::NullCoalesce(_) => {
-                let rhs = unwrap_expression(binary.rhs);
-                if matches!(rhs, Expression::Literal(Literal::Null(_))) {
-                    let var_name = assertion_context.get_expression_id(binary.lhs);
 
-                    if let Some(var_name) = var_name {
-                        if_types.insert(var_name, vec![vec![Assertion::IsIsset]]);
+            match binary.operator {
+                BinaryOperator::NullCoalesce(_) => {
+                    let rhs = unwrap_expression(binary.rhs);
+                    if matches!(rhs, Expression::Literal(Literal::Null(_))) {
+                        let var_name = assertion_context.get_expression_id(binary.lhs);
+
+                        if let Some(var_name) = var_name {
+                            if_types.insert(var_name, vec![vec![Assertion::IsIsset]]);
+                        }
                     }
                 }
+                BinaryOperator::Instanceof(_) => {
+                    return scrape_instanceof_assertions(binary.lhs, binary.rhs, artifacts, assertion_context);
+                }
+                _ => {}
             }
-            BinaryOperator::GreaterThan(_) | BinaryOperator::GreaterThanOrEqual(_) => {
-                return scrape_greater_than_assertions(
-                    binary.lhs,
-                    &binary.operator,
-                    binary.rhs,
-                    artifacts,
-                    assertion_context,
-                );
-            }
-            BinaryOperator::LessThan(_) | BinaryOperator::LessThanOrEqual(_) => {
-                return scrape_lesser_than_assertions(
-                    binary.lhs,
-                    &binary.operator,
-                    binary.rhs,
-                    artifacts,
-                    assertion_context,
-                );
-            }
-            BinaryOperator::Instanceof(_) => {
-                return scrape_instanceof_assertions(binary.lhs, binary.rhs, artifacts, assertion_context);
-            }
-            _ => {}
-        },
+        }
         _ => {}
     }
 
     if if_types.is_empty() { vec![] } else { vec![if_types] }
+}
+
+fn scrape_comparison_assertions<A>(
+    left: &Expression,
+    operator: &BinaryOperator,
+    right: &Expression,
+    artifacts: &AnalysisArtifacts,
+    assertion_context: AssertionContext<'_, '_, A>,
+) -> Option<Vec<WordMap<AssertionSet>>>
+where
+    A: Arena,
+{
+    let assertions = match operator {
+        BinaryOperator::Equal(_) | BinaryOperator::Identical(_) => {
+            scrape_equality_assertions(left, operator.is_identity(), right, artifacts, assertion_context)
+        }
+        BinaryOperator::NotEqual(_) | BinaryOperator::NotIdentical(_) | BinaryOperator::AngledNotEqual(_) => {
+            scrape_inequality_assertions(left, operator, right, artifacts, assertion_context)
+        }
+        BinaryOperator::GreaterThan(_) | BinaryOperator::GreaterThanOrEqual(_) => {
+            let mut assertions = scrape_greater_than_assertions(left, operator, right, artifacts, assertion_context);
+
+            add_comparison_null_assertions(
+                right,
+                left,
+                matches!(operator, BinaryOperator::GreaterThanOrEqual(_)),
+                artifacts,
+                assertion_context,
+                &mut assertions,
+            );
+
+            assertions
+        }
+        BinaryOperator::LessThan(_) | BinaryOperator::LessThanOrEqual(_) => {
+            let mut assertions = scrape_lesser_than_assertions(left, operator, right, artifacts, assertion_context);
+
+            add_comparison_null_assertions(
+                left,
+                right,
+                matches!(operator, BinaryOperator::LessThanOrEqual(_)),
+                artifacts,
+                assertion_context,
+                &mut assertions,
+            );
+
+            assertions
+        }
+        _ => return None,
+    };
+
+    Some(assertions)
+}
+
+pub struct CoalesceComparison {
+    pub coalesced_id: Word,
+    pub default_passes: bool,
+    pub is_array_access: bool,
+    pub assertions: AssertionSet,
+}
+
+pub fn scrape_coalesce_comparison_assertions<A>(
+    binary: &Binary,
+    artifacts: &AnalysisArtifacts,
+    assertion_context: AssertionContext<'_, '_, A>,
+) -> Option<CoalesceComparison>
+where
+    A: Arena,
+{
+    let (coalesce, coalesce_is_left) = match (unwrap_expression(binary.lhs), unwrap_expression(binary.rhs)) {
+        (Expression::Binary(coalesce), _) if coalesce.operator.is_null_coalesce() => (coalesce, true),
+        (_, Expression::Binary(coalesce)) if coalesce.operator.is_null_coalesce() => (coalesce, false),
+        _ => return None,
+    };
+
+    if expression_is_nullsafe(coalesce.lhs) {
+        return None;
+    }
+
+    let coalesced_id = assertion_context.get_expression_id(coalesce.lhs)?;
+    let default_value = ComparedLiteral::of(artifacts.get_expression_type(coalesce.rhs)?)?;
+    let (left, right) = if coalesce_is_left { (coalesce.lhs, binary.rhs) } else { (binary.lhs, coalesce.lhs) };
+    let other_value =
+        ComparedLiteral::of(artifacts.get_expression_type(if coalesce_is_left { right } else { left })?)?;
+    let default_passes = if coalesce_is_left {
+        default_value.compare(&binary.operator, &other_value)?
+    } else {
+        other_value.compare(&binary.operator, &default_value)?
+    };
+
+    let assertions: AssertionSet =
+        scrape_comparison_assertions(left, &binary.operator, right, artifacts, assertion_context)?
+            .into_iter()
+            .filter_map(|mut if_types| if_types.remove(&coalesced_id))
+            .flatten()
+            .collect();
+
+    if assertions.is_empty() {
+        return None;
+    }
+
+    Some(CoalesceComparison {
+        coalesced_id,
+        default_passes,
+        is_array_access: matches!(unwrap_expression(coalesce.lhs), Expression::ArrayAccess(_)),
+        assertions,
+    })
+}
+
+enum ComparedLiteral<'value> {
+    Int(i64),
+    Float(f64),
+    String(&'value [u8]),
+}
+
+impl<'value> ComparedLiteral<'value> {
+    fn of(union: &'value TUnion) -> Option<Self> {
+        union
+            .get_single_literal_int_value()
+            .map(Self::Int)
+            .or_else(|| union.get_single_literal_float_value().map(Self::Float))
+            .or_else(|| union.get_single_literal_string_value().map(Self::String))
+    }
+
+    fn number(&self) -> Option<f64> {
+        match self {
+            Self::Int(value) => Some(*value as f64),
+            Self::Float(value) => Some(*value),
+            _ => None,
+        }
+    }
+
+    fn compare(&self, operator: &BinaryOperator, other: &Self) -> Option<bool> {
+        match operator {
+            BinaryOperator::Identical(_) => Some(self.is_identical(other)),
+            BinaryOperator::NotIdentical(_) => Some(!self.is_identical(other)),
+            BinaryOperator::Equal(_) => self.is_equal(other),
+            BinaryOperator::NotEqual(_) | BinaryOperator::AngledNotEqual(_) => self.is_equal(other).map(|equal| !equal),
+            _ => {
+                let ordering = self.number()?.partial_cmp(&other.number()?)?;
+
+                match operator {
+                    BinaryOperator::GreaterThan(_) => Some(ordering.is_gt()),
+                    BinaryOperator::GreaterThanOrEqual(_) => Some(ordering.is_ge()),
+                    BinaryOperator::LessThan(_) => Some(ordering.is_lt()),
+                    BinaryOperator::LessThanOrEqual(_) => Some(ordering.is_le()),
+                    _ => None,
+                }
+            }
+        }
+    }
+
+    fn is_identical(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Int(left), Self::Int(right)) => left == right,
+            (Self::Float(left), Self::Float(right)) => left == right,
+            (Self::String(left), Self::String(right)) => left == right,
+            _ => false,
+        }
+    }
+
+    fn is_equal(&self, other: &Self) -> Option<bool> {
+        match (self, other) {
+            (Self::String(left), Self::String(right)) if left == right => Some(true),
+            (Self::String(left), Self::String(right)) => {
+                let has_digit = |value: &[u8]| value.iter().any(u8::is_ascii_digit);
+
+                if has_digit(left) || has_digit(right) { None } else { Some(false) }
+            }
+            _ => Some(self.number()? == other.number()?),
+        }
+    }
 }
 
 fn process_custom_assertions(expression_span: Span, artifacts: &AnalysisArtifacts) -> WordMap<AssertionSet> {
@@ -963,7 +1118,7 @@ where
     }
 
     if let Some(true_position) = has_true_variable(left, right, artifacts) {
-        return get_true_inquality_assertions(left, right, assertion_context, true_position);
+        return get_true_inquality_assertions(left, operator.is_identity(), right, assertion_context, true_position);
     }
 
     if let Some(empty_array_position) = has_empty_array_variable(left, right) {
@@ -1560,6 +1715,7 @@ where
 
 fn get_true_inquality_assertions<A>(
     left: &Expression,
+    is_identity: bool,
     right: &Expression,
     assertion_context: AssertionContext<'_, '_, A>,
     true_position: OtherValuePosition,
@@ -1576,7 +1732,9 @@ where
     let var_name = assertion_context.get_expression_id(base_conditional);
 
     if let Some(var_name) = var_name {
-        if_types.insert(var_name, vec![vec![Assertion::IsType(TAtomic::Scalar(TScalar::r#true()))]]);
+        let assertion =
+            if is_identity { Assertion::IsNotType(TAtomic::Scalar(TScalar::r#true())) } else { Assertion::Falsy };
+        if_types.insert(var_name, vec![vec![assertion]]);
     }
 
     vec![if_types]
@@ -1653,28 +1811,35 @@ where
 
     let mut if_types: WordMap<AssertionSet> = WordMap::default();
 
-    if let Some(right_value) = right_integer.as_ref().and_then(TInteger::get_literal_value)
-        && let Some(argument_id) = get_strlen_argument_expression_id(assertion_context, left)
-    {
+    if let Some(right_value) = right_integer.as_ref().and_then(TInteger::get_literal_value) {
         let bound = if matches!(operator, BinaryOperator::LessThanOrEqual(_)) {
             right_value.saturating_add(1)
         } else {
             right_value
         };
 
-        if_types.insert(argument_id, vec![vec![Assertion::StringLengthLessThan(bound)]]);
+        if let Some((argument_id, assertions)) =
+            get_strlen_argument_assertions(assertion_context, artifacts, left, Assertion::StringLengthLessThan(bound))
+        {
+            if_types.insert(argument_id, assertions);
+        }
     }
 
-    if let Some(left_value) = left_integer.as_ref().and_then(TInteger::get_literal_value)
-        && let Some(argument_id) = get_strlen_argument_expression_id(assertion_context, right)
-    {
+    if let Some(left_value) = left_integer.as_ref().and_then(TInteger::get_literal_value) {
         let bound = if matches!(operator, BinaryOperator::LessThanOrEqual(_)) {
             left_value
         } else {
             left_value.saturating_add(1)
         };
 
-        if_types.insert(argument_id, vec![vec![Assertion::StringLengthGreaterThanOrEqual(bound)]]);
+        if let Some((argument_id, assertions)) = get_strlen_argument_assertions(
+            assertion_context,
+            artifacts,
+            right,
+            Assertion::StringLengthGreaterThanOrEqual(bound),
+        ) {
+            if_types.insert(argument_id, assertions);
+        }
     }
 
     let left_id = assertion_context.get_expression_id(left);
@@ -1866,28 +2031,35 @@ where
 
     let mut if_types: WordMap<AssertionSet> = WordMap::default();
 
-    if let Some(right_value) = right_integer.as_ref().and_then(TInteger::get_literal_value)
-        && let Some(argument_id) = get_strlen_argument_expression_id(assertion_context, left)
-    {
+    if let Some(right_value) = right_integer.as_ref().and_then(TInteger::get_literal_value) {
         let bound = if matches!(operator, BinaryOperator::GreaterThanOrEqual(_)) {
             right_value
         } else {
             right_value.saturating_add(1)
         };
 
-        if_types.insert(argument_id, vec![vec![Assertion::StringLengthGreaterThanOrEqual(bound)]]);
+        if let Some((argument_id, assertions)) = get_strlen_argument_assertions(
+            assertion_context,
+            artifacts,
+            left,
+            Assertion::StringLengthGreaterThanOrEqual(bound),
+        ) {
+            if_types.insert(argument_id, assertions);
+        }
     }
 
-    if let Some(left_value) = left_integer.as_ref().and_then(TInteger::get_literal_value)
-        && let Some(argument_id) = get_strlen_argument_expression_id(assertion_context, right)
-    {
+    if let Some(left_value) = left_integer.as_ref().and_then(TInteger::get_literal_value) {
         let bound = if matches!(operator, BinaryOperator::GreaterThanOrEqual(_)) {
             left_value.saturating_add(1)
         } else {
             left_value
         };
 
-        if_types.insert(argument_id, vec![vec![Assertion::StringLengthLessThan(bound)]]);
+        if let Some((argument_id, assertions)) =
+            get_strlen_argument_assertions(assertion_context, artifacts, right, Assertion::StringLengthLessThan(bound))
+        {
+            if_types.insert(argument_id, assertions);
+        }
     }
 
     let left_id = assertion_context.get_expression_id(left);
@@ -2008,6 +2180,66 @@ where
     }
 
     if if_types.is_empty() { vec![] } else { vec![if_types] }
+}
+
+fn add_comparison_null_assertions<A>(
+    smaller: &Expression,
+    greater: &Expression,
+    or_equal: bool,
+    artifacts: &AnalysisArtifacts,
+    assertion_context: AssertionContext<'_, '_, A>,
+    assertions: &mut Vec<WordMap<AssertionSet>>,
+) where
+    A: Arena,
+{
+    if assertions.is_empty() {
+        assertions.push(WordMap::default());
+    }
+
+    let if_types = &mut assertions[0];
+
+    if let Some(greater_id) = assertion_context.get_expression_id(greater)
+        && artifacts.get_expression_type(smaller).is_some_and(|smaller_type| {
+            if or_equal { excludes_null_at_or_above(smaller_type) } else { excludes_null_above(smaller_type) }
+        })
+    {
+        if_types.entry(greater_id).or_default().push(vec![Assertion::NotNullFromComparison]);
+    }
+
+    if let Some(smaller_id) = assertion_context.get_expression_id(smaller)
+        && !if_types.values().flatten().flatten().any(Assertion::is_negatable)
+        && artifacts.get_expression_type(greater).is_some_and(|greater_type| {
+            if or_equal { excludes_null_above(greater_type) } else { excludes_null_at_or_above(greater_type) }
+        })
+    {
+        if_types.insert(smaller_id, vec![vec![Assertion::NotNullWhenComparisonFails]]);
+    }
+
+    if if_types.is_empty() {
+        assertions.clear();
+    }
+}
+
+fn excludes_null_above(union: &TUnion) -> bool {
+    !union.is_never()
+        && union.types.iter().all(|atomic| match atomic {
+            TAtomic::GenericParameter(parameter) => excludes_null_above(&parameter.constraint),
+            atomic => !atomic.is_known_literal_string() && !atomic.is_literal_class_string(),
+        })
+}
+
+fn excludes_null_at_or_above(union: &TUnion) -> bool {
+    !union.is_never()
+        && union.types.iter().all(|atomic| match atomic {
+            TAtomic::Scalar(TScalar::Integer(integer)) => {
+                integer.get_minimum_value().is_some_and(|minimum| minimum > 0)
+                    || integer.get_maximum_value().is_some_and(|maximum| maximum < 0)
+            }
+            TAtomic::Scalar(TScalar::Float(float)) => float.get_literal_value().is_some_and(|value| value != 0.0),
+            TAtomic::Scalar(TScalar::Bool(boolean)) => boolean.is_true(),
+            TAtomic::GenericParameter(parameter) => excludes_null_at_or_above(&parameter.constraint),
+            atomic => atomic.is_object_type(),
+        })
 }
 
 fn scrape_instanceof_assertions<A>(
@@ -2224,10 +2456,12 @@ where
     is_function_call_to_one_of(expression, assertion_context, &[b"count", b"sizeof", b"Psl\\Iter\\count"])
 }
 
-fn get_strlen_argument_expression_id<A>(
+fn get_strlen_argument_assertions<A>(
     assertion_context: AssertionContext<'_, '_, A>,
+    artifacts: &AnalysisArtifacts,
     expression: &Expression,
-) -> Option<Word>
+    length_assertion: Assertion,
+) -> Option<(Word, AssertionSet)>
 where
     A: Arena,
 {
@@ -2235,7 +2469,38 @@ where
         return None;
     }
 
+    if let Expression::Call(Call::Function(FunctionCall { argument_list, .. })) = expression
+        && let Some(argument) = argument_list.arguments.first()
+        && let Expression::Binary(coalesce) = unwrap_expression(argument.value())
+        && matches!(coalesce.operator, BinaryOperator::NullCoalesce(_))
+        && let Assertion::StringLengthGreaterThanOrEqual(minimum_length)
+        | Assertion::StringLengthLessThan(minimum_length) = &length_assertion
+        && artifacts.get_expression_type(argument.value()).is_some_and(TUnion::is_string)
+        && artifacts
+            .get_expression_type(coalesce.rhs)
+            .is_some_and(|fallback_type| is_always_shorter_string(fallback_type, *minimum_length))
+        && let Some(coalesced_id) = assertion_context.get_expression_id(coalesce.lhs)
+    {
+        let assertions = if matches!(length_assertion, Assertion::StringLengthGreaterThanOrEqual(_)) {
+            vec![vec![length_assertion], vec![Assertion::NotNullFromComparison]]
+        } else {
+            vec![vec![length_assertion, Assertion::NotNullWhenComparisonFails]]
+        };
+
+        return Some((coalesced_id, assertions));
+    }
+
     get_first_argument_expression_id(assertion_context, expression)
+        .map(|argument_id| (argument_id, vec![vec![length_assertion]]))
+}
+
+fn is_always_shorter_string(union: &TUnion, length: i64) -> bool {
+    !union.types.is_empty()
+        && union.types.iter().all(|atomic| {
+            atomic
+                .get_literal_string_value()
+                .is_some_and(|value| i64::try_from(value.len()).is_ok_and(|len| len < length))
+        })
 }
 
 fn is_function_call_to<A>(

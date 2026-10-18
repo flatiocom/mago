@@ -10,6 +10,7 @@ use mago_word::WordSet;
 use mago_algebra::assertion_set::AssertionSet;
 use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::reference::SymbolReferences;
+use mago_codex::ttype::atomic::array::key::ArrayKey;
 use mago_codex::ttype::combine_owned_union_types_rc;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::union::TUnion;
@@ -32,6 +33,8 @@ pub(crate) use self::expression_types::ExpressionTypeCheckpoints;
 
 pub mod editor;
 mod expression_types;
+
+pub(crate) type ByReferenceItem = (Vec<Option<ArrayKey>>, Word);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -104,6 +107,7 @@ pub struct AnalysisArtifacts {
     pub read_memoized_array_accesses: WordMap<Rc<TUnion>>,
     pub read_memoized_undeclared_properties: WordMap<(Rc<TUnion>, Vec<UndeclaredProperty>)>,
     pub read_memoized_property_receivers: WordMap<Rc<TUnion>>,
+    pub(crate) by_reference_items: HashMap<(u32, u32), Vec<ByReferenceItem>>,
     pub reported_receiver_offsets: HashSet<u32>,
     pub inferred_parameter_types: Option<HashMap<usize, TUnion>>,
     pub method_initialized_properties: HashMap<(Word, Word), WordSet>,
@@ -151,6 +155,7 @@ impl AnalysisArtifacts {
             read_memoized_array_accesses: WordMap::default(),
             read_memoized_undeclared_properties: WordMap::default(),
             read_memoized_property_receivers: WordMap::default(),
+            by_reference_items: HashMap::default(),
             reported_receiver_offsets: HashSet::default(),
             inferred_parameter_types: None,
             method_initialized_properties: HashMap::default(),

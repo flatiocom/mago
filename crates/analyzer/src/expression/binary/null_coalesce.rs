@@ -144,12 +144,15 @@ where
         let non_null_lhs_type = lhs_type.to_non_nullable();
         let has_returned = block_context.flags.has_returned();
         block_context.flags.set_has_returned(false);
-        let access_paths_before: WordMap<Rc<TUnion>> = block_context
+        let mut access_paths_before: WordMap<Rc<TUnion>> = block_context
             .locals
             .iter()
             .filter(|(variable_id, _)| is_access_path(variable_id.as_bytes()))
             .map(|(variable_id, variable_type)| (*variable_id, Rc::clone(variable_type)))
             .collect();
+        if let Some(lhs_id) = get_block_expression_id(binary.lhs, context, block_context) {
+            narrow_property_bases_to_non_null(&mut access_paths_before, lhs_id);
+        }
         binary.rhs.analyze(context, block_context, artifacts)?;
         block_context.locals.retain(|variable_id, type_after| {
             if !is_access_path(variable_id.as_bytes()) {
@@ -255,14 +258,14 @@ where
         );
 
         if let Some(lhs_id) = get_block_expression_id(binary.lhs, context, block_context) {
-            narrow_property_bases_to_non_null(block_context, lhs_id);
+            narrow_property_bases_to_non_null(&mut block_context.locals, lhs_id);
         }
     }
 
     Ok(())
 }
 
-fn narrow_property_bases_to_non_null(block_context: &mut BlockContext<'_>, expression_id: Word) {
+fn narrow_property_bases_to_non_null(locals: &mut WordMap<Rc<TUnion>>, expression_id: Word) {
     let mut base = expression_id.as_bytes();
     while let Some(arrow) = memchr::memmem::rfind(base, b"->") {
         if base.ends_with(b"()") {
@@ -271,11 +274,11 @@ fn narrow_property_bases_to_non_null(block_context: &mut BlockContext<'_>, expre
 
         base = base[..arrow].strip_suffix(b"?").unwrap_or(&base[..arrow]);
         let base_id = Word::new(base);
-        if let Some(base_type) = block_context.locals.get(&base_id)
+        if let Some(base_type) = locals.get(&base_id)
             && base_type.is_nullable()
         {
             let non_null_type = Rc::new(base_type.to_non_nullable());
-            block_context.locals.insert(base_id, non_null_type);
+            locals.insert(base_id, non_null_type);
         }
     }
 }

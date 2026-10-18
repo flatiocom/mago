@@ -5,16 +5,21 @@ use mago_algebra::AssertionMap;
 
 use mago_algebra::clause::Clause;
 use mago_algebra::disjoin_clauses;
+use mago_algebra::negate_formula;
 use mago_codex::assertion::Assertion;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
+use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::array::key::ArrayKey;
 use mago_codex::ttype::atomic::callable::TCallable;
 use mago_codex::ttype::atomic::scalar::TScalar;
+use mago_codex::ttype::combine_union_types;
+use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
+use mago_codex::ttype::get_array_parameters;
 use mago_codex::ttype::get_literal_int;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_never;
@@ -258,6 +263,8 @@ where
         );
     }
 
+    let target_was_narrowed =
+        existing_target_type.as_ref().is_some_and(|target_type| !target_type.possibly_undefined());
     if let (Some(target_variable_id), Some(existing_target_type)) = (&target_variable_id, &existing_target_type) {
         block_context.remove_descendants(context, *target_variable_id, existing_target_type, Some(&source_type));
     } else {
@@ -290,6 +297,7 @@ where
         false,
         property_write_kind,
         is_compound_assignment,
+        target_was_narrowed,
     )?;
 
     if !successful {
@@ -338,6 +346,7 @@ where
             block_context,
             artifacts,
         );
+        add_conditional_assignment_clauses(target_variable_id, source_expression, context, block_context, artifacts);
     }
 
     if let Some(assignment_span) = assignment_span {
@@ -441,6 +450,164 @@ fn add_array_key_first_last_assignment_clauses<'ctx, 'arena, A>(
     )));
 }
 
+fn add_conditional_assignment_clauses<'ctx, 'arena, A>(
+    target_variable_id: Word,
+    source_expression: &Expression<'arena>,
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &AnalysisArtifacts,
+) where
+    A: Arena,
+{
+    if context.native_types_only {
+        return;
+    }
+
+    let Expression::Conditional(conditional) = unwrap_expression(source_expression) else {
+        return;
+    };
+
+    let Some(then) = conditional.then else {
+        return;
+    };
+
+    let thresholds = context.settings.algebra_thresholds();
+    let Some(condition_clauses) = get_formula(
+        conditional.condition.span(),
+        conditional.condition.span(),
+        conditional.condition,
+        context.get_assertion_context_from_block(block_context),
+        artifacts,
+        &thresholds,
+        context.settings.formula_size_threshold,
+    ) else {
+        return;
+    };
+
+    let Some(negated_condition_clauses) = negate_formula(&condition_clauses, &thresholds) else {
+        return;
+    };
+
+    for (branch, other_branch, branch_clauses) in
+        [(then, conditional.r#else, condition_clauses), (conditional.r#else, then, negated_condition_clauses)]
+    {
+        let (Some(branch_type), Some(other_branch_type)) =
+            (artifacts.get_expression_type(branch), artifacts.get_expression_type(other_branch))
+        else {
+            continue;
+        };
+
+        let Some(other_value) = get_conditional_branch_value(other_branch_type) else {
+            continue;
+        };
+
+        if !does_value_tell_branch_apart(context, branch_type, other_branch_type, other_value) {
+            continue;
+        }
+
+        let branch_clauses = BlockContext::filter_clauses(
+            context,
+            target_variable_id,
+            branch_clauses.into_iter().map(|clause| Rc::new(without_isset_definedness(clause))).collect(),
+            None,
+        );
+
+        if branch_clauses.is_empty() {
+            continue;
+        }
+
+        let target_is_other_value = if other_value.is_null() {
+            Assertion::IsType(TAtomic::Null)
+        } else {
+            Assertion::IsIdentical(other_value.clone())
+        };
+
+        let possibilities = AssertionMap::from_iter([(
+            target_variable_id,
+            AssertionMap::from_iter([(target_is_other_value.to_hash(), target_is_other_value)]),
+        )]);
+
+        block_context.clauses.extend(
+            disjoin_clauses(
+                vec![Clause::new(possibilities, source_expression.span(), source_expression.span(), None, None, None)],
+                branch_clauses.into_iter().map(|clause| (*clause).clone()).collect(),
+                source_expression.span(),
+                &thresholds,
+            )
+            .into_iter()
+            .map(Rc::new),
+        );
+    }
+}
+
+fn without_isset_definedness(clause: Clause) -> Clause {
+    if !clause
+        .possibilities
+        .values()
+        .any(|assertions| assertions.values().any(|assertion| *assertion == Assertion::IsIsset))
+    {
+        return clause;
+    }
+
+    let possibilities = clause
+        .possibilities
+        .iter()
+        .map(|(variable_id, assertions)| {
+            let assertions = assertions
+                .values()
+                .map(|assertion| {
+                    let assertion = if *assertion == Assertion::IsIsset {
+                        Assertion::IsNotType(TAtomic::Null)
+                    } else {
+                        assertion.clone()
+                    };
+
+                    (assertion.to_hash(), assertion)
+                })
+                .collect();
+
+            (*variable_id, assertions)
+        })
+        .collect();
+
+    Clause::new(
+        possibilities,
+        clause.condition_span,
+        clause.span,
+        Some(clause.wedge),
+        Some(clause.reconcilable),
+        Some(clause.generated),
+    )
+}
+
+fn get_conditional_branch_value(branch_type: &TUnion) -> Option<&TAtomic> {
+    if !branch_type.is_single() {
+        return None;
+    }
+
+    let value = branch_type.get_single();
+
+    (value.is_null() || value.is_known_literal_string() || value.is_literal_int()).then_some(value)
+}
+
+fn does_value_tell_branch_apart<A>(
+    context: &Context<'_, '_, A>,
+    branch_type: &TUnion,
+    value_type: &TUnion,
+    value: &TAtomic,
+) -> bool
+where
+    A: Arena,
+{
+    if !union_comparator::can_expression_types_be_identical(context.codebase, branch_type, value_type, false, false) {
+        return true;
+    }
+
+    value.is_falsy()
+        && branch_type.types.iter().any(|atomic| atomic != value)
+        && branch_type.types.iter().filter(|atomic| *atomic != value).all(TAtomic::is_truthy)
+}
+
 pub(crate) fn assign_to_expression<'ctx, 'ast, 'arena, A>(
     context: &mut Context<'ctx, 'arena, A>,
     block_context: &mut BlockContext<'ctx>,
@@ -452,6 +619,7 @@ pub(crate) fn assign_to_expression<'ctx, 'ast, 'arena, A>(
     destructuring: bool,
     property_write_kind: PropertyWriteKind,
     index_read_first: bool,
+    target_was_narrowed: bool,
 ) -> Result<bool, AnalysisError>
 where
     A: Arena,
@@ -524,6 +692,7 @@ where
                 array_access.into(),
                 &source_type,
                 index_read_first,
+                target_was_narrowed,
             )?;
         }
         Expression::ArrayAppend(array_append) => {
@@ -534,6 +703,7 @@ where
                 array_append.into(),
                 &source_type,
                 index_read_first,
+                target_was_narrowed,
             )?;
         }
         Expression::Array(array) => {
@@ -798,6 +968,20 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
 
         assigned_type = Rc::new(variable_type);
         from_docblock = true;
+
+        if let Some(source_expression) = source_expression {
+            let source_span = source_expression.span();
+            let by_reference_items = artifacts
+                .by_reference_items
+                .get(&(source_span.start.offset, source_span.end.offset))
+                .cloned()
+                .unwrap_or_default();
+            for (path, referenced_variable_id) in by_reference_items {
+                if let Some(item_type) = get_value_type_at_path(&assigned_type, &path, context.codebase) {
+                    block_context.locals.insert(referenced_variable_id, Rc::new(item_type));
+                }
+            }
+        }
     }
 
     if !from_docblock && assigned_type.is_mixed() && !variable_id.as_bytes().starts_with(b"$_") {
@@ -1466,6 +1650,48 @@ fn get_closure_expression_type<'arena>(
     let span = get_closure_expression_span(expression)?;
 
     Some(TUnion::from_atomic(TAtomic::Callable(TCallable::Alias(FunctionLikeIdentifier::for_closure(file, span)))))
+}
+
+fn get_value_type_at_path(
+    array_type: &TUnion,
+    path: &[Option<ArrayKey>],
+    codebase: &CodebaseMetadata,
+) -> Option<TUnion> {
+    let mut current_type = array_type.clone();
+    for key in path {
+        let mut value_type: Option<TUnion> = None;
+        for atomic in current_type.types.iter() {
+            let TAtomic::Array(array) = atomic else {
+                return None;
+            };
+
+            let item_type = match (array, key) {
+                (TArray::Keyed(keyed), Some(key)) => keyed
+                    .known_items
+                    .as_ref()
+                    .and_then(|items| items.get(key))
+                    .map(|(_, item_type)| item_type.clone())
+                    .or_else(|| keyed.parameters.as_ref().map(|(_, item_type)| (**item_type).clone()))?,
+                (TArray::List(list), Some(ArrayKey::Integer(index))) => list
+                    .known_elements
+                    .as_ref()
+                    .zip(usize::try_from(*index).ok())
+                    .and_then(|(elements, index)| elements.get(&index))
+                    .map_or_else(|| (*list.element_type).clone(), |(_, element)| element.clone()),
+                (TArray::List(_), Some(_)) => return None,
+                (array, None) => get_array_parameters(array, codebase).1,
+            };
+
+            value_type = Some(match value_type {
+                Some(value_type) => combine_union_types(&value_type, &item_type, codebase, CombinerOptions::default()),
+                None => item_type,
+            });
+        }
+
+        current_type = value_type.filter(|value_type| !value_type.is_never())?;
+    }
+
+    Some(current_type)
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 use mago_allocator::Arena;
+use mago_codex::assertion::Assertion;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::get_bool;
@@ -8,6 +9,7 @@ use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
+use mago_span::Span;
 use mago_syntax::cst::Access;
 use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
@@ -55,6 +57,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for IssetConstruct<'arena> {
             value.analyze(context, block_context, artifacts)?;
             block_context.flags.set_inside_isset(was_inside_isset);
             report_redundant_isset(context, block_context, artifacts, value);
+            narrow_non_constant_offset_keys(context, block_context, artifacts, self.span(), value);
+            narrow_chain_of_unnamed_expression(context, block_context, artifacts, self.span(), value);
             if let Some(value_type) = artifacts.get_expression_type(value) {
                 if value_type.is_never() || value_type.is_null() {
                     any_definitely_unset = true;
@@ -83,6 +87,83 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for IssetConstruct<'arena> {
         artifacts.set_expression_type(self, result_type);
 
         Ok(())
+    }
+}
+
+fn narrow_non_constant_offset_keys<A>(
+    context: &Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &mut AnalysisArtifacts,
+    isset_span: Span,
+    value: &Expression<'_>,
+) where
+    A: Arena,
+{
+    let mut expression = unwrap_expression(value);
+    loop {
+        expression = match expression {
+            Expression::ArrayAccess(array_access) => {
+                let is_known_array = artifacts.get_expression_type(array_access.array).is_some_and(|array_type| {
+                    array_type.is_array() && !array_type.types.iter().all(TAtomic::is_empty_array)
+                });
+                let has_constant_key = artifacts.get_expression_type(array_access.index).is_some_and(|index_type| {
+                    index_type.get_single_literal_int_value().is_some()
+                        || index_type.get_single_literal_string_value().is_some()
+                });
+
+                if is_known_array
+                    && !has_constant_key
+                    && let Some(index_id) = get_block_expression_id(array_access.index, context, block_context)
+                {
+                    artifacts
+                        .true_branch_only_assertions
+                        .entry((isset_span.start.offset, isset_span.end.offset))
+                        .or_default()
+                        .entry(index_id)
+                        .or_default()
+                        .push(vec![Assertion::Any]);
+                }
+
+                unwrap_expression(array_access.array)
+            }
+            Expression::Access(Access::Property(property_access)) => unwrap_expression(property_access.object),
+            _ => return,
+        };
+    }
+}
+
+fn narrow_chain_of_unnamed_expression<A>(
+    context: &Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+    artifacts: &mut AnalysisArtifacts,
+    isset_span: Span,
+    value: &Expression<'_>,
+) where
+    A: Arena,
+{
+    if get_block_expression_id(value, context, block_context).is_some() {
+        return;
+    }
+
+    let mut expression = unwrap_expression(value);
+    loop {
+        expression = match expression {
+            Expression::ArrayAccess(array_access) => unwrap_expression(array_access.array),
+            Expression::Access(Access::Property(property_access)) => unwrap_expression(property_access.object),
+            _ => return,
+        };
+
+        if let Some(expression_id) = get_block_expression_id(expression, context, block_context) {
+            artifacts
+                .true_branch_only_assertions
+                .entry((isset_span.start.offset, isset_span.end.offset))
+                .or_default()
+                .entry(expression_id)
+                .or_default()
+                .push(vec![Assertion::IsIsset]);
+
+            return;
+        }
     }
 }
 

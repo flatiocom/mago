@@ -522,6 +522,7 @@ where
                     false,
                     PropertyWriteKind::Mutation,
                     true,
+                    false,
                 )?;
 
                 block_context.assigned_variable_ids.insert(argument_id, argument.start_offset());
@@ -554,6 +555,7 @@ where
                     false,
                     PropertyWriteKind::Mutation,
                     true,
+                    false,
                 )?;
 
                 if let Some(argument_id) = argument_id {

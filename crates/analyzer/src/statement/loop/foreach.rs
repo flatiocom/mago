@@ -4,6 +4,8 @@ use std::sync::Arc;
 use mago_allocator::Arena;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
+use mago_codex::ttype::comparator::ComparisonResult;
+use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::get_arraykey;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::union::TUnion;
@@ -90,6 +92,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
                 false,
                 PropertyWriteKind::Direct,
                 false,
+                false,
             )?;
 
             if !assigned {
@@ -135,6 +138,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             false,
             if is_by_reference { PropertyWriteKind::Mutation } else { PropertyWriteKind::Direct },
             false,
+            false,
         )?;
         loop_block_context.flags.set_inside_foreach_value(false);
 
@@ -156,6 +160,21 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
         if is_by_reference && let Expression::Variable(Variable::Direct(direct_variable)) = value_expression {
             loop_block_context.references_to_external_scope.insert(Word::from(direct_variable.name));
         }
+
+        let narrowed_value = if !is_by_reference
+            && artifacts.get_expression_type(iterator).is_some_and(|iterator_type| {
+                iterator_type
+                    .types
+                    .iter()
+                    .all(|atomic| matches!(atomic, TAtomic::Array(array) if !array.has_known_items()))
+            })
+            && is_variable_value
+            && let (Some(iterator_id), Some(value_id)) = (iterator_variable_id, value_expression_id)
+        {
+            Some((iterator_id, value_id, source_value_type.clone()))
+        } else {
+            None
+        };
 
         let foreach_entry = if !is_by_reference
             && artifacts.get_expression_type(iterator).is_some_and(TUnion::is_array)
@@ -180,6 +199,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             loop_scope.tracks_assignment_targets = true;
         }
 
+        if narrowed_value.is_some() {
+            loop_scope.tracks_assignment_targets = true;
+        }
+
         let (inner_loop_block_context, loop_scope) = r#loop::analyze(
             context,
             self.body.statements(),
@@ -193,20 +216,35 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             always_enters_loop,
         )?;
 
-        let refined_entry = if let Some((iterator_id, key_id, value_id, entry_id, original_entry_type)) = foreach_entry
+        let refined_entry = if let Some((iterator_id, key_id, _, entry_id, original_entry_type)) = foreach_entry
             && !loop_scope.final_actions.contains(ControlAction::Break)
-            && assignments_only_target_current_entry(
-                iterator_id,
-                key_id,
-                value_id,
-                entry_id,
-                &loop_scope.assignment_targets,
-            )
+            && assignments_only_target_current_entry(iterator_id, key_id, entry_id, &loop_scope.assignment_targets)
             && let Some(entry_type) = inner_loop_block_context.locals.get(&entry_id)
             && entry_type != &original_entry_type
             && !entry_type.is_mixed()
         {
             Some((iterator_id, Rc::clone(entry_type)))
+        } else if let Some((iterator_id, value_id, source_value_type)) = narrowed_value
+            && !loop_scope.final_actions.contains(ControlAction::Break)
+            && !loop_scope.final_actions.contains(ControlAction::Continue)
+            && !loop_scope.assignment_targets.contains(&value_id)
+            && let Some(value_type) = inner_loop_block_context.locals.get(&value_id)
+            && !value_type.is_mixed()
+        {
+            let mut value_type = (**value_type).clone();
+            value_type.set_possibly_undefined(false, None);
+
+            (value_type != source_value_type
+                && union_comparator::is_contained_by(
+                    context.codebase,
+                    &value_type,
+                    &source_value_type,
+                    false,
+                    false,
+                    false,
+                    &mut ComparisonResult::new(),
+                ))
+            .then(|| (iterator_id, Rc::new(value_type)))
         } else {
             None
         };
@@ -241,15 +279,11 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
 fn assignments_only_target_current_entry(
     iterator_id: Word,
     key_id: Word,
-    value_id: Word,
     entry_id: Word,
     assignment_targets: &mago_word::WordSet,
 ) -> bool {
     for variable_id in assignment_targets {
-        if *variable_id == key_id
-            || *variable_id == value_id
-            || (*variable_id != entry_id && var_has_root(*variable_id, iterator_id))
-        {
+        if *variable_id == key_id || (*variable_id != entry_id && var_has_root(*variable_id, iterator_id)) {
             return false;
         }
     }

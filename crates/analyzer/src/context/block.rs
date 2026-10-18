@@ -12,7 +12,6 @@ use mago_codex::ttype::TType;
 use mago_codex::ttype::add_optional_union_type;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
-use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_never;
 use mago_codex::ttype::union::TUnion;
 use mago_span::Span;
@@ -146,6 +145,8 @@ pub struct BlockContext<'ctx> {
     /// Assertions inferred for repeated zero-argument method calls in the active branch.
     pub stable_method_call_assertions: WordMap<AssertionSet>,
 
+    pub mixed_receiver_reads: WordMap<Rc<TUnion>>,
+
     /// Zero-argument method calls known to be stable since the last potentially
     /// mutating invocation.
     pub stable_method_calls: WordSet,
@@ -247,6 +248,7 @@ impl<'ctx> BlockContext<'ctx> {
             calls_parent_initializer: None,
             active_method_call_assertions: WordMap::default(),
             stable_method_call_assertions: WordMap::default(),
+            mixed_receiver_reads: WordMap::default(),
             stable_method_calls: WordSet::default(),
             class_type_relations: WordMap::default(),
         }
@@ -548,6 +550,12 @@ impl<'ctx> BlockContext<'ctx> {
         });
     }
 
+    pub(crate) fn outlives_narrowing(&self, variable_id: Word) -> bool {
+        self.locals.get(&variable_id).is_some_and(|memoized_type| {
+            !self.mixed_receiver_reads.get(&variable_id).is_some_and(|read_type| Rc::ptr_eq(read_type, memoized_type))
+        })
+    }
+
     pub(crate) fn remove_descendants<'arena, A>(
         &mut self,
         context: &mut Context<'ctx, 'arena, A>,
@@ -824,11 +832,7 @@ where
     }
 
     if existing_type.eq(&old_type) {
-        let Some(new_type) = new_type else {
-            return existing_type;
-        };
-
-        return add_optional_union_type(get_mixed(), Some(new_type), context.codebase);
+        return new_type.cloned().unwrap_or(existing_type);
     }
 
     let updated_type = subtract_union_types(context, existing_type, old_type);

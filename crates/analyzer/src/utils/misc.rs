@@ -6,6 +6,7 @@ use foldhash::HashMap;
 use mago_algebra::AlgebraThresholds;
 use mago_algebra::clause::Clause;
 use mago_algebra::negate_formula;
+use mago_codex::assertion::Assertion;
 use mago_collector::Collector;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
@@ -27,6 +28,19 @@ pub fn check_for_paradox<A>(
 ) where
     A: Arena,
 {
+    let formula_2 = formula_2
+        .iter()
+        .filter(|clause| {
+            !clause
+                .possibilities
+                .values()
+                .flat_map(|assertions| assertions.values())
+                .all(Assertion::is_comparison_null_fact)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let formula_2 = formula_2.as_slice();
+
     if formula_2.is_empty() || (formula_1.is_empty() && formula_2.len() == 1) {
         return;
     }
