@@ -6,7 +6,7 @@ declare(strict_types=1);
 $array = [];
 
 if (
-    isset($array['test'])
+    isset($array['test']) // @mago-expect analysis:mixed-array-access
     || is_string(
         // @mago-expect analysis:mixed-array-access
         $array['test'],
@@ -17,5 +17,5 @@ if (
 /** @var mixed $guarded */
 $guarded = [];
 
-if (isset($guarded['test']) && is_string($guarded['test'])) {
+if (isset($guarded['test']) && is_string($guarded['test'])) { // @mago-expect analysis:mixed-array-access
 }

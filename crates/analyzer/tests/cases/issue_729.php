@@ -11,6 +11,6 @@ JSON;
 /** @var mixed **/
 $response = \json_decode($content, associative: true);
 
-$redirectTo = isset($response['redirectTo']) && \is_string($response['redirectTo']) ? $response['redirectTo'] : '';
+$redirectTo = isset($response['redirectTo']) && \is_string($response['redirectTo']) ? $response['redirectTo'] : ''; // @mago-expect analysis:mixed-array-access
 
 echo \strtoupper($redirectTo);

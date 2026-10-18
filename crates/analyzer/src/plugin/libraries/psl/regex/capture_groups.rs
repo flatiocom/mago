@@ -107,6 +107,7 @@ impl FunctionReturnTypeProvider for CaptureGroupsProvider {
                 non_empty: true,
                 known_items: Some(known_items.into()),
                 known_non_list: false,
+                parameters_are_shape_tail: false,
             })))]),
         )))))
     }

@@ -359,7 +359,7 @@ pub fn handle_return_value<'ctx, A>(
             return;
         }
 
-        let mut union_comparison_result = ComparisonResult::new();
+        let mut union_comparison_result = ComparisonResult::ignoring_shape_tails();
 
         let is_contained_by = is_contained_by(
             context.codebase,
@@ -609,7 +609,7 @@ fn handle_property_hook_return<'ctx, A>(
         return;
     }
 
-    let mut comparison_result = ComparisonResult::new();
+    let mut comparison_result = ComparisonResult::ignoring_shape_tails();
     if is_contained_by(
         context.codebase,
         &inferred_return_type,

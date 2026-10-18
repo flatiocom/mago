@@ -107,7 +107,7 @@ where
             );
         }
 
-        let mut union_comparison_result = ComparisonResult::new();
+        let mut union_comparison_result = ComparisonResult::ignoring_shape_tails();
 
         let type_match_found = union_comparator::is_contained_by(
             context.codebase,

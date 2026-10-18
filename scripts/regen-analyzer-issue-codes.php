@@ -359,6 +359,7 @@ final class AnalyzerCodeModuleGenerator
         'unused-class-constant',
         'incorrect-method-casing',
         'unused-closure-use-variable',
+        'possibly-invalid-array-index',
     ];
 
     /**

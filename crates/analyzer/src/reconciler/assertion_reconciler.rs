@@ -214,6 +214,7 @@ where
                 parameters: existing_keyed_array.parameters.clone(),
                 non_empty: has_non_optional || existing_keyed_array.non_empty || *new_type_non_empty,
                 known_non_list: existing_keyed_array.known_non_list,
+                parameters_are_shape_tail: false,
             })));
         }
 
@@ -812,6 +813,7 @@ where
                 parameters,
                 non_empty: true,
                 known_non_list,
+                parameters_are_shape_tail: false,
             })))
         }
         (None, Some(second_known_items)) => {
@@ -830,6 +832,7 @@ where
                 parameters,
                 non_empty: true,
                 known_non_list,
+                parameters_are_shape_tail: false,
             })))
         }
         (Some(first_known_items), None) => {
@@ -848,6 +851,7 @@ where
                 parameters,
                 non_empty: true,
                 known_non_list,
+                parameters_are_shape_tail: false,
             })))
         }
         _ => Some(TAtomic::Array(TArray::Keyed(TKeyedArray {
@@ -855,6 +859,7 @@ where
             parameters,
             non_empty: true,
             known_non_list,
+            parameters_are_shape_tail: false,
         }))),
     }
 }
@@ -999,6 +1004,10 @@ fn get_missing_type(assertion: &Assertion, key: Option<&[u8]>, inside_loop: bool
         let mut atomic = atomic.clone();
         atomic.remove_placeholders();
         return wrap_atomic(atomic.clone());
+    }
+
+    if let Assertion::InArray(typed_value) = assertion {
+        return typed_value.clone();
     }
 
     get_mixed()

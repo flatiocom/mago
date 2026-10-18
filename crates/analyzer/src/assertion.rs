@@ -750,7 +750,9 @@ fn add_possible_key_argument_type(
         *possible_type = Some(add_optional_union_type(candidate, possible_type.as_ref(), codebase));
     };
 
-    let accepts_all_scalars = input_key_type.is_mixed() || input_key_type.has_scalar();
+    let array_key = get_arraykey();
+    let input_key_type = if input_key_type.is_mixed() { &array_key } else { input_key_type };
+    let accepts_all_scalars = input_key_type.has_scalar();
 
     match key {
         TAtomic::Scalar(TScalar::Integer(integer)) => {

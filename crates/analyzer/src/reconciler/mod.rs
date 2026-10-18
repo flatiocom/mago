@@ -25,7 +25,6 @@ use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::expander;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
-use mago_codex::ttype::get_arraykey;
 use mago_codex::ttype::get_iterable_value_parameter;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_mixed_maybe_from_loop;
@@ -50,6 +49,7 @@ use crate::context::block::BlockContext;
 use crate::context::scope::var_has_root;
 use crate::resolver::class_name::get_class_name_from_atomic;
 use crate::resolver::property::resolve_declared_property;
+use crate::utils::expression::is_dynamic_index_id;
 
 pub mod assertion_reconciler;
 pub mod negated_assertion_reconciler;
@@ -587,7 +587,7 @@ fn adjust_array_type(
 
     let resolved_key = resolve_literal_array_key(array_key);
 
-    if resolved_key.is_none() && array_key.starts_with(b"$") {
+    if resolved_key.is_none() && is_dynamic_index_id(array_key) {
         if let Some(existing_type) = context.locals.get(&base_key_atom).cloned()
             && existing_type.types.iter().any(|t| matches!(t, TAtomic::Array(a) if a.is_empty()))
         {
@@ -659,12 +659,8 @@ fn adjust_array_type(
                 }
             }
             TAtomic::Mixed(_) => {
-                base_atomic_type = TAtomic::Array(TArray::Keyed(TKeyedArray {
-                    known_items: Some(BTreeMap::from([(dictkey, (optional, result_type.clone()))]).into()),
-                    parameters: Some((Arc::new(get_arraykey()), Arc::new(get_mixed()))),
-                    non_empty: !optional,
-                    known_non_list: false,
-                }));
+                compatible_types.push(base_atomic_type);
+                continue;
             }
             _ => {
                 if base_atomic_type.is_object_type()
@@ -992,7 +988,7 @@ fn add_nested_assertions(
 
                 let new_key = if let Some(resolved_key) = resolve_literal_array_key(array_key) {
                     Some(resolved_key)
-                } else if array_key.starts_with(b"$") {
+                } else if is_dynamic_index_id(array_key) {
                     None
                 } else {
                     continue 'outer;

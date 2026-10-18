@@ -14,7 +14,10 @@ use mago_names::ResolvedNames;
 use mago_span::HasSpan;
 use mago_syntax::cst::Access;
 use mago_syntax::cst::ArrayAccess;
+use mago_syntax::cst::Binary;
+use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Call;
+use mago_syntax::cst::ClassConstantAccess;
 use mago_syntax::cst::ClassLikeConstantSelector;
 use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
@@ -441,8 +444,74 @@ pub fn get_index_id<'ast, 'arena>(
         Expression::UnaryPostfix(unary_postfix) => {
             return get_index_id(unary_postfix.operand, this_class_name, resolved_names, codebase);
         }
+        Expression::UnaryPrefix(UnaryPrefix { operator, operand }) => {
+            let cast = match operator {
+                UnaryPrefixOperator::StringCast(..) | UnaryPrefixOperator::BinaryCast(..) => b"(string)".as_slice(),
+                UnaryPrefixOperator::IntCast(..) | UnaryPrefixOperator::IntegerCast(..) => b"(int)".as_slice(),
+                _ => return None,
+            };
+            let operand = get_index_id(operand, this_class_name, resolved_names, codebase)
+                .filter(|operand| is_dynamic_index_id(operand.as_bytes()))?;
+
+            concat_word!(cast, operand.as_bytes())
+        }
+        Expression::Binary(Binary { lhs, operator: BinaryOperator::StringConcat(_), rhs }) => {
+            let lhs = get_index_id(lhs, this_class_name, resolved_names, codebase)?;
+            let rhs = get_index_id(rhs, this_class_name, resolved_names, codebase)?;
+            if !is_dynamic_index_id(lhs.as_bytes()) && !is_dynamic_index_id(rhs.as_bytes()) {
+                return None;
+            }
+
+            concat_word!(b"(", lhs.as_bytes(), b".", rhs.as_bytes(), b")")
+        }
+        Expression::Access(Access::ClassConstant(class_constant_access))
+            if let Some(literal_id) = codebase.and_then(|codebase| {
+                get_literal_class_constant_index_id(class_constant_access, this_class_name, resolved_names, codebase)
+            }) =>
+        {
+            literal_id
+        }
         _ => return get_expression_id(expression, this_class_name, resolved_names, codebase),
     })
+}
+
+#[inline]
+pub fn is_dynamic_index_id(index_id: &[u8]) -> bool {
+    index_id.starts_with(b"$") || index_id.starts_with(b"(")
+}
+
+#[inline]
+pub fn has_dynamic_index(access_id: &[u8]) -> bool {
+    memchr::memmem::find(access_id, b"[$").is_some() || memchr::memmem::find(access_id, b"[(").is_some()
+}
+
+fn get_literal_class_constant_index_id(
+    class_constant_access: &ClassConstantAccess<'_>,
+    this_class_name: Option<Word>,
+    resolved_names: &ResolvedNames<'_>,
+    codebase: &CodebaseMetadata,
+) -> Option<Word> {
+    let class_name = match class_constant_access.class {
+        Expression::Identifier(identifier) => word(resolved_names.get(&identifier)),
+        Expression::Self_(_) => this_class_name?,
+        _ => return None,
+    };
+
+    let ClassLikeConstantSelector::Identifier(constant_name) = &class_constant_access.constant else {
+        return None;
+    };
+
+    let constant_type = codebase.get_class_constant_type(class_name.as_bytes(), constant_name.value)?;
+    if let Some(value) = constant_type.get_single_literal_int_value() {
+        return Some(word(value.to_string().as_bytes()));
+    }
+
+    let value = constant_type.get_single_literal_string_value()?;
+    if value.iter().any(|byte| matches!(byte, b'\'' | b'\\' | b'[' | b']')) {
+        return None;
+    }
+
+    Some(concat_word!(b"'", value, b"'"))
 }
 
 pub fn get_function_like_id_from_call<'ast, 'arena>(

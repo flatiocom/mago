@@ -406,6 +406,13 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             block_context.possibly_undefined_variable_ids.insert(variable_id);
         }
 
+        let mut merged_variable_ids: WordSet = if_scope
+            .new_variables
+            .iter()
+            .chain(if_scope.redefined_variables.iter())
+            .flat_map(|variables| variables.keys().copied())
+            .collect();
+
         if let Some(new_variables) = if_scope.new_variables {
             for (variable_id, variable_type) in new_variables {
                 block_context.locals.insert(variable_id, variable_type);
@@ -443,24 +450,41 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             );
         }
 
+        let mut merged_variables = Vec::new();
         for (variable_id, variable_type) in if_scope.possibly_redefined_variables {
-            let Some(existing_type) = block_context.locals.remove(&variable_id).map(Rc::unwrap_or_clone) else {
+            if if_scope.updated_variables.contains(&variable_id) {
+                continue;
+            }
+
+            let Some(existing_type) = block_context.locals.get(&variable_id) else {
                 continue;
             };
 
-            if if_scope.updated_variables.contains(&variable_id) {
-                block_context.locals.insert(variable_id, Rc::new(existing_type));
+            let new_type =
+                combine_union_types(existing_type, &variable_type, context.codebase, CombinerOptions::default());
+            merged_variables.push((variable_id, Rc::clone(existing_type), new_type));
+        }
 
+        merged_variable_ids.extend(merged_variables.iter().map(|(variable_id, _, _)| *variable_id));
+        for (variable_id, existing_type, new_type) in &merged_variables {
+            if new_type.eq(existing_type) {
                 continue;
             }
 
-            let new_type =
-                combine_union_types(&existing_type, &variable_type, context.codebase, CombinerOptions::default());
+            let merged_descendants: Vec<_> = block_context
+                .locals
+                .iter()
+                .filter(|(id, _)| {
+                    *id != variable_id && merged_variable_ids.contains(*id) && var_has_root(**id, *variable_id)
+                })
+                .map(|(id, ty)| (*id, Rc::clone(ty)))
+                .collect();
 
-            if !new_type.eq(&existing_type) {
-                block_context.remove_descendants(context, variable_id, &existing_type, Some(&new_type));
-            }
+            block_context.remove_descendants(context, *variable_id, existing_type, Some(new_type));
+            block_context.locals.extend(merged_descendants);
+        }
 
+        for (variable_id, _, new_type) in merged_variables {
             block_context.locals.insert(variable_id, Rc::new(new_type));
         }
 

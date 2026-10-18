@@ -25,6 +25,7 @@ use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::cst::Access;
+use mago_syntax::cst::Argument;
 use mago_syntax::cst::Array;
 use mago_syntax::cst::ArrayElement;
 use mago_syntax::cst::Assignment;
@@ -33,12 +34,14 @@ use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Call;
 use mago_syntax::cst::Expression;
+use mago_syntax::cst::FunctionCall;
 use mago_syntax::cst::List;
 use mago_syntax::cst::UnaryPrefix;
 use mago_syntax::cst::UnaryPrefixOperator;
 use mago_syntax::cst::Variable;
 use mago_word::Word;
 use mago_word::WordSet;
+use mago_word::concat_word;
 
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
@@ -129,6 +132,10 @@ where
     }
 
     analyze_assignment_target(target_expression, context, block_context, artifacts)?;
+
+    if assignment_operator.is_none() && source_expression.is_some() {
+        analyze_target_indices_before_source(target_expression, context, block_context, artifacts)?;
+    }
 
     let target_variable_id = get_block_expression_id(target_expression, context, block_context);
     let mut existing_target_type = None;
@@ -263,6 +270,8 @@ where
         }
     }
 
+    let is_compound_assignment = assignment_operator.is_some();
+
     let property_write_kind = match assignment_operator {
         Some(AssignmentOperator::Coalesce(_)) => PropertyWriteKind::Coalesce,
         Some(_) => PropertyWriteKind::Mutation,
@@ -280,6 +289,7 @@ where
         Rc::clone(&source_type),
         false,
         property_write_kind,
+        is_compound_assignment,
     )?;
 
     if !successful {
@@ -321,6 +331,13 @@ where
         && matches!(target_expression, Expression::Variable(_))
     {
         add_nullsafe_assignment_clauses(target_variable_id, source_expression, context, block_context);
+        add_array_key_first_last_assignment_clauses(
+            target_variable_id,
+            source_expression,
+            context,
+            block_context,
+            artifacts,
+        );
     }
 
     if let Some(assignment_span) = assignment_span {
@@ -366,6 +383,64 @@ fn add_nullsafe_assignment_clauses<'ctx, 'arena, A>(
     }
 }
 
+fn add_array_key_first_last_assignment_clauses<'ctx, 'arena, A>(
+    target_variable_id: Word,
+    source_expression: &Expression<'arena>,
+    context: &Context<'ctx, 'arena, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &AnalysisArtifacts,
+) where
+    A: Arena,
+{
+    let Expression::Call(Call::Function(FunctionCall { function: Expression::Identifier(function), argument_list })) =
+        unwrap_expression(source_expression)
+    else {
+        return;
+    };
+
+    let is_key_first_or_last =
+        |name: &[u8]| name.eq_ignore_ascii_case(b"array_key_first") || name.eq_ignore_ascii_case(b"array_key_last");
+
+    let calls_key_first_or_last = is_key_first_or_last(context.resolved_names.get(function))
+        || (function.is_local() && is_key_first_or_last(function.value()));
+    if !calls_key_first_or_last {
+        return;
+    }
+
+    let Some(Argument::Positional(array_argument)) = argument_list.arguments.first() else {
+        return;
+    };
+
+    if !artifacts.get_expression_type(array_argument.value).is_some_and(|array_type| array_type.is_array()) {
+        return;
+    }
+
+    let Some(array_id) = get_block_expression_id(array_argument.value, context, block_context) else {
+        return;
+    };
+
+    if var_has_root(array_id, target_variable_id) {
+        return;
+    }
+
+    let key_null = Assertion::IsType(TAtomic::Null);
+    let key_exists = Assertion::ArrayKeyExists;
+    let access_id = concat_word!(array_id.as_bytes(), b"[", target_variable_id.as_bytes(), b"]");
+    let possibilities = AssertionMap::from_iter([
+        (target_variable_id, AssertionMap::from_iter([(key_null.to_hash(), key_null)])),
+        (access_id, AssertionMap::from_iter([(key_exists.to_hash(), key_exists)])),
+    ]);
+
+    block_context.clauses.push(Rc::new(Clause::new(
+        possibilities,
+        source_expression.span(),
+        source_expression.span(),
+        Some(false),
+        Some(true),
+        Some(true),
+    )));
+}
+
 pub(crate) fn assign_to_expression<'ctx, 'ast, 'arena, A>(
     context: &mut Context<'ctx, 'arena, A>,
     block_context: &mut BlockContext<'ctx>,
@@ -376,6 +451,7 @@ pub(crate) fn assign_to_expression<'ctx, 'ast, 'arena, A>(
     mut source_type: Rc<TUnion>,
     destructuring: bool,
     property_write_kind: PropertyWriteKind,
+    is_compound_assignment: bool,
 ) -> Result<bool, AnalysisError>
 where
     A: Arena,
@@ -441,10 +517,24 @@ where
             target_expression_id,
         )?,
         Expression::ArrayAccess(array_access) => {
-            array_assignment::analyze(context, block_context, artifacts, array_access.into(), &source_type)?;
+            array_assignment::analyze(
+                context,
+                block_context,
+                artifacts,
+                array_access.into(),
+                &source_type,
+                is_compound_assignment,
+            )?;
         }
         Expression::ArrayAppend(array_append) => {
-            array_assignment::analyze(context, block_context, artifacts, array_append.into(), &source_type)?;
+            array_assignment::analyze(
+                context,
+                block_context,
+                artifacts,
+                array_append.into(),
+                &source_type,
+                is_compound_assignment,
+            )?;
         }
         Expression::Array(array) => {
             analyze_destructuring(
@@ -996,7 +1086,7 @@ where
                 } else if impossible {
                     get_mixed()
                 } else {
-                    let access_type = get_array_target_type_given_index(
+                    let (access_type, _) = get_array_target_type_given_index(
                         context,
                         block_context,
                         key_value_element.key.span(),
@@ -1012,6 +1102,7 @@ where
                         None,
                         None,
                         false,
+                        true,
                     );
 
                     if add_null { access_type.as_nullable() } else { access_type }
@@ -1036,7 +1127,7 @@ where
                 } else if impossible {
                     get_mixed()
                 } else {
-                    let access_type = get_array_target_type_given_index(
+                    let (access_type, _) = get_array_target_type_given_index(
                         context,
                         block_context,
                         target_span,
@@ -1052,6 +1143,7 @@ where
                         None,
                         None,
                         false,
+                        true,
                     );
 
                     if add_null { access_type.as_nullable() } else { access_type }
@@ -1209,6 +1301,40 @@ fn check_list_destructure_keys<'arena, A>(
 
         context.collector.report_with_code(IssueCode::ListDestructureNegativeKey, issue);
     }
+}
+
+/// PHP evaluates a computed index of the target before the right-hand side, and reads a bare variable index after it.
+fn analyze_target_indices_before_source<'ctx, 'arena, A>(
+    target_expression: &Expression<'arena>,
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+) -> Result<(), AnalysisError>
+where
+    A: Arena,
+{
+    let index = match target_expression {
+        Expression::ArrayAccess(array_access) => {
+            analyze_target_indices_before_source(array_access.array, context, block_context, artifacts)?;
+
+            array_access.index
+        }
+        Expression::ArrayAppend(array_append) => {
+            return analyze_target_indices_before_source(array_append.array, context, block_context, artifacts);
+        }
+        _ => return Ok(()),
+    };
+
+    if matches!(index, Expression::Variable(Variable::Direct(_))) || artifacts.get_expression_type(index).is_some() {
+        return Ok(());
+    }
+
+    let was_inside_general_use = block_context.flags.inside_general_use();
+    block_context.flags.set_inside_general_use(true);
+    index.analyze(context, block_context, artifacts)?;
+    block_context.flags.set_inside_general_use(was_inside_general_use);
+
+    Ok(())
 }
 
 fn analyze_assignment_target<'ctx, 'arena, A>(

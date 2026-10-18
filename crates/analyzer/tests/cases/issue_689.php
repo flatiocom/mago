@@ -53,7 +53,7 @@ function main(): void
     $a = '{"out": "123"}';
     /** @var mixed **/
     $c = \json_decode($a, flags: \JSON_THROW_ON_ERROR);
-    if (isset($c->out) && \is_string($c->out)) {
+    if (isset($c->out) && \is_string($c->out)) { // @mago-expect analysis:mixed-property-access
         accepts_string($c->out);
     }
 }

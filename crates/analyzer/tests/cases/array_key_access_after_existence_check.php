@@ -53,7 +53,7 @@ function processMultipleKeys(array $options): array
  */
 function nestedArrayAccess(array $data): null|string
 {
-    if (isset($data['user']['name'])) {
+    if (isset($data['user']['name'])) { // @mago-expect analysis:mixed-array-access
         // Nested access should be safe after isset
         /** @mago-expect analysis:invalid-type-cast */
         return (string) $data['user']['name'];

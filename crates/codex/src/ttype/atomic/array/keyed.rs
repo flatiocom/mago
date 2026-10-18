@@ -28,6 +28,8 @@ pub struct TKeyedArray {
     /// Flag indicating if the array is known not to be a list.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub known_non_list: bool,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub parameters_are_shape_tail: bool,
 }
 
 impl PartialEq for TKeyedArray {
@@ -37,7 +39,10 @@ impl PartialEq for TKeyedArray {
             return true;
         }
 
-        if self.non_empty != other.non_empty || self.known_non_list != other.known_non_list {
+        if self.non_empty != other.non_empty
+            || self.known_non_list != other.known_non_list
+            || self.parameters_are_shape_tail != other.parameters_are_shape_tail
+        {
             return false;
         }
 
@@ -73,7 +78,13 @@ impl TKeyedArray {
     #[inline]
     #[must_use]
     pub fn new_with_parameters(key_type: Arc<TUnion>, value_type: Arc<TUnion>) -> Self {
-        Self { known_items: None, parameters: Some((key_type, value_type)), non_empty: false, known_non_list: false }
+        Self {
+            known_items: None,
+            parameters: Some((key_type, value_type)),
+            non_empty: false,
+            known_non_list: false,
+            parameters_are_shape_tail: false,
+        }
     }
 
     #[inline]

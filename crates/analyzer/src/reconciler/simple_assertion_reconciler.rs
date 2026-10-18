@@ -744,7 +744,9 @@ where
 
     'outer: for atomic in existing_var_type.types.as_ref() {
         match atomic {
-            TAtomic::Array(TArray::Keyed(TKeyedArray { known_items, parameters, non_empty, known_non_list })) => {
+            TAtomic::Array(TArray::Keyed(TKeyedArray {
+                known_items, parameters, non_empty, known_non_list, ..
+            })) => {
                 if *known_non_list {
                     did_remove_type = true;
                     continue;
@@ -1613,7 +1615,9 @@ where
                     known_count,
                 })));
             }
-            TAtomic::Array(TArray::Keyed(TKeyedArray { non_empty, parameters, known_items, known_non_list })) => {
+            TAtomic::Array(TArray::Keyed(TKeyedArray {
+                non_empty, parameters, known_items, known_non_list, ..
+            })) => {
                 if !non_empty {
                     did_remove_type = true;
                     if parameters.is_none() && known_items.as_ref().is_none_or(|items| items.is_empty()) {
@@ -1626,6 +1630,7 @@ where
                     parameters,
                     known_items,
                     known_non_list,
+                    parameters_are_shape_tail: false,
                 })));
             }
             TAtomic::Mixed(_) => {
@@ -1704,6 +1709,7 @@ where
             parameters,
             known_items,
             known_non_list,
+            ..
         })) = atomic
         {
             did_remove_type = true;
@@ -1720,6 +1726,7 @@ where
                     parameters: parameters.clone(),
                     non_empty: true,
                     known_non_list: *known_non_list,
+                    parameters_are_shape_tail: false,
                 })));
             }
         }
@@ -2093,6 +2100,16 @@ where
                 did_remove_type = true;
                 acceptable_types.push(atomic);
             }
+            TAtomic::Mixed(_) if !negated => {
+                did_remove_type = true;
+                acceptable_types.push(TAtomic::Array(TArray::Keyed(TKeyedArray {
+                    known_items: Some(BTreeMap::from([(key_name, (false, get_mixed()))]).into()),
+                    parameters: Some((Arc::new(get_arraykey()), Arc::new(get_mixed()))),
+                    non_empty: true,
+                    known_non_list: false,
+                    parameters_are_shape_tail: false,
+                })));
+            }
             TAtomic::Mixed(_) => {
                 did_remove_type = true;
                 acceptable_types.push(atomic);
@@ -2234,6 +2251,7 @@ where
                     parameters: Some((Arc::new(get_arraykey()), Arc::new(get_mixed()))),
                     non_empty: false,
                     known_non_list: false,
+                    parameters_are_shape_tail: false,
                 }));
                 acceptable_types.extend(keyed_array.types.into_owned());
             }

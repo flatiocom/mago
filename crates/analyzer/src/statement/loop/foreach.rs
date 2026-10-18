@@ -89,6 +89,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
                 Rc::new(key_type),
                 false,
                 PropertyWriteKind::Direct,
+                false,
             )?;
 
             if !assigned {
@@ -133,6 +134,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
             Rc::new(value_type),
             false,
             if is_by_reference { PropertyWriteKind::Mutation } else { PropertyWriteKind::Direct },
+            false,
         )?;
         loop_block_context.flags.set_inside_foreach_value(false);
 
@@ -156,6 +158,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Foreach<'arena> {
         }
 
         let foreach_entry = if !is_by_reference
+            && artifacts.get_expression_type(iterator).is_some_and(TUnion::is_array)
             && matches!(iterator, Expression::Variable(Variable::Direct(_)))
             && self.target.key().is_some_and(|key| matches!(key, Expression::Variable(Variable::Direct(_))))
             && matches!(value_expression, Expression::Variable(Variable::Direct(_)))

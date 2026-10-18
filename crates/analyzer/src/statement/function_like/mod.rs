@@ -553,8 +553,11 @@ where
         // and choosing the more specific one, this current solution is a bit naive.
         let declared_type_is_specific = parameter_metadata.get_type_metadata().is_some_and(|tm| {
             let union = &tm.type_union;
+            let is_nullable_vanilla_array = union.is_nullable()
+                && !parameter_metadata.flags.is_by_reference()
+                && union.to_non_nullable().is_vanilla_array();
 
-            !union.is_vanilla_array() && !union.is_vanilla_mixed()
+            !union.is_vanilla_array() && !union.is_vanilla_mixed() && !is_nullable_vanilla_array
         });
 
         let mut final_parameter_type = if declared_type_is_specific {

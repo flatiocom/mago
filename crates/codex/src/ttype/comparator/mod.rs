@@ -28,6 +28,7 @@ pub struct ComparisonResult {
     pub replacement_atomic_type: Option<TAtomic>,
     pub type_variable_lower_bounds: Vec<(Word, TemplateBound)>,
     pub type_variable_upper_bounds: Vec<(Word, TemplateBound)>,
+    pub ignore_shape_tails: bool,
 }
 
 impl Default for ComparisonResult {
@@ -40,6 +41,12 @@ impl Default for ComparisonResult {
 impl ComparisonResult {
     #[inline]
     #[must_use]
+    pub fn ignoring_shape_tails() -> Self {
+        Self { ignore_shape_tails: true, ..Self::new() }
+    }
+
+    #[inline]
+    #[must_use]
     pub fn new() -> Self {
         Self {
             type_coerced: None,
@@ -49,6 +56,7 @@ impl ComparisonResult {
             replacement_atomic_type: None,
             type_variable_lower_bounds: vec![],
             type_variable_upper_bounds: vec![],
+            ignore_shape_tails: false,
         }
     }
 }

@@ -3022,6 +3022,7 @@ fn decode_complete_array(reader: &mut PayloadReader<'_>, depth: usize) -> Result
                 parameters,
                 non_empty,
                 known_non_list: false,
+                parameters_are_shape_tail: false,
             })
         }
         unknown => return Err(protocol(format!("unknown complete array kind {unknown}"))),

@@ -284,7 +284,10 @@ fn is_contained_by_atomic(
             continue;
         }
 
-        let mut atomic_comparison_result = ComparisonResult::new();
+        let mut atomic_comparison_result = ComparisonResult {
+            ignore_shape_tails: union_comparison_result.ignore_shape_tails,
+            ..ComparisonResult::new()
+        };
         let is_atomic_contained_by = atomic_comparator::is_contained_by(
             codebase,
             input_type_part,
@@ -419,6 +422,7 @@ fn get_combined_keyed_array_union_container(
         parameters: Some((Arc::clone(input_key), Arc::new(value))),
         non_empty,
         known_non_list,
+        parameters_are_shape_tail: false,
     })))
 }
 

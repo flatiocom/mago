@@ -97,6 +97,7 @@ fn unwrap_closure_return_array(array: &TArray, context: &ProviderContext<'_, '_,
                     non_empty: keyed.non_empty,
                     known_items: Some(new_items.into()),
                     known_non_list: keyed.known_non_list,
+                    parameters_are_shape_tail: false,
                 }))));
             }
 
@@ -108,6 +109,7 @@ fn unwrap_closure_return_array(array: &TArray, context: &ProviderContext<'_, '_,
                 non_empty: keyed.non_empty,
                 known_items: None,
                 known_non_list: keyed.known_non_list,
+                parameters_are_shape_tail: false,
             }))))
         }
     }

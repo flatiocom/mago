@@ -323,7 +323,7 @@ pub fn verify_argument_type<'arena, A>(
         }
     }
 
-    let mut union_comparison_result = ComparisonResult::new();
+    let mut union_comparison_result = ComparisonResult::ignoring_shape_tails();
     let type_match_found =
         is_contained_by(context.codebase, input_type, parameter_type, true, true, false, &mut union_comparison_result);
 

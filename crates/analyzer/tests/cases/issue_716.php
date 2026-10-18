@@ -3,7 +3,7 @@
 /** @var mixed $response */
 $response = json_decode('{}', true);
 
-if (!isset($response['content'][0]['input'])) {
+if (!isset($response['content'][0]['input'])) { // @mago-expect analysis:mixed-array-access,mixed-array-access,mixed-array-access
     throw new RuntimeException('no input');
 }
 

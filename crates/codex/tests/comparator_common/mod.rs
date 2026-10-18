@@ -344,6 +344,7 @@ pub fn t_empty_array() -> TAtomic {
         parameters: None,
         non_empty: false,
         known_non_list: false,
+        parameters_are_shape_tail: false,
     }))
 }
 #[must_use]
@@ -353,6 +354,7 @@ pub fn t_keyed_unsealed(key: TUnion, value: TUnion, non_empty: bool) -> TAtomic 
         parameters: Some((Arc::new(key), Arc::new(value))),
         non_empty,
         known_non_list: false,
+        parameters_are_shape_tail: false,
     }))
 }
 #[must_use]
@@ -362,6 +364,7 @@ pub fn t_keyed_sealed(items: BTreeMap<ArrayKey, (bool, TUnion)>, non_empty: bool
         parameters: None,
         non_empty,
         known_non_list: false,
+        parameters_are_shape_tail: false,
     }))
 }
 #[must_use]
@@ -376,6 +379,7 @@ pub fn t_keyed_with_both(
         parameters: Some((Arc::new(key), Arc::new(value))),
         non_empty,
         known_non_list: false,
+        parameters_are_shape_tail: false,
     }))
 }
 #[must_use]

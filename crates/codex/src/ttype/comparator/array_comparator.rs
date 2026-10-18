@@ -5,6 +5,7 @@ use crate::metadata::CodebaseMetadata;
 use crate::ttype::atomic::TAtomic;
 use crate::ttype::atomic::array::TArray;
 use crate::ttype::atomic::array::key::ArrayKey;
+use crate::ttype::atomic::array::keyed::TKeyedArray;
 use crate::ttype::atomic::scalar::TScalar;
 use crate::ttype::atomic::scalar::int::TInteger;
 use crate::ttype::comparator::ComparisonResult;
@@ -91,6 +92,24 @@ pub(crate) fn is_array_contained_by_array(
     inside_assertion: bool,
     atomic_comparison_result: &mut ComparisonResult,
 ) -> bool {
+    if atomic_comparison_result.ignore_shape_tails
+        && let TArray::Keyed(input_keyed) = input_array
+        && input_keyed.parameters_are_shape_tail
+        && let TArray::Keyed(container_keyed) = container_array
+        && container_keyed.known_items.is_none()
+    {
+        let input_shape =
+            TArray::Keyed(TKeyedArray { parameters: None, parameters_are_shape_tail: false, ..input_keyed.clone() });
+
+        return is_array_contained_by_array(
+            codebase,
+            &input_shape,
+            container_array,
+            inside_assertion,
+            atomic_comparison_result,
+        );
+    }
+
     if container_array.is_sealed() && !input_array.is_sealed() {
         return false;
     }

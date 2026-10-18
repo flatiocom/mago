@@ -29,6 +29,7 @@ use crate::artifacts::editor::MemberReference;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
+use crate::expression::array_access::report_index_types_of_array_access;
 use crate::resolver::property::report_deprecated_property;
 use crate::resolver::property::resolve_declared_property;
 use crate::resolver::property::resolve_instance_properties;
@@ -128,6 +129,10 @@ where
         && let Some(existing_type) = block_context.locals.get(property_access_id).cloned()
     {
         add_memoized_property_reference(context, block_context, artifacts, object, property_selector, is_null_safe)?;
+
+        if let Expression::ArrayAccess(array_access) = object {
+            report_index_types_of_array_access(context, block_context, artifacts, array_access)?;
+        }
 
         artifacts.set_rc_expression_type(&span, existing_type);
 

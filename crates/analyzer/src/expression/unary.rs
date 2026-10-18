@@ -879,6 +879,7 @@ where
         Rc::clone(&resulting_type_union),
         false,
         PropertyWriteKind::Mutation,
+        true,
     )?;
 
     if !successful {
@@ -1127,6 +1128,7 @@ where
         Rc::clone(&resulting_type_union),
         false,
         PropertyWriteKind::Mutation,
+        true,
     )?;
 
     if !successful {

@@ -502,6 +502,7 @@ where
                 },
                 non_empty: true,
                 known_non_list: array_creation_info.known_non_list,
+                parameters_are_shape_tail: false,
             }))])
         }
     } else if item_key_type.is_none() && item_value_type.is_none() {
@@ -524,6 +525,7 @@ where
             },
             non_empty: !array_creation_info.can_be_empty,
             known_non_list: array_creation_info.known_non_list,
+            parameters_are_shape_tail: false,
         }))])
     };
 

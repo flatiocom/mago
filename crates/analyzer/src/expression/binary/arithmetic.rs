@@ -1098,6 +1098,9 @@ fn compose_keyed_plus(left: &TKeyedArray, right: &TKeyedArray) -> TKeyedArray {
 
     let non_empty =
         left.is_non_empty() || right.is_non_empty() || composed_known.values().any(|(optional, _)| !*optional);
+    let left_is_shape = left.known_items.as_deref().is_some_and(|items| !items.is_empty())
+        && (left.parameters.is_none() || left.parameters_are_shape_tail);
+    let parameters_are_shape_tail = left_is_shape && composed_parameters.is_some();
 
     TKeyedArray {
         known_items: Some(composed_known).filter(|m| !m.is_empty()).map(Into::into),
@@ -1108,6 +1111,7 @@ fn compose_keyed_plus(left: &TKeyedArray, right: &TKeyedArray) -> TKeyedArray {
                 && left.parameters.is_none()
                 && left.known_items.as_deref().is_none_or(BTreeMap::is_empty)
                 && right.known_non_list),
+        parameters_are_shape_tail,
     }
 }
 

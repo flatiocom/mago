@@ -1,5 +1,6 @@
 use crate::metadata::CodebaseMetadata;
 use crate::ttype::atomic::TAtomic;
+use crate::ttype::atomic::array::TArray;
 use crate::ttype::comparator::ComparisonResult;
 use crate::ttype::comparator::generic_comparator::update_failed_result_from_nested;
 use crate::ttype::comparator::union_comparator;
@@ -28,6 +29,16 @@ pub fn is_contained_by(
         && input_k.is_mixed()
     {
         input_k = get_arraykey();
+    }
+
+    let shape_tail_has_general_key = atomic_comparison_result.ignore_shape_tails
+        && matches!(
+            input_type_part,
+            TAtomic::Array(TArray::Keyed(keyed)) if keyed.parameters_are_shape_tail
+                && keyed.parameters.as_ref().is_some_and(|(key, _)| key.is_array_key())
+        );
+    if shape_tail_has_general_key {
+        input_k = container_k.clone();
     }
 
     let mut all_types_contain = true;

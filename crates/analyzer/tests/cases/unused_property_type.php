@@ -129,7 +129,7 @@ final class NarrowedMixedWrite
 
     public function write(mixed $values): void
     {
-        if (!isset($values->tags)) {
+        if (!isset($values->tags)) { // @mago-expect analysis:mixed-property-access
             return;
         }
 

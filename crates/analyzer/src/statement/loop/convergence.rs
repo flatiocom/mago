@@ -114,6 +114,8 @@ impl<'ctx> Snapshot<'ctx> {
         saved.loop_scope.clone_from(&artifacts.loop_scope);
         saved.case_scopes.clone_from(&artifacts.case_scopes);
         saved.fully_matched_switch_offsets.clone_from(&artifacts.fully_matched_switch_offsets);
+        saved.reported_array_index_offsets.clone_from(&artifacts.reported_array_index_offsets);
+        saved.read_memoized_array_accesses.clone_from(&artifacts.read_memoized_array_accesses);
         saved.inferred_parameter_types.clone_from(&artifacts.inferred_parameter_types);
         saved.method_initialized_properties.clone_from(&artifacts.method_initialized_properties);
         saved.method_calls_this_methods.clone_from(&artifacts.method_calls_this_methods);
@@ -199,6 +201,7 @@ fn same_artifact_inputs(left: &AnalysisArtifacts, right: &AnalysisArtifacts) -> 
         && left.case_scopes.len() == right.case_scopes.len()
         && left.case_scopes.iter().zip(&right.case_scopes).all(|(left, right)| same_case(left, right))
         && left.fully_matched_switch_offsets == right.fully_matched_switch_offsets
+        && left.reported_array_index_offsets == right.reported_array_index_offsets
         && match (&left.inferred_parameter_types, &right.inferred_parameter_types) {
             (Some(left), Some(right)) => {
                 left.len() == right.len()

@@ -181,9 +181,7 @@ where
                     result.encountered_mixed = true;
                 }
 
-                if !block_context.flags.inside_isset() || !object_atomic.is_mixed() {
-                    report_access_on_non_object(context, object_atomic, property_selector, object_expression.span());
-                }
+                report_access_on_non_object(context, object_atomic, property_selector, object_expression.span());
 
                 continue;
             }

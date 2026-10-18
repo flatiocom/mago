@@ -312,6 +312,7 @@ pub fn combine(types: Vec<TAtomic>, codebase: &CodebaseMetadata, options: Combin
             },
             non_empty: combination.flags.contains(CombinationFlags::KEYED_ARRAY_ALWAYS_FILLED),
             known_non_list: combination.flags.contains(CombinationFlags::KEYED_ARRAY_KNOWN_NON_LIST),
+            parameters_are_shape_tail: false,
         })));
     }
 
@@ -336,6 +337,7 @@ pub fn combine(types: Vec<TAtomic>, codebase: &CodebaseMetadata, options: Combin
             parameters: None,
             non_empty: false,
             known_non_list: false,
+            parameters_are_shape_tail: false,
         })));
     }
 
@@ -753,7 +755,13 @@ fn scrape_type_properties(
                             Some((*element_type).clone())
                         };
                 }
-                TArray::Keyed(TKeyedArray { parameters, known_items, non_empty, known_non_list }) => {
+                TArray::Keyed(TKeyedArray {
+                    parameters,
+                    known_items,
+                    non_empty,
+                    known_non_list,
+                    parameters_are_shape_tail,
+                }) => {
                     let mut had_previous_keyed_array = combination.flags.contains(CombinationFlags::HAS_KEYED_ARRAY);
                     let sealed_budget_available = !combination.sealed_keyed_budget_exhausted
                         && combination.sealed_arrays.len() < options.array_combination_threshold as usize;
@@ -785,6 +793,7 @@ fn scrape_type_properties(
                                 parameters,
                                 non_empty,
                                 known_non_list,
+                                parameters_are_shape_tail,
                             }));
 
                             continue;
@@ -821,6 +830,7 @@ fn scrape_type_properties(
                                 known_non_list: combination
                                     .flags
                                     .contains(CombinationFlags::KEYED_ARRAY_KNOWN_NON_LIST),
+                                parameters_are_shape_tail: false,
                             });
                             combination.sealed_arrays.push(frozen);
                             combination.flags.remove(CombinationFlags::HAS_KEYED_ARRAY);
@@ -849,6 +859,7 @@ fn scrape_type_properties(
                                 known_non_list: combination
                                     .flags
                                     .contains(CombinationFlags::KEYED_ARRAY_KNOWN_NON_LIST),
+                                parameters_are_shape_tail: false,
                             });
                             combination.sealed_arrays.push(frozen);
                             combination.sealed_arrays.push(TArray::Keyed(TKeyedArray {
@@ -856,6 +867,7 @@ fn scrape_type_properties(
                                 parameters,
                                 non_empty,
                                 known_non_list,
+                                parameters_are_shape_tail,
                             }));
                             combination.flags.remove(CombinationFlags::HAS_KEYED_ARRAY);
                             combination.flags.remove(CombinationFlags::KEYED_ARRAY_KNOWN_NON_LIST);
@@ -1528,7 +1540,7 @@ fn flush_sealed_keyed_arrays_into_combination(
         };
 
         any_keyed = true;
-        let TKeyedArray { known_items, parameters, non_empty, known_non_list } = keyed;
+        let TKeyedArray { known_items, parameters, non_empty, known_non_list, .. } = keyed;
 
         if known_non_list {
             combination.flags.insert(CombinationFlags::KEYED_ARRAY_KNOWN_NON_LIST);
@@ -1951,6 +1963,7 @@ mod tests {
                     parameters: None,
                     non_empty,
                     known_non_list: true,
+                    parameters_are_shape_tail: false,
                 }));
                 let codebase = CodebaseMetadata::new();
                 let options = CombinerOptions::default();

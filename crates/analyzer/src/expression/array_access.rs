@@ -10,15 +10,18 @@ use mago_codex::ttype::get_arraykey;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::template::TemplateResult;
 use mago_codex::ttype::union::TUnion;
+use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_syntax::cst::ArrayAccess;
 use mago_syntax::cst::Expression;
+use mago_word::Word;
 use mago_word::WordMap;
 use mago_word::concat_word;
 use mago_word::word;
 
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
+use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
@@ -34,6 +37,7 @@ use crate::utils::expression::array::get_array_target_type_given_index;
 use crate::utils::expression::expression_is_nullsafe;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_index_id;
+use crate::utils::expression::has_dynamic_index;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
     fn analyze<'ctx, A>(
@@ -55,6 +59,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
             )
             .map(|index| concat_word!(array_id.as_bytes(), b"[", index.as_bytes(), b"]"))
         });
+
+        let index_offset = self.index.span().start.offset;
+        artifacts.reported_array_index_offsets.remove(&index_offset);
+
         let saved_narrowed_type = if matches!(self.index, Expression::UnaryPostfix(_)) {
             keyed_array_var_id.as_ref().and_then(|k| block_context.locals.get(k).cloned())
         } else {
@@ -90,8 +98,22 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
             && block_context.has_variable_atom(*keyed_array_var_id)
             && let Some(array_access_type) = block_context.locals.get(keyed_array_var_id).cloned()
         {
-            let is_variable_key = memchr::memmem::find(keyed_array_var_id.as_bytes(), b"[$").is_some();
+            let is_variable_key = has_dynamic_index(keyed_array_var_id.as_bytes());
             if is_variable_key || !array_access_type.possibly_undefined() {
+                let is_unnarrowed_read = artifacts
+                    .read_memoized_array_accesses
+                    .get(keyed_array_var_id)
+                    .is_some_and(|read_type| Rc::ptr_eq(read_type, &array_access_type));
+
+                report_stored_read_index_type(
+                    context,
+                    block_context,
+                    artifacts,
+                    self,
+                    &index_type,
+                    extended_var_id,
+                    is_unnarrowed_read,
+                );
                 artifacts.set_rc_expression_type(self, Rc::clone(&array_access_type));
 
                 return Ok(());
@@ -99,9 +121,17 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
         }
 
         if let Some(saved_type) = saved_narrowed_type {
-            let is_variable_key =
-                keyed_array_var_id.as_ref().is_some_and(|k| memchr::memmem::find(k.as_bytes(), b"[$").is_some());
+            let is_variable_key = keyed_array_var_id.as_ref().is_some_and(|k| has_dynamic_index(k.as_bytes()));
             if is_variable_key || !saved_type.possibly_undefined() {
+                report_stored_read_index_type(
+                    context,
+                    block_context,
+                    artifacts,
+                    self,
+                    &index_type,
+                    extended_var_id,
+                    false,
+                );
                 artifacts.set_rc_expression_type(self, saved_type);
 
                 return Ok(());
@@ -111,7 +141,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
         let container_type = artifacts.get_rc_expression_type(&self.array).cloned();
 
         if let Some(container_type) = container_type {
-            let access_type = Rc::new(get_array_target_type_given_index(
+            let (access_type, index_reported) = get_array_target_type_given_index(
                 context,
                 block_context,
                 self.span(),
@@ -123,7 +153,14 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
                 extended_var_id,
                 None,
                 container_type.can_be_null() && expression_is_nullsafe(self.array),
-            ));
+                true,
+            );
+
+            if index_reported {
+                artifacts.reported_array_index_offsets.insert(index_offset);
+            }
+
+            let access_type = Rc::new(access_type);
 
             let access_type =
                 match get_offset_get_read_type(context, block_context, artifacts, self, &container_type, &index_type) {
@@ -136,10 +173,11 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
 
                 if !block_context.flags.inside_isset()
                     && can_store_result
-                    && memchr::memmem::find(keyed_array_var_id.as_bytes(), b"[$").is_some()
+                    && has_dynamic_index(keyed_array_var_id.as_bytes())
                     && !block_context.locals.contains_key(keyed_array_var_id)
                 {
                     block_context.locals.insert(*keyed_array_var_id, Rc::clone(&access_type));
+                    artifacts.read_memoized_array_accesses.insert(*keyed_array_var_id, Rc::clone(&access_type));
                 }
             }
 
@@ -150,6 +188,82 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
 
         Ok(())
     }
+}
+
+fn report_stored_read_index_type<'ctx, 'arena, A>(
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+    array_access: &ArrayAccess<'arena>,
+    index_type: &TUnion,
+    extended_var_id: Option<Word>,
+    is_unnarrowed_read: bool,
+) where
+    A: Arena,
+{
+    let Some(container_type) = artifacts.get_rc_expression_type(array_access.array).cloned() else {
+        return;
+    };
+
+    let ((_, index_reported), recorded_issues) = context.record(|context| {
+        get_array_target_type_given_index(
+            context,
+            block_context,
+            array_access.span(),
+            array_access.array.span(),
+            Some(array_access.index.span()),
+            &container_type,
+            index_type,
+            false,
+            extended_var_id,
+            None,
+            container_type.can_be_null() && expression_is_nullsafe(array_access.array),
+            true,
+        )
+    });
+
+    context.collector.extend(recorded_issues.into_iter().filter(|issue| {
+        is_index_type_issue(issue) || (is_unnarrowed_read && is_possibly_undefined_index_issue(issue))
+    }));
+
+    if index_reported {
+        artifacts.reported_array_index_offsets.insert(array_access.index.span().start.offset);
+    }
+}
+
+pub(crate) fn report_index_types_of_array_access<'ctx, 'arena, A>(
+    context: &mut Context<'ctx, 'arena, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &mut AnalysisArtifacts,
+    array_access: &ArrayAccess<'arena>,
+) -> Result<(), AnalysisError>
+where
+    A: Arena,
+{
+    let (result, recorded_issues) = context.record(|context| array_access.analyze(context, block_context, artifacts));
+
+    context.collector.extend(recorded_issues.into_iter().filter(is_index_type_issue));
+
+    result
+}
+
+fn is_possibly_undefined_index_issue(issue: &Issue) -> bool {
+    const POSSIBLY_UNDEFINED_INDEX_CODES: [IssueCode; 2] =
+        [IssueCode::PossiblyUndefinedStringArrayIndex, IssueCode::PossiblyUndefinedIntArrayIndex];
+
+    POSSIBLY_UNDEFINED_INDEX_CODES.iter().any(|code| issue.code.as_deref() == Some(code.as_str()))
+}
+
+fn is_index_type_issue(issue: &Issue) -> bool {
+    const INDEX_TYPE_CODES: [IssueCode; 5] = [
+        IssueCode::MixedArrayIndex,
+        IssueCode::InvalidArrayIndex,
+        IssueCode::MismatchedArrayIndex,
+        IssueCode::NullArrayIndex,
+        IssueCode::PossiblyNullArrayIndex,
+    ];
+
+    INDEX_TYPE_CODES.iter().any(|code| issue.code.as_deref() == Some(code.as_str()))
 }
 
 /// Types `$object[$offset]` the same as `$object->offsetGet($offset)` when a return-type

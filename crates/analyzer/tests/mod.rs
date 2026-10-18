@@ -62,6 +62,8 @@ test_case!(array_access_assignment_is_remembered_on_read, {
     settings
 });
 test_case!(array_access_assignment_is_not_remembered_by_default);
+test_case!(assignment_analyzes_computed_target_index_before_source);
+test_case!(nested_array_write_with_mixed_key_has_array_key_keys);
 test_case!(array_declared_with_mixed_key_has_array_key_keys);
 test_case!(class_constant_with_spread_has_inferred_type);
 test_case!(closure_keeps_declared_return_over_wider_inferred_return);
@@ -69,7 +71,15 @@ test_case!(property_narrowing_dropped_in_branch_keeps_the_outer_type);
 test_case!(switch_case_only_variable_is_possibly_defined_after_switch);
 test_case!(loop_body_variable_keeps_its_type_on_the_next_pass);
 test_case!(loop_body_only_variable_keeps_its_type_after_the_loop);
+test_case!(compound_assignment_reports_its_index_once);
+test_case!(mixed_array_index);
+test_case!(mixed_array_index_on_repeated_read);
+test_case!(float_array_index);
+test_case!(array_key_cast_on_write);
+test_case!(index_of_nullable_array);
+test_case!(repeated_read_index_type);
 test_case!(collator_sort_keeps_value_type);
+test_case!(array_key_exists_narrows_key_on_mixed_base);
 test_case!(shipmonk_variable_type_overwritten, {
     let mut settings = default_test_settings();
     settings.check_variable_type_overwrite = true;
@@ -3036,22 +3046,60 @@ test_case!(foreach_empty_array_analyze_dead_code, {
 test_case!(object_compared_with_number);
 test_case!(dead_catch, mago_analyzer::settings::Settings { check_dead_catch: true, ..Default::default() });
 test_case!(mixed_operand_reported_once_per_operation);
+test_case!(possibly_invalid_array_index);
+test_case!(mixed_access_inside_isset);
 test_case!(concat_operand_reported_at_operation_start);
 test_case!(imprecise_var_tag_type, {
     let mut s = crate::framework::default_test_settings();
     s.check_missing_type_hints = true;
     s
 });
+test_case!(literal_union_key_never_exists_in_isset);
+test_case!(literal_union_key_all_defined_read, {
+    let mut s = crate::framework::default_test_settings();
+    s.allow_possibly_undefined_array_keys = false;
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(static_property_offset_write_type);
 test_case!(foreach_var_tag_widening);
 test_case!(docblock_var_string_over_empty_or_non_empty);
 test_case!(composite_string_non_falsy);
 test_case!(mixed_operand_arithmetic_result);
 test_case!(conditional_parent_return_covariance);
 test_case!(deferred_constant_int_folding);
+test_case!(class_constant_index_narrowing);
 test_case!(by_reference_argument_possibly_undefined);
 test_case!(int_exponentiation_result);
 test_case!(inherited_param_out);
+test_case!(nested_write_into_possibly_missing_array, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s.pollute_scope_with_loop_initial_assignments = false;
+    s.pollute_scope_with_always_iterable_foreach = false;
+    s.pollute_scope_with_block = false;
+    s
+});
 test_case!(array_merge_renumbers_int_keys);
+test_case!(unsealed_shape_missing_key_read, {
+    let mut s = crate::framework::default_test_settings();
+    s.allow_possibly_undefined_array_keys = false;
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(possibly_undefined_index_repeat_read, {
+    let mut s = crate::framework::default_test_settings();
+    s.allow_possibly_undefined_array_keys = false;
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(map_key_narrowing_like_phpstan, {
+    let mut s = crate::framework::default_test_settings();
+    s.allow_possibly_undefined_array_keys = false;
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(array_plus_shape_accepted_like_phpstan);
 test_case!(class_constant_keys_of_constant_array);
 test_case!(generic_first_class_callable_argument);
 test_case!(for_without_condition_never_exits);
@@ -3062,14 +3110,29 @@ test_case!(array_access_union_offset_write_remembered, {
     s
 });
 test_case!(conditional_return_empty_array_is_not_non_empty);
+test_case!(array_write_at_never_key_keeps_array);
+test_case!(array_key_first_last_key_exists_when_not_null, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
 test_case!(trait_this_is_the_class_its_users_share);
 test_case!(trait_method_inherits_host_docblock);
 test_case!(imprecise_signature_type_on_declaration_line, crate::framework::check_missing_type_hints_settings());
 test_case!(trait_reads_properties_every_user_declares);
 test_case!(trait_calls_methods_every_user_declares);
+test_case!(offset_write_drops_scalar_members);
+test_case!(offset_write_into_mixed_forgets_narrowed_keys);
+test_case!(foreach_entry_link_needs_array_iteratee);
 test_case!(variable_type_overwrite_list_drops_known_elements, {
     let mut s = crate::framework::default_test_settings();
     s.check_variable_type_overwrite = true;
+    s
+});
+test_case!(list_index_below_required_element_is_set);
+test_case!(list_index_outside_known_elements, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
     s
 });
 test_case!(key_of_non_empty_array_like_phpstan);

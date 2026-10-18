@@ -8,6 +8,7 @@ function gar(?string $y): void
 
     // @mago-expect analysis:possibly-null-array-index
     if (isset($x[$y])) {
+        // @mago-expect analysis:possibly-null-array-index
         echo $x[$y], PHP_EOL;
         if ($y === null) {
             echo 123, PHP_EOL;

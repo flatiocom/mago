@@ -19,7 +19,9 @@ class Foo
     {
         // @mago-expect analysis:possibly-null-array-index,possibly-null-array-index
         if (isset(self::ORDER_BY[$order], self::$DIRECTION[$direction])) {
+            // @mago-expect analysis:possibly-null-array-index
             $order = self::ORDER_BY[$order];
+            // @mago-expect analysis:possibly-null-array-index
             $direction = self::$DIRECTION[$direction];
         }
     }

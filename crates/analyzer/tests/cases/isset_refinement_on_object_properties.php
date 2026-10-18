@@ -80,7 +80,7 @@ function example_6(mixed $v): void
     }
 }
 
-if (isset($x, $x->a, $x->b)) {
+if (isset($x, $x->a, $x->b)) { // @mago-expect analysis:mixed-property-access,mixed-property-access
     example_6($x);
     example_6($x->a);
     example_6($x->b);
