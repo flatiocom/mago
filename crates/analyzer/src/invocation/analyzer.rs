@@ -734,9 +734,12 @@ where
                     && contains_parameter_variable(&final_parameter_type);
 
             if !check_is_deferred_to_partial_invocation {
+                let uninstantiated_argument_type =
+                    with_own_templates_as_parameter_constraints(context, &argument_value_type);
+
                 verify_argument_type(
                     context,
-                    &argument_value_type,
+                    uninstantiated_argument_type.as_ref().unwrap_or(&argument_value_type),
                     &final_parameter_type,
                     *argument_offset,
                     argument_expression,
@@ -1445,6 +1448,49 @@ fn infer_generic_callable_arguments<'ctx, 'arena, A>(
             }
         }
     }
+}
+
+fn with_own_templates_as_parameter_constraints<A>(
+    context: &Context<'_, '_, A>,
+    argument_type: &TUnion,
+) -> Option<TUnion>
+where
+    A: Arena,
+{
+    if !callable_argument_has_template_parameter(context, argument_type) {
+        return None;
+    }
+
+    let types = argument_type
+        .types
+        .iter()
+        .map(|atomic| {
+            let TAtomic::Callable(TCallable::Signature(signature)) = atomic else {
+                return atomic.clone();
+            };
+
+            let Some(metadata) = signature.get_source().and_then(|source| context.codebase.get_function_like(&source))
+            else {
+                return atomic.clone();
+            };
+
+            let mut constraints = TemplateResult::default();
+            for (name, template) in &metadata.template_types {
+                constraints.add_lower_bound(*name, template.defining_entity, template.constraint.clone());
+            }
+
+            let mut signature = signature.clone();
+            for parameter in signature.get_parameters_mut() {
+                if let Some(parameter_type) = parameter.get_type_signature_mut() {
+                    *parameter_type = inferred_type_replacer::replace(parameter_type, &constraints, context.codebase);
+                }
+            }
+
+            TAtomic::Callable(TCallable::Signature(signature))
+        })
+        .collect();
+
+    Some(TUnion::from_vec(types))
 }
 
 fn callable_argument_has_template_parameter<A>(context: &Context<'_, '_, A>, argument_type: &TUnion) -> bool

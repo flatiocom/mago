@@ -623,7 +623,11 @@ where
             false
         };
 
+        let are_empty_and_non_empty_arrays =
+            subject.types.iter().all(TAtomic::is_empty_array) && target.types.iter().all(TAtomic::is_non_empty_array);
+
         let are_disjoint = are_int_float_disjoint
+            || are_empty_and_non_empty_arrays
             || !union_comparator::can_expression_types_be_identical(context.codebase, &subject, &target, false, false);
 
         if are_disjoint {

@@ -1,11 +1,13 @@
 use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::metadata::function_like::FunctionLikeMetadata;
 use mago_codex::ttype::TType;
+use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
 use mago_codex::ttype::expander::expand_union;
+use mago_codex::ttype::union::TUnion;
 use mago_codex::visibility::Visibility;
 use mago_word::Word;
 
@@ -309,7 +311,60 @@ pub fn validate_method_signature_compatibility(
         }
     }
 
+    if let (Some(parent_return), Some(child_return)) =
+        (&parent_method.return_type_metadata, &child_method.return_type_metadata)
+        && parent_return.from_docblock
+        && !child_return.from_docblock
+        && parent_return.type_union.types.len() == 1
+        && parent_return.type_union.types[0].is_conditional()
+    {
+        let expansion_options = TypeExpansionOptions {
+            self_class: Some(child_class_name),
+            static_class_type: StaticClassType::Name(child_class_name),
+            function_is_final: child_method_meta.is_final,
+            ..Default::default()
+        };
+
+        let mut expanded_child_return_type = child_return.type_union.clone();
+        if expanded_child_return_type.is_expandable() {
+            expand_union(codebase, &mut expanded_child_return_type, &expansion_options);
+        }
+
+        let mut branches = Vec::new();
+        collect_conditional_branches(&parent_return.type_union, &mut branches);
+        for mut branch in branches {
+            if branch.is_expandable() {
+                expand_union(codebase, &mut branch, &expansion_options);
+            }
+
+            if !union_comparator::is_contained_by(
+                codebase,
+                &expanded_child_return_type,
+                &branch,
+                false,
+                false,
+                false,
+                &mut ComparisonResult::new(),
+            ) {
+                issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
+                    child_type: expanded_child_return_type.get_id(),
+                    parent_type: parent_return.type_union.get_id(),
+                });
+                return issues;
+            }
+        }
+    }
+
     issues
+}
+
+fn collect_conditional_branches(union: &TUnion, branches: &mut Vec<TUnion>) {
+    if let [TAtomic::Conditional(conditional)] = union.types.as_ref() {
+        collect_conditional_branches(&conditional.then, branches);
+        collect_conditional_branches(&conditional.otherwise, branches);
+    } else {
+        branches.push(union.clone());
+    }
 }
 
 const fn is_visibility_narrowed(child_visibility: Visibility, parent_visibility: Visibility) -> bool {

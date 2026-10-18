@@ -160,12 +160,28 @@ where
                 ));
             }
 
-            if let Some(inferred_return_type) = inferred_return_type {
-                signature.return_type = Some(Arc::new(inferred_return_type));
+            let resolved_return_type = if let Some(inferred_return_type) = inferred_return_type {
+                inferred_return_type
             } else if inner_has_returned {
-                signature.return_type = Some(Arc::new(get_never()));
+                get_never()
             } else {
-                signature.return_type = Some(Arc::new(get_void()));
+                get_void()
+            };
+
+            let narrows_declared_return_type = signature.return_type.as_ref().is_none_or(|declared_return_type| {
+                union_comparator::is_contained_by(
+                    context.codebase,
+                    &resolved_return_type,
+                    declared_return_type,
+                    false,
+                    false,
+                    false,
+                    &mut ComparisonResult::default(),
+                )
+            });
+
+            if narrows_declared_return_type {
+                signature.return_type = Some(Arc::new(resolved_return_type));
             }
         }
     }

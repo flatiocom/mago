@@ -120,7 +120,8 @@ where
                 // should bind `T = Foo`, mirroring how Psalm/PHPStan coerce literal
                 // strings that name a real class. Only do this when the literal really
                 // names a class-like in the codebase, otherwise leave inference alone.
-                if let Some(literal) = string.get_known_literal_value()
+                if let Some(literal) =
+                    string.get_known_literal_value().map(|literal| literal.strip_prefix(b"\\").unwrap_or(literal))
                     && context.codebase.class_like_exists(literal)
                 {
                     input_objects.push(TClassLikeString::literal(word(literal)).get_object_type(context.codebase));
