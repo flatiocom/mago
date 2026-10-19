@@ -58,6 +58,8 @@ Mago supports two baseline shapes with different precision-vs-resilience trade-o
 
 Groups issues by `(file, code, message)` and stores a count. Resilient to line-number shifts: if you reformat or insert code above an issue, the baseline still matches as long as the same kind of issue still occurs.
 
+A message that names a closure or an anonymous class, such as `{closure:src/Cart.php:42:9}`, is stored without the line and column (`{closure:src/Cart.php}`), so moving the closure does not desync the baseline either.
+
 ```toml
 variant = "loose"
 

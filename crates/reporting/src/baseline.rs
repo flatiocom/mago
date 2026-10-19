@@ -17,9 +17,11 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 use foldhash::HashMap;
 use foldhash::HashSet;
+use regex::Regex;
 use schemars::JsonSchema;
 
 use mago_database::DatabaseReader;
@@ -156,6 +158,16 @@ pub struct BaselineComparisonResult {
 /// This ensures that baselines created on Windows work on Linux and vice versa.
 fn normalize_path(path: &[u8]) -> String {
     String::from_utf8_lossy(path).replace('\\', "/")
+}
+
+#[allow(clippy::unwrap_used)]
+static SYNTHETIC_NAME_POSITION: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{(closure|anonymous-class):([^{}]*):\d+:\d+\}").unwrap());
+
+type LooseBaselineKey = (String, String, String);
+
+fn loose_baseline_key(file: String, code: String, message: &str) -> LooseBaselineKey {
+    (file, code, SYNTHETIC_NAME_POSITION.replace_all(message, "{$1:$2}").into_owned())
 }
 
 impl StrictBaseline {
@@ -386,7 +398,7 @@ impl LooseBaseline {
     /// File paths are normalized to ensure cross-platform compatibility.
     #[must_use]
     pub fn generate_from_issues(issues: &IssueCollection, read_database: &ReadDatabase) -> Self {
-        let mut issue_counts: HashMap<(String, String, String), u32> = HashMap::default();
+        let mut issue_counts: HashMap<LooseBaselineKey, u32> = HashMap::default();
 
         for issue in issues.iter() {
             let Some(annotation) = baseline_annotation(issue) else {
@@ -399,9 +411,8 @@ impl LooseBaseline {
 
             let normalized_path = normalize_path(&file.name);
             let code = issue.code.as_ref().unwrap_or(&String::from("unknown")).clone();
-            let message = issue.message.to_string();
 
-            let key = (normalized_path, code, message);
+            let key = loose_baseline_key(normalized_path, code, &issue.message);
             *issue_counts.entry(key).or_insert(0) += 1;
         }
 
@@ -421,8 +432,7 @@ impl LooseBaseline {
     /// For each (file, code, message) tuple, issues are filtered out up to the count in the baseline.
     #[must_use]
     pub fn filter_issues(&self, issues: IssueCollection, read_database: &ReadDatabase) -> IssueCollection {
-        let mut remaining_counts: HashMap<(String, String, String), u32> =
-            self.issues.iter().map(|i| ((i.file.clone(), i.code.clone(), i.message.clone()), i.count)).collect();
+        let mut remaining_counts = self.counts_by_key();
 
         let mut filtered_issues = Vec::new();
 
@@ -439,7 +449,7 @@ impl LooseBaseline {
 
             let normalized_path = normalize_path(&file.name);
             let code = issue.code.as_ref().unwrap_or(&String::from("unknown")).clone();
-            let key = (normalized_path, code, issue.message.to_string());
+            let key = loose_baseline_key(normalized_path, code, &issue.message);
 
             if let Some(count) = remaining_counts.get_mut(&key)
                 && *count > 0
@@ -464,13 +474,8 @@ impl LooseBaseline {
         issues: &IssueCollection,
         read_database: &ReadDatabase,
     ) -> BaselineComparisonResult {
-        let current = Self::generate_from_issues(issues, read_database);
-
-        let current_map: HashMap<_, _> =
-            current.issues.iter().map(|i| ((i.file.clone(), i.code.clone(), i.message.clone()), i.count)).collect();
-
-        let baseline_map: HashMap<_, _> =
-            self.issues.iter().map(|i| ((i.file.clone(), i.code.clone(), i.message.clone()), i.count)).collect();
+        let current_map = Self::generate_from_issues(issues, read_database).counts_by_key();
+        let baseline_map = self.counts_by_key();
 
         let mut new_issues: Vec<BaselineChangeEntry> = vec![];
         let mut removed_issues: Vec<BaselineChangeEntry> = vec![];
@@ -524,36 +529,36 @@ impl LooseBaseline {
     /// are dropped. The second tuple element is the number of stale occurrences removed.
     #[must_use]
     pub fn prune_outdated_entries(&self, issues: &IssueCollection, read_database: &ReadDatabase) -> (Self, usize) {
-        let current = Self::generate_from_issues(issues, read_database);
-        let current_counts: HashMap<(String, String, String), u32> = current
-            .issues
-            .iter()
-            .map(|issue| ((issue.file.clone(), issue.code.clone(), issue.message.to_string()), issue.count))
-            .collect();
+        let current_counts = Self::generate_from_issues(issues, read_database).counts_by_key();
 
         let mut kept: Vec<LooseBaselineIssue> = Vec::new();
         let mut removed_count = 0;
 
-        for issue in &self.issues {
-            let key = (issue.file.clone(), issue.code.clone(), issue.message.to_string());
+        for (key, count) in self.counts_by_key() {
             let current_count = current_counts.get(&key).copied().unwrap_or(0);
-            let new_count = issue.count.min(current_count);
+            let new_count = count.min(current_count);
 
-            removed_count += (issue.count - new_count) as usize;
+            removed_count += (count - new_count) as usize;
 
             if new_count > 0 {
-                kept.push(LooseBaselineIssue {
-                    file: issue.file.clone(),
-                    code: issue.code.clone(),
-                    message: issue.message.to_string(),
-                    count: new_count,
-                });
+                let (file, code, message) = key;
+                kept.push(LooseBaselineIssue { file, code, message, count: new_count });
             }
         }
 
         kept.sort();
 
         (Self { variant: BaselineVariant::Loose, issues: kept }, removed_count)
+    }
+
+    fn counts_by_key(&self) -> HashMap<LooseBaselineKey, u32> {
+        let mut counts: HashMap<LooseBaselineKey, u32> = HashMap::default();
+        for issue in &self.issues {
+            let key = loose_baseline_key(issue.file.clone(), issue.code.clone(), &issue.message);
+            *counts.entry(key).or_insert(0) += issue.count;
+        }
+
+        counts
     }
 }
 
@@ -924,5 +929,95 @@ mod tests {
         assert_eq!(pruned.issues.len(), 1, "the new `E500` issue must not be added");
         assert_eq!(pruned.issues[0].code, "E001");
         assert_eq!(pruned.issues[0].count, 1, "the count must be capped at the current occurrences");
+    }
+
+    fn closure_issues(file_id: FileId, closure_lines: &[u32]) -> IssueCollection {
+        let mut issues = IssueCollection::new();
+        for line in closure_lines {
+            let message = format!("Argument #1 of `{{closure:test.php:{line}:5}}` is invalid.");
+            issues.push(create_test_issue_with_message(file_id, "E001", &message, 0, 5));
+        }
+
+        issues
+    }
+
+    #[test]
+    fn test_loose_baseline_stays_in_sync_when_a_closure_moves() {
+        let (db, file_id) = create_test_database();
+        let read_db = db.read_only();
+
+        let mut issues = closure_issues(file_id, &[3]);
+        issues.push(create_test_issue_with_message(
+            file_id,
+            "E002",
+            "`{anonymous-class:test.php:2:1}` is invalid.",
+            0,
+            5,
+        ));
+        let baseline = LooseBaseline::generate_from_issues(&issues, &read_db);
+
+        assert_eq!(baseline.issues[0].message, "Argument #1 of `{closure:test.php}` is invalid.");
+        assert_eq!(baseline.issues[1].message, "`{anonymous-class:test.php}` is invalid.");
+
+        let mut moved = closure_issues(file_id, &[1]);
+        moved.push(create_test_issue_with_message(
+            file_id,
+            "E002",
+            "`{anonymous-class:test.php:4:3}` is invalid.",
+            0,
+            5,
+        ));
+
+        assert!(baseline.compare_with_issues(&moved, &read_db).is_up_to_date);
+        assert_eq!(baseline.filter_issues(moved, &read_db).len(), 0);
+    }
+
+    #[test]
+    fn test_loose_baseline_reports_a_new_issue_in_a_moved_closure() {
+        let (db, file_id) = create_test_database();
+        let read_db = db.read_only();
+
+        let baseline = LooseBaseline::generate_from_issues(&closure_issues(file_id, &[3]), &read_db);
+        let moved = closure_issues(file_id, &[4, 4]);
+
+        assert_eq!(baseline.compare_with_issues(&moved, &read_db).new_issues.len(), 1);
+        assert_eq!(baseline.filter_issues(moved, &read_db).len(), 1);
+    }
+
+    #[test]
+    fn test_loose_baseline_reports_a_fixed_issue_in_a_moved_closure() {
+        let (db, file_id) = create_test_database();
+        let read_db = db.read_only();
+
+        let baseline = LooseBaseline::generate_from_issues(&closure_issues(file_id, &[3, 3]), &read_db);
+        let result = baseline.compare_with_issues(&closure_issues(file_id, &[2]), &read_db);
+
+        assert!(!result.is_up_to_date);
+        assert_eq!(result.removed_issues.len(), 1);
+    }
+
+    #[test]
+    fn test_loose_baseline_merges_entries_written_with_closure_positions() {
+        let (db, file_id) = create_test_database();
+        let read_db = db.read_only();
+
+        let positioned_entry = |line: u32| LooseBaselineIssue {
+            file: "test.php".to_string(),
+            code: "E001".to_string(),
+            message: format!("Argument #1 of `{{closure:test.php:{line}:5}}` is invalid."),
+            count: 1,
+        };
+        let baseline =
+            LooseBaseline { variant: BaselineVariant::Loose, issues: vec![positioned_entry(3), positioned_entry(9)] };
+        let moved = closure_issues(file_id, &[4, 10]);
+
+        assert!(baseline.compare_with_issues(&moved, &read_db).is_up_to_date);
+
+        let (pruned, removed) = baseline.prune_outdated_entries(&moved, &read_db);
+
+        assert_eq!(removed, 0);
+        assert_eq!(pruned.issues.len(), 1);
+        assert_eq!(pruned.issues[0].message, "Argument #1 of `{closure:test.php}` is invalid.");
+        assert_eq!(pruned.issues[0].count, 2);
     }
 }
