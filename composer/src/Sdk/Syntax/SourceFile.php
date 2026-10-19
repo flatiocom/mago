@@ -120,6 +120,10 @@ final class SourceFile
      */
     public function getDescendants(Node $node, ?NodeKind $kind = null): array
     {
+        if ($kind !== null) {
+            return $this->nodes->getDescendants($node, $kind);
+        }
+
         $descendants = [];
         $stack = [$node];
         while (($current = array_pop($stack)) !== null) {
@@ -127,7 +131,7 @@ final class SourceFile
             for ($index = count($children) - 1; $index >= 0; --$index) {
                 $stack[] = $children[$index];
             }
-            if ($current !== $node && ($kind === null || $current->kind === $kind)) {
+            if ($current !== $node) {
                 $descendants[] = $current;
             }
         }
@@ -140,24 +144,7 @@ final class SourceFile
      */
     public function getFirstDescendant(Node $node, NodeKind $kind): ?Node
     {
-        $stack = [];
-        $children = $this->getChildren($node);
-        for ($index = count($children) - 1; $index >= 0; --$index) {
-            $stack[] = $children[$index];
-        }
-
-        while (($current = array_pop($stack)) !== null) {
-            if ($current->kind === $kind) {
-                return $current;
-            }
-
-            $children = $this->getChildren($current);
-            for ($index = count($children) - 1; $index >= 0; --$index) {
-                $stack[] = $children[$index];
-            }
-        }
-
-        return null;
+        return $this->nodes->getFirstDescendant($node, $kind);
     }
 
     public function getText(Node|Span $selection): string

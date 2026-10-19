@@ -9,6 +9,8 @@ use Mago\Sdk\Span;
 use Mago\Sdk\Syntax\Node;
 use Mago\Sdk\Syntax\NodeKind;
 
+use function array_slice;
+use function count;
 use function ord;
 use function unpack;
 
@@ -17,12 +19,20 @@ use function unpack;
  *
  * @internal
  * @mago-expect lint:cyclomatic-complexity
+ * @mago-expect lint:kan-defect
+ * @mago-expect lint:too-many-methods
  */
 final class NodeStore
 {
     public const RECORD_SIZE = 21;
 
     private const NO_NODE = 4_294_967_295;
+
+    private const PARENT_OFFSET = 9;
+
+    private const FIRST_CHILD_OFFSET = 13;
+
+    private const NEXT_SIBLING_OFFSET = 17;
 
     /**
      * @var array<int<0, max>, Node>
@@ -38,6 +48,11 @@ final class NodeStore
      * @var array<string, list<Node>>
      */
     private array $nodesByKind = [];
+
+    /**
+     * @var array<int, int>
+     */
+    private array $lastIdsOfRoots = [];
 
     /**
      * @param list<NodeKind> $kinds
@@ -127,6 +142,29 @@ final class NodeStore
     }
 
     /**
+     * @return list<Node>
+     */
+    public function getDescendants(Node $node, NodeKind $kind): array
+    {
+        $ids = $this->getIdsOfKind($kind);
+        $offset = self::positionAfter($ids, $node->id);
+        $length = self::positionAfter($ids, $this->getLastIdInSubtree($node->id)) - $offset;
+
+        return $this->getMany(array_slice($ids, $offset, $length));
+    }
+
+    public function getFirstDescendant(Node $node, NodeKind $kind): ?Node
+    {
+        $ids = $this->getIdsOfKind($kind);
+        $id = $ids[self::positionAfter($ids, $node->id)] ?? null;
+        if ($id === null || $id > $this->getLastIdInSubtree($node->id)) {
+            return null;
+        }
+
+        return $this->get($id);
+    }
+
+    /**
      * @return list<int<0, 4294967295>>
      */
     private function getIdsOfKind(NodeKind $kind): array
@@ -142,6 +180,66 @@ final class NodeStore
         }
 
         return $this->idsByKind[$kind->value] ?? [];
+    }
+
+    /**
+     * @param list<int<0, 4294967295>> $ids
+     *
+     * @return int<0, max>
+     */
+    private static function positionAfter(array $ids, int $id): int
+    {
+        $low = 0;
+        $high = count($ids);
+        while ($low < $high) {
+            $middle = ($low + $high) >> 1;
+            if ($ids[$middle] <= $id) {
+                $low = $middle + 1;
+                continue;
+            }
+
+            $high = $middle;
+        }
+
+        return $low;
+    }
+
+    private function getLastIdInSubtree(int $id): int
+    {
+        while (($sibling = $this->getLink($id, self::NEXT_SIBLING_OFFSET)) === self::NO_NODE) {
+            $parent = $this->getLink($id, self::PARENT_OFFSET);
+            if ($parent === self::NO_NODE) {
+                return $this->lastIdsOfRoots[$id] ??= $this->getLastLeaf($id);
+            }
+
+            $id = $parent;
+        }
+
+        return $sibling - 1;
+    }
+
+    private function getLastLeaf(int $id): int
+    {
+        while (($child = $this->getLink($id, self::FIRST_CHILD_OFFSET)) !== self::NO_NODE) {
+            while (($sibling = $this->getLink($child, self::NEXT_SIBLING_OFFSET)) !== self::NO_NODE) {
+                $child = $sibling;
+            }
+
+            $id = $child;
+        }
+
+        return $id;
+    }
+
+    /**
+     * @return int<0, 4294967295>
+     */
+    private function getLink(int $id, int $linkOffset): int
+    {
+        /** @var array{1: int<0, 4294967295>} $decoded */
+        $decoded = unpack('N', $this->records, ($id * self::RECORD_SIZE) + $linkOffset);
+
+        return $decoded[1];
     }
 
     /**
