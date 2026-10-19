@@ -30,6 +30,16 @@ final class NodeStore
     private array $nodes = [];
 
     /**
+     * @var null|array<string, list<int<0, 4294967295>>>
+     */
+    private ?array $idsByKind = null;
+
+    /**
+     * @var array<string, list<Node>>
+     */
+    private array $nodesByKind = [];
+
+    /**
      * @param list<NodeKind> $kinds
      * @param int<0, 4294967295> $nodeCount
      */
@@ -84,12 +94,12 @@ final class NodeStore
      */
     public function getAll(?NodeKind $kind = null): array
     {
-        $nodes = [];
-        for ($id = 0, $offset = 0; $id < $this->nodeCount; ++$id, $offset += self::RECORD_SIZE) {
-            if ($kind !== null && $this->kinds[ord($this->records[$offset])] !== $kind) {
-                continue;
-            }
+        if ($kind !== null) {
+            return $this->nodesByKind[$kind->value] ??= $this->getMany($this->getIdsOfKind($kind));
+        }
 
+        $nodes = [];
+        for ($id = 0; $id < $this->nodeCount; ++$id) {
             $nodes[] = $this->nodes[$id] ??= $this->materialize($id);
         }
 
@@ -114,6 +124,24 @@ final class NodeStore
         }
 
         return $children;
+    }
+
+    /**
+     * @return list<int<0, 4294967295>>
+     */
+    private function getIdsOfKind(NodeKind $kind): array
+    {
+        if ($this->idsByKind === null) {
+            $idsByKind = [];
+            for ($id = 0, $offset = 0; $id < $this->nodeCount; ++$id, $offset += self::RECORD_SIZE) {
+                $idsByKind[$this->kinds[ord($this->records[$offset])]->value][] = $id;
+            }
+
+            /** @var array<string, list<int<0, 4294967295>>> $idsByKind */
+            $this->idsByKind = $idsByKind;
+        }
+
+        return $this->idsByKind[$kind->value] ?? [];
     }
 
     /**
