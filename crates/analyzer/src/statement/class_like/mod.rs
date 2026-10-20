@@ -89,6 +89,14 @@ fn report_duplicate_definition<A>(
 ) where
     A: Arena,
 {
+    if context
+        .codebase
+        .get_class_like(name)
+        .is_some_and(|metadata| !metadata.original_name.as_bytes().eq_ignore_ascii_case(name))
+    {
+        return;
+    }
+
     let name = BytesDisplay(name);
     context.collector.report_with_code(
         IssueCode::DuplicateDefinition,

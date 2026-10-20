@@ -35,7 +35,7 @@ where
     };
 
     let canonical = metadata.original_name;
-    if canonical == used_name {
+    if canonical == used_name || !canonical.as_bytes().eq_ignore_ascii_case(used_name.as_bytes()) {
         return;
     }
 

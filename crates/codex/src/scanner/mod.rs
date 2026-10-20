@@ -23,6 +23,7 @@ use mago_syntax::cst::FunctionCall;
 use mago_syntax::cst::If;
 use mago_syntax::cst::IfBody;
 use mago_syntax::cst::Interface;
+use mago_syntax::cst::Literal;
 use mago_syntax::cst::Method;
 use mago_syntax::cst::Namespace;
 use mago_syntax::cst::Program;
@@ -287,6 +288,7 @@ where
         self.walk_expression(r#if.condition, context);
 
         let guard = classify_polyfill_guard(r#if.condition);
+        let is_never_taken = matches!(r#if.condition.unparenthesized(), Expression::Literal(Literal::False(_)));
 
         match &r#if.body {
             IfBody::Statement(body) => {
@@ -294,7 +296,9 @@ where
                 if then_polyfill {
                     self.polyfill_depth = self.polyfill_depth.saturating_add(1);
                 }
-                self.walk_statement(body.statement, context);
+                if !is_never_taken || (body.else_if_clauses.is_empty() && body.else_clause.is_none()) {
+                    self.walk_statement(body.statement, context);
+                }
                 if then_polyfill {
                     self.polyfill_depth = self.polyfill_depth.saturating_sub(1);
                 }
@@ -319,8 +323,10 @@ where
                 if then_polyfill {
                     self.polyfill_depth = self.polyfill_depth.saturating_add(1);
                 }
-                for statement in &body.statements {
-                    self.walk_statement(statement, context);
+                if !is_never_taken || (body.else_if_clauses.is_empty() && body.else_clause.is_none()) {
+                    for statement in &body.statements {
+                        self.walk_statement(statement, context);
+                    }
                 }
                 if then_polyfill {
                     self.polyfill_depth = self.polyfill_depth.saturating_sub(1);

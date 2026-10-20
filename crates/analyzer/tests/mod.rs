@@ -2517,6 +2517,7 @@ test_case!(issue_1038);
 test_case!(issue_1040);
 test_case!(issue_1045);
 test_case!(class_like_casing_in_type_hints, crate::framework::check_name_casing_settings());
+test_case!(class_alias_replaces_dead_stub, crate::framework::check_name_casing_settings());
 test_case!(issue_1048, {
     let mut s = crate::framework::default_test_settings();
     s.check_name_casing = true;
