@@ -4,6 +4,7 @@ use mago_word::WordMap;
 use crate::metadata::CodebaseMetadata;
 use crate::metadata::flags::MetadataFlags;
 use crate::metadata::inherited_methods::inheritance_depth;
+use crate::populator::overriding_deprecation;
 
 /// DocBlock flags that patches may change on any declaration.
 pub(crate) const PATCHABLE_COMMON_DOCBLOCK_FLAGS: MetadataFlags = MetadataFlags::from_bits(
@@ -87,15 +88,23 @@ pub(super) fn propagate_inherited_docblock_flags(codebase: &mut CodebaseMetadata
                 metadata.flags.insert(MetadataFlags::CONSISTENT_TEMPLATES);
             }
             for &(name, span, flags, explicit) in &constants {
-                if let Some(constant) = metadata.constants.get_mut(&name)
-                    && constant.span == span
-                {
-                    merge_explicit_docblock_flags(
-                        &mut constant.flags,
-                        flags,
-                        explicit,
-                        PATCHABLE_COMMON_DOCBLOCK_FLAGS,
-                    );
+                if let Some(constant) = metadata.constants.get_mut(&name) {
+                    if constant.span == span {
+                        merge_explicit_docblock_flags(
+                            &mut constant.flags,
+                            flags,
+                            explicit,
+                            PATCHABLE_COMMON_DOCBLOCK_FLAGS,
+                        );
+                    } else if explicit.contains(MetadataFlags::DEPRECATED)
+                        && let Some(deprecated) = overriding_deprecation(
+                            constant.explicit_docblock_flags,
+                            &constant.attributes,
+                            flags.is_deprecated(),
+                        )
+                    {
+                        constant.flags.set(MetadataFlags::DEPRECATED, deprecated);
+                    }
                 }
             }
             for &(name, span, flags, explicit) in &properties {

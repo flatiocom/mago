@@ -135,6 +135,7 @@ fn analyze_invocation_targets<'ctx, 'arena, A>(
     encountered_mixed_targets: bool,
     should_add_null: bool,
     object_has_nullsafe_null: bool,
+    report_deprecation: bool,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
@@ -184,6 +185,7 @@ where
                 call_span,
                 this_variable,
                 class_related_argument_variables.as_ref(),
+                report_deprecation,
             )
         });
 
@@ -268,6 +270,7 @@ fn analyze_invocation_target<'ctx, 'ast, 'arena, A>(
     call_span: Span,
     this_variable: Option<Word>,
     class_related_argument_variables: Option<&WordSet>,
+    report_deprecation: bool,
 ) -> Result<TUnion, AnalysisError>
 where
     A: Arena,
@@ -333,6 +336,7 @@ where
         template_result,
         &argument_types,
         true,
+        report_deprecation,
     )?;
 
     Ok(return_type)

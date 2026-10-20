@@ -25,7 +25,8 @@ use crate::expression::unary::cast_type_to_string;
 use crate::resolver::class_name::resolve_classnames_from_expression;
 use crate::resolver::property::PropertyResolutionResult;
 use crate::resolver::property::ResolvedProperty;
-use crate::resolver::property::report_deprecated_property;
+use crate::utils::deprecation::report_deprecated_property;
+use crate::utils::deprecation::report_static_property_on_deprecated_class;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_variable_id;
 use crate::visibility::check_static_property_read_visibility;
@@ -304,6 +305,16 @@ where
 
     if check_deprecation && !block_context.is_enclosing_scope_deprecated() {
         report_deprecated_property(context, declaring_class_metadata, property_metadata, variable.span());
+
+        if let Expression::Identifier(_) = class_expr.unparenthesized() {
+            report_static_property_on_deprecated_class(
+                context,
+                class_metadata,
+                declaring_class_metadata,
+                property_metadata,
+                variable.span(),
+            );
+        }
     }
 
     let type_metadata = if context.native_types_only {

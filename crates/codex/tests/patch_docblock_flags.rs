@@ -273,6 +273,58 @@ fn builtin_constant_flag_patches_respect_descendant_overrides() {
 }
 
 #[test]
+fn deprecation_patches_reach_overriding_descendants() {
+    let mut codebase = scan(
+        b"vendor.php",
+        FileType::Vendored,
+        "<?php
+            class P {
+                /** @deprecated */
+                public const X = 1;
+                /** @deprecated */
+                public int $x = 1;
+            }
+            class Own extends P {
+                public const X = 2;
+                public int $x = 2;
+            }
+            class Kept extends P {
+                /** @deprecated */
+                public const X = 3;
+                /** @deprecated */
+                public int $x = 3;
+            }
+        ",
+    );
+    populate(&mut codebase);
+    for name in ["own", "kept"] {
+        let class = &codebase.class_likes[&word(name)];
+        assert!(class.constants[&word("X")].flags.is_deprecated(), "{name}");
+        assert!(class.properties[&word("$x")].flags.is_deprecated(), "{name}");
+    }
+
+    codebase.extend(scan(
+        b"patch.php",
+        FileType::Patch,
+        "<?php
+            class P {
+                /** @not-deprecated */
+                public const X = 1;
+                /** @not-deprecated */
+                public int $x = 1;
+            }
+        ",
+    ));
+    codebase.apply_patches_pass();
+    populate_cached(&mut codebase, true);
+
+    let own = &codebase.class_likes[&word("own")];
+    assert!(!own.constants[&word("X")].flags.is_deprecated());
+    assert!(!own.properties[&word("$x")].flags.is_deprecated());
+    assert!(codebase.class_likes[&word("kept")].constants[&word("X")].flags.is_deprecated());
+}
+
+#[test]
 fn builtin_flag_patches_preserve_cached_descendant_docblocks() {
     for targeted in [false, true] {
         let mut codebase = scan(

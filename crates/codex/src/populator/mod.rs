@@ -29,6 +29,8 @@ mod sorter;
 mod templates;
 mod trait_hosts;
 
+pub(crate) use docblock::overriding_deprecation;
+
 #[cfg(test)]
 mod ancestry_tests;
 
@@ -374,6 +376,7 @@ fn populate_codebase_inner(
         if !incremental || !class_likes_to_repopulate.is_empty() {
             docblock::inherit_method_docblocks(codebase, &safe_symbols, Some(&class_likes_to_repopulate), parallel);
             docblock::inherit_property_docblocks(codebase, &safe_symbols, Some(&class_likes_to_repopulate), parallel);
+            docblock::inherit_constant_deprecations(codebase, &safe_symbols, Some(&class_likes_to_repopulate));
         }
         trace_phase!("docblocks");
     } else if parallel && rayon::current_num_threads() > 1 {
@@ -448,6 +451,7 @@ fn populate_codebase_inner(
                 if !incremental || !class_likes_to_repopulate.is_empty() {
                     docblock::inherit_method_docblocks(codebase, &safe_symbols, None, true);
                     docblock::inherit_property_docblocks(codebase, &safe_symbols, None, true);
+                    docblock::inherit_constant_deprecations(codebase, &safe_symbols, None);
                 }
             },
         );
@@ -536,6 +540,7 @@ fn populate_codebase_inner(
         if !incremental || !class_likes_to_repopulate.is_empty() {
             docblock::inherit_method_docblocks(codebase, &safe_symbols, None, parallel);
             docblock::inherit_property_docblocks(codebase, &safe_symbols, None, parallel);
+            docblock::inherit_constant_deprecations(codebase, &safe_symbols, None);
         }
         trace_phase!("docblocks");
     }

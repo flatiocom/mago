@@ -361,6 +361,7 @@ where
             &template_result,
             &argument_types,
             true,
+            true,
         )?;
 
         if !check_method_visibility_by_id(
@@ -601,6 +602,7 @@ where
             None,
             &template_result,
             &argument_types,
+            true,
             true,
         )?;
     } else if let Some(argument_list) = argument_list

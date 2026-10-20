@@ -259,7 +259,9 @@ impl<'ctx> BlockContext<'ctx> {
     }
 
     pub fn is_enclosing_scope_deprecated(&self) -> bool {
-        if self.scope.get_function_like().is_some_and(|function_like| function_like.flags.is_deprecated()) {
+        if self.flags.inside_deprecated_scope()
+            || self.scope.get_function_like().is_some_and(|function_like| function_like.flags.is_deprecated())
+        {
             return true;
         }
 

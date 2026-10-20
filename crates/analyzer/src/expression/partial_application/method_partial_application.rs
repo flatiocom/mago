@@ -27,6 +27,7 @@ use crate::invocation::MethodTargetContext;
 use crate::invocation::analyzer::analyze_invocation;
 use crate::invocation::template_result::populate_template_result_from_invocation;
 use crate::resolver::method::resolve_method_targets;
+use crate::utils::deprecation::report_deprecated_function_like;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for MethodPartialApplication<'arena> {
     #[allow(clippy::expect_used)]
@@ -75,6 +76,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for MethodPartialApplication<'arena>
                 let Some(method_metadata) = context.codebase.get_function_like(&identifier) else {
                     continue;
                 };
+
+                if !block_context.is_enclosing_scope_deprecated() {
+                    report_deprecated_function_like(context, &identifier, method_metadata, None, self.method.span());
+                }
 
                 let class_metadata = context
                     .codebase

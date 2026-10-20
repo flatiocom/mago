@@ -62,6 +62,7 @@ use crate::invocation::Invocation;
 use crate::invocation::InvocationArgumentsSource;
 use crate::invocation::InvocationTarget;
 use crate::invocation::MethodInvocationKind;
+use crate::invocation::MethodTargetContext;
 use crate::invocation::arguments::is_argument_mutated_by_reference;
 use crate::invocation::arguments::is_argument_referenceable;
 use crate::invocation::arguments::is_array_multisort;
@@ -69,6 +70,7 @@ use crate::invocation::resolver::resolve_invocation_type;
 use crate::plugin::provider::assertion::InvocationAssertions;
 use crate::reconciler;
 use crate::reconciler::assertion_reconciler::intersect_union_with_union;
+use crate::utils::deprecation::report_deprecated_function_like;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_non_nullsafe_expression_id;
 use crate::utils::expression::get_nullsafe_base_expressions;
@@ -83,6 +85,7 @@ pub fn post_invocation_process<'ctx, 'arena, A>(
     template_result: &TemplateResult,
     parameters: &WordMap<TUnion>,
     apply_assertions: bool,
+    report_deprecation: bool,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
@@ -105,28 +108,17 @@ where
     };
     let full_callable_name = OnceCell::new();
 
-    if metadata.flags.is_deprecated() && !block_context.is_enclosing_scope_deprecated() {
-        let full_callable_name =
-            full_callable_name.get_or_init(|| display_callable_name(context, identifier, metadata.original_name));
-        let issue_kind = match identifier {
-            FunctionLikeIdentifier::Function(_) => IssueCode::DeprecatedFunction,
-            FunctionLikeIdentifier::Method(_, _) => IssueCode::DeprecatedMethod,
-            FunctionLikeIdentifier::Closure(_) => IssueCode::DeprecatedClosure,
+    if report_deprecation && !block_context.is_enclosing_scope_deprecated() {
+        let static_class = match &invoication.target {
+            InvocationTarget::FunctionLike {
+                method_context:
+                    Some(MethodTargetContext { invocation_kind: MethodInvocationKind::Static, class_like_metadata, .. }),
+                ..
+            } => Some(*class_like_metadata),
+            _ => None,
         };
 
-        context.collector.report_with_code(
-            issue_kind,
-            Issue::warning(format!("Call to deprecated {callable_kind_str}: {full_callable_name}."))
-                .with_annotation(
-                    Annotation::primary(invoication.target.span()).with_message(format!("This {callable_kind_str} is deprecated")),
-                )
-                .with_note(format!(
-                    "The {callable_kind_str} {full_callable_name} is marked as deprecated and may be removed or its behavior changed in future versions."
-                ))
-                .with_help(format!(
-                    "Consult the documentation for {full_callable_name} for alternatives or migration instructions."
-                )),
-        );
+        report_deprecated_function_like(context, identifier, metadata, static_class, invoication.target.span());
     }
 
     // Report if named arguments are used where not allowed
@@ -352,7 +344,7 @@ where
     )
 }
 
-fn display_callable_name<A>(
+pub(crate) fn display_callable_name<A>(
     context: &Context<'_, '_, A>,
     identifier: &FunctionLikeIdentifier,
     original_name: Word,

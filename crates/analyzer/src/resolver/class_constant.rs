@@ -2,7 +2,6 @@ use mago_allocator::Arena;
 use mago_word::Word;
 
 use mago_codex::metadata::class_like::ClassLikeMetadata;
-use mago_codex::metadata::class_like_constant::ClassLikeConstantMetadata;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::generic::TGenericParameter;
 use mago_codex::ttype::atomic::object::TObject;
@@ -36,6 +35,9 @@ use crate::resolver::class_name::ResolvedClassname;
 use crate::resolver::class_name::resolve_classnames_from_expression;
 use crate::resolver::selector::ResolvedSelector;
 use crate::resolver::selector::resolve_constant_selector;
+use crate::utils::deprecation::report_class_name_of_deprecated_class;
+use crate::utils::deprecation::report_deprecated_class_constant;
+use crate::utils::deprecation::report_deprecated_class_constant_metadata;
 use crate::utils::names::display_class_like_name;
 use crate::visibility::check_class_constant_visibility;
 
@@ -96,6 +98,13 @@ where
             if let ResolvedSelector::Identifier(const_name) = selector_resolution
                 && const_name.as_bytes().eq_ignore_ascii_case(b"class")
             {
+                if class_resolution.origin == (ResolutionOrigin::Named { is_self: false, is_parent: false })
+                    && let Some(fq_class_id) = class_resolution.fqcn
+                    && !block_context.is_enclosing_scope_deprecated()
+                {
+                    report_class_name_of_deprecated_class(context, fq_class_id, class_expr.span());
+                }
+
                 if let Some(const_type) =
                     handle_class_magic_constant(context, artifacts, class_resolution, class_expr, constant_selector)
                 {
@@ -342,7 +351,13 @@ where
     // Check for a defined constant
     if let Some(constant_metadata) = metadata.constants.get(&const_name) {
         if !block_context.is_enclosing_scope_deprecated() {
-            report_deprecated_class_constant(context, metadata, constant_metadata, const_span);
+            report_deprecated_class_constant_metadata(
+                context,
+                metadata,
+                constant_metadata,
+                matches!(resolution_origin, ResolutionOrigin::Named { is_self: false, is_parent: false }),
+                const_span,
+            );
         }
 
         check_class_constant_visibility(
@@ -394,6 +409,18 @@ where
     if metadata.kind.is_enum()
         && let Some(enum_case_metadata) = metadata.enum_cases.get(&const_name)
     {
+        if !block_context.is_enclosing_scope_deprecated() {
+            report_deprecated_class_constant(
+                context,
+                metadata,
+                const_name,
+                Some(enum_case_metadata.span),
+                enum_case_metadata.flags.is_deprecated(),
+                false,
+                const_span,
+            );
+        }
+
         let display = format!("{}::{}", metadata.original_name, const_name);
         crate::utils::availability::check_enum_case_availability(context, enum_case_metadata, &display, const_span);
 
@@ -415,7 +442,13 @@ where
 
         if let Some(constant_metadata) = required_metadata.constants.get(&const_name) {
             if !block_context.is_enclosing_scope_deprecated() {
-                report_deprecated_class_constant(context, required_metadata, constant_metadata, const_span);
+                report_deprecated_class_constant_metadata(
+                    context,
+                    required_metadata,
+                    constant_metadata,
+                    false,
+                    const_span,
+                );
             }
 
             check_class_constant_visibility(
@@ -482,27 +515,6 @@ where
     // Not found, report error.
     report_non_existent_constant(context, metadata, const_name, class_span, const_span);
     None
-}
-
-fn report_deprecated_class_constant<A>(
-    context: &mut Context<'_, '_, A>,
-    class_metadata: &ClassLikeMetadata,
-    constant_metadata: &ClassLikeConstantMetadata,
-    span: Span,
-) where
-    A: Arena,
-{
-    if !constant_metadata.flags.is_deprecated() {
-        return;
-    }
-
-    let name = format!("{}::{}", class_metadata.original_name, constant_metadata.name);
-    context.collector.report_with_code(
-        IssueCode::DeprecatedClassConstant,
-        Issue::warning(format!("Use of deprecated class constant `{name}`."))
-            .with_annotation(Annotation::primary(span).with_message("This class constant is deprecated"))
-            .with_help(format!("Check the documentation for `{name}` for a replacement.")),
-    );
 }
 
 /// Reports an error for a class-like that cannot be found in the codebase.

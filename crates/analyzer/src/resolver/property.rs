@@ -52,6 +52,7 @@ use crate::error::AnalysisError;
 use crate::external::PropertyAccessKind;
 use crate::resolver::class_name::report_non_existent_class_like;
 use crate::resolver::selector::resolve_member_selector;
+use crate::utils::deprecation::report_deprecated_property;
 use crate::utils::names::display_class_like_name;
 use crate::utils::template::get_template_types_for_class_member;
 use crate::visibility::check_resolved_property_read_visibility;
@@ -1381,27 +1382,6 @@ where
         is_magic: resolution.is_magic(),
         read_type,
     })
-}
-
-pub(crate) fn report_deprecated_property<A>(
-    context: &mut Context<'_, '_, A>,
-    class_metadata: &ClassLikeMetadata,
-    property_metadata: &PropertyMetadata,
-    span: Span,
-) where
-    A: Arena,
-{
-    if !property_metadata.flags.is_deprecated() {
-        return;
-    }
-
-    let name = format!("{}::{}", class_metadata.original_name, property_metadata.name.0);
-    context.collector.report_with_code(
-        IssueCode::DeprecatedProperty,
-        Issue::warning(format!("Use of deprecated property `{name}`."))
-            .with_annotation(Annotation::primary(span).with_message("This property is deprecated"))
-            .with_help(format!("Check the documentation for `{name}` for a replacement.")),
-    );
 }
 
 /// Records references to child properties that can satisfy a `property_exists()` assertion.

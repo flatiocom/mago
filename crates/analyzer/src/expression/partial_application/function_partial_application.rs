@@ -32,6 +32,7 @@ use crate::invocation::InvocationArgumentsSource;
 use crate::invocation::InvocationTarget;
 use crate::invocation::InvocationTargetParameter;
 use crate::invocation::analyzer::analyze_invocation;
+use crate::utils::deprecation::report_deprecated_function_like;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for FunctionPartialApplication<'arena> {
     fn analyze<'ctx, A>(
@@ -48,6 +49,19 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for FunctionPartialApplication<'aren
                 .into_iter()
                 .map(std::borrow::Cow::into_owned)
                 .collect();
+
+        if self.argument_list.is_first_class_callable()
+            && let Expression::Identifier(_) = self.function
+            && !block_context.is_enclosing_scope_deprecated()
+        {
+            for callable in &callables {
+                if let TCallable::Alias(identifier) = callable
+                    && let Some(metadata) = context.codebase.get_function_like(identifier)
+                {
+                    report_deprecated_function_like(context, identifier, metadata, None, self.function.span());
+                }
+            }
+        }
 
         let resulting_type = if self.argument_list.is_first_class_callable() {
             let callable_types: Vec<TAtomic> = callables

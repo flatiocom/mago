@@ -1417,6 +1417,24 @@ fn check_class_like_implements<'ctx, 'arena, A>(
                 continue;
             }
 
+            if implemented_metadata.flags.is_deprecated() && !class_like_metadata.flags.is_deprecated() {
+                context.collector.report_with_code(
+                    IssueCode::DeprecatedClass,
+                    Issue::warning(format!("Use of deprecated interface `{implemented_name}` in `implements` clause"))
+                        .with_annotation(
+                            Annotation::primary(implemented_type.span())
+                                .with_message("This interface is marked as deprecated"),
+                        )
+                        .with_annotation(
+                            Annotation::secondary(implemented_class_span)
+                                .with_message(format!("`{implemented_name}` was marked deprecated here")),
+                        )
+                        .with_help(
+                            "Consider implementing another interface, or consult its documentation for alternatives.",
+                        ),
+                );
+            }
+
             if context.settings.check_experimental
                 && implemented_metadata.flags.is_experimental()
                 && !class_like_metadata.flags.is_experimental()

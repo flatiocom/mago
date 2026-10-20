@@ -18,8 +18,9 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::resolver::class_name::get_class_name_from_atomic;
-use crate::resolver::property::report_deprecated_property;
 use crate::resolver::static_property::resolve_static_properties;
+use crate::utils::deprecation::report_deprecated_property;
+use crate::utils::deprecation::report_static_property_on_deprecated_class;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_static_property_access_expression_id;
 
@@ -150,6 +151,11 @@ where
         None
     };
 
+    let named_class = match class.unparenthesized() {
+        Expression::Identifier(_) => class_name.and_then(|name| context.codebase.get_class_like(name.as_bytes())),
+        _ => None,
+    };
+
     let codebase = context.codebase;
     for class_name in class_name.into_iter().chain(
         class_type
@@ -168,6 +174,16 @@ where
             && !block_context.is_enclosing_scope_deprecated()
         {
             report_deprecated_property(context, class_metadata, property_metadata, property.span());
+
+            if let Some(named_class) = named_class.filter(|named| named.name == class_name) {
+                report_static_property_on_deprecated_class(
+                    context,
+                    named_class,
+                    class_metadata,
+                    property_metadata,
+                    property.span(),
+                );
+            }
         }
 
         artifacts.symbol_references.add_reference_for_property_read(

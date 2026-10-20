@@ -13,6 +13,7 @@ use mago_word::word;
 use crate::assertion::Assertion;
 use crate::identifier::method::MethodIdentifier;
 use crate::metadata::CodebaseMetadata;
+use crate::metadata::attribute::AttributeMetadata;
 use crate::metadata::class_like::TemplateTypes;
 use crate::metadata::flags::MetadataFlags;
 use crate::metadata::function_like::FunctionLikeMetadata;
@@ -421,6 +422,7 @@ struct MethodInheritance {
     if_true_assertions: Option<BTreeMap<Word, Vec<Assertion>>>,
     if_false_assertions: Option<BTreeMap<Word, Vec<Assertion>>>,
     purity: Option<bool>,
+    deprecated: Option<bool>,
 }
 
 /// Sorts and applies docblock inheritance work items.
@@ -644,6 +646,7 @@ fn resolve_method_inheritance(
         should_inherit_if_false_assertions,
         should_clear_inferred_assertions,
         should_inherit_purity,
+        should_inherit_deprecation,
     ) = {
         let child_method = codebase.function_likes.get(&child_method_id)?;
 
@@ -714,6 +717,17 @@ fn resolve_method_inheritance(
             && !child_method.explicit_docblock_flags.contains(MetadataFlags::PURE)
             && child_method.flags.is_pure() != parent_is_pure;
 
+        let should_inherit_deprecation = overriding_deprecation(
+            child_method.explicit_docblock_flags,
+            &child_method.attributes,
+            passes_on_deprecation(
+                parent_method.flags,
+                parent_method.explicit_docblock_flags,
+                &parent_method.attributes,
+            ),
+        )
+        .filter(|deprecated| *deprecated != child_method.flags.is_deprecated());
+
         (
             should_inherit_return,
             params_to_inherit,
@@ -725,6 +739,7 @@ fn resolve_method_inheritance(
             should_inherit_if_false_assertions,
             should_clear_inferred_assertions,
             should_inherit_purity,
+            should_inherit_deprecation,
         )
     };
 
@@ -738,6 +753,7 @@ fn resolve_method_inheritance(
         && !should_inherit_if_false_assertions
         && !should_clear_inferred_assertions
         && !should_inherit_purity
+        && should_inherit_deprecation.is_none()
     {
         return None;
     }
@@ -871,6 +887,7 @@ fn resolve_method_inheritance(
         if_true_assertions: parent_if_true_assertions_to_apply,
         if_false_assertions: parent_if_false_assertions_to_apply,
         purity: should_inherit_purity.then_some(parent_is_pure),
+        deprecated: should_inherit_deprecation,
     })
 }
 
@@ -928,6 +945,98 @@ fn apply_method_inheritance(codebase: &mut CodebaseMetadata, inheritance: Method
 
     if let Some(is_pure) = inheritance.purity {
         child_method.flags.set(MetadataFlags::PURE, is_pure);
+    }
+
+    if let Some(deprecated) = inheritance.deprecated {
+        child_method.flags.set(MetadataFlags::DEPRECATED, deprecated);
+    }
+}
+
+fn has_deprecated_attribute(attributes: &[AttributeMetadata]) -> bool {
+    attributes.iter().any(|attribute| attribute.name.as_bytes().eq_ignore_ascii_case(b"Deprecated"))
+}
+
+pub(crate) fn passes_on_deprecation(
+    flags: MetadataFlags,
+    explicit_docblock_flags: MetadataFlags,
+    attributes: &[AttributeMetadata],
+) -> bool {
+    flags.is_deprecated()
+        && (explicit_docblock_flags.contains(MetadataFlags::DEPRECATED) || !has_deprecated_attribute(attributes))
+}
+
+pub(crate) fn overriding_deprecation(
+    explicit_docblock_flags: MetadataFlags,
+    attributes: &[AttributeMetadata],
+    parent_passes_on_deprecation: bool,
+) -> Option<bool> {
+    (!explicit_docblock_flags.contains(MetadataFlags::DEPRECATED))
+        .then(|| parent_passes_on_deprecation || has_deprecated_attribute(attributes))
+}
+
+pub fn inherit_constant_deprecations(
+    codebase: &mut CodebaseMetadata,
+    safe_symbols: &WordSet,
+    dirty_classes: Option<&WordSet>,
+) {
+    let mut targets: Vec<(usize, Word)> = match dirty_classes {
+        Some(dirty) => dirty
+            .iter()
+            .chain(dirty.iter().filter_map(|name| codebase.all_class_like_descendants.get(name)).flatten())
+            .copied()
+            .collect::<WordSet>()
+            .into_iter()
+            .filter_map(|name| {
+                codebase.class_likes.get(&name).map(|metadata| (metadata.all_parent_classes.len(), name))
+            })
+            .collect(),
+        None => {
+            codebase.class_likes.iter().map(|(name, metadata)| (metadata.all_parent_classes.len(), *name)).collect()
+        }
+    };
+    targets.retain(|(_, name)| safe_symbols.is_empty() || !safe_symbols.contains(name));
+    targets.sort_unstable();
+
+    for (_, class_name) in targets {
+        let Some(class_metadata) = codebase.class_likes.get(&class_name) else { continue };
+        let parents: Vec<Word> = class_metadata
+            .direct_parent_class
+            .into_iter()
+            .chain(class_metadata.direct_parent_interfaces.iter().copied())
+            .collect();
+        let inherited: Vec<(Word, bool)> = class_metadata
+            .constants
+            .iter()
+            .filter(|(_, constant)| {
+                constant.span.file_id == class_metadata.span.file_id
+                    && class_metadata.span.has_offset(constant.span.start.offset)
+            })
+            .filter_map(|(name, constant)| {
+                let parent_constant = parents
+                    .iter()
+                    .filter_map(|parent| codebase.class_likes.get(parent))
+                    .find_map(|parent| parent.constants.get(name))?;
+                let parent_passes_on_deprecation = passes_on_deprecation(
+                    parent_constant.flags,
+                    parent_constant.explicit_docblock_flags,
+                    &parent_constant.attributes,
+                );
+
+                overriding_deprecation(
+                    constant.explicit_docblock_flags,
+                    &constant.attributes,
+                    parent_passes_on_deprecation,
+                )
+                .map(|deprecated| (*name, deprecated))
+            })
+            .collect();
+
+        let Some(class_metadata) = codebase.class_likes.get_mut(&class_name) else { continue };
+        for (name, deprecated) in inherited {
+            if let Some(constant) = class_metadata.constants.get_mut(&name) {
+                constant.flags.set(MetadataFlags::DEPRECATED, deprecated);
+            }
+        }
     }
 }
 
@@ -1024,6 +1133,27 @@ fn collect_property_inheritance_work(
 
 fn apply_property_inheritance_work(codebase: &mut CodebaseMetadata, inheritance_work: Vec<(usize, Word, Word, Word)>) {
     for (_, class_name, property_name, parent_class) in inheritance_work {
+        let Some(parent_metadata) = codebase.class_likes.get(&parent_class) else { continue };
+        let Some(parent_property) = parent_metadata.properties.get(&property_name) else { continue };
+
+        let parent_passes_on_deprecation = passes_on_deprecation(
+            parent_property.flags,
+            parent_property.explicit_docblock_flags,
+            &parent_property.attributes,
+        );
+        if let Some(child_property) = codebase
+            .class_likes
+            .get_mut(&class_name)
+            .and_then(|child_metadata| child_metadata.properties.get_mut(&property_name))
+            && let Some(deprecated) = overriding_deprecation(
+                child_property.explicit_docblock_flags,
+                &child_property.attributes,
+                parent_passes_on_deprecation,
+            )
+        {
+            child_property.flags.set(MetadataFlags::DEPRECATED, deprecated);
+        }
+
         let Some(parent_metadata) = codebase.class_likes.get(&parent_class) else { continue };
         let Some(parent_property) = parent_metadata.properties.get(&property_name) else { continue };
 

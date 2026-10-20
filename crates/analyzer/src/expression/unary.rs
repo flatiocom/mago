@@ -70,6 +70,7 @@ use crate::expression::assignment::PropertyWriteKind;
 use crate::expression::assignment::assign_to_expression;
 use crate::expression::call::method_call::analyze_implicit_method_call;
 use crate::expression::operator_overloading::report_overloaded_operator_on_operand;
+use crate::utils::deprecation::report_deprecated_string_cast;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::php_emulation::str_increment_bytes;
 use crate::utils::php_emulation::str_is_numeric_bytes;
@@ -466,6 +467,10 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPrefix<'arena> {
                                     .with_note("The string value of `mixed` cannot be determined statically, and arrays or non-stringable objects fail at runtime.")
                                     .with_help("Narrow the value with a type check before casting it to `string`."),
                             );
+                        }
+
+                        if !block_context.is_enclosing_scope_deprecated() {
+                            report_deprecated_string_cast(context, &t, self.span());
                         }
 
                         let operand_expression_id = get_block_expression_id(self.operand, context, block_context);

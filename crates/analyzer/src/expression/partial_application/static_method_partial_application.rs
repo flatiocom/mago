@@ -27,6 +27,7 @@ use crate::invocation::MethodInvocationKind;
 use crate::invocation::MethodTargetContext;
 use crate::invocation::analyzer::analyze_invocation;
 use crate::resolver::static_method::resolve_static_method_targets;
+use crate::utils::deprecation::report_deprecated_function_like;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for StaticMethodPartialApplication<'arena> {
     fn analyze<'ctx, A>(
@@ -55,6 +56,20 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for StaticMethodPartialApplication<'
                 resolved_method.classname,
                 resolved_method.method_identifier.get_method_name(),
             ));
+        }
+
+        if self.argument_list.is_first_class_callable() && !block_context.is_enclosing_scope_deprecated() {
+            for resolved_method in &method_resolution.resolved_methods {
+                let declaring_method = resolved_method.method_identifier;
+                let identifier = FunctionLikeIdentifier::Method(
+                    declaring_method.get_class_name(),
+                    declaring_method.get_method_name(),
+                );
+                if let Some(metadata) = context.codebase.get_method_by_id(&declaring_method) {
+                    let static_class = context.codebase.get_class_like(resolved_method.classname.as_bytes());
+                    report_deprecated_function_like(context, &identifier, metadata, static_class, self.method.span());
+                }
+            }
         }
 
         let resulting_type = if self.argument_list.is_first_class_callable() {
