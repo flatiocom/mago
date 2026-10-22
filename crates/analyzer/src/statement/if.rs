@@ -586,6 +586,13 @@ where
 
     analyze_body_statements(if_statement.body.statements(), context, &mut if_block_context, artifacts)?;
 
+    let condition_type = artifacts.get_expression_type(if_statement.condition);
+    if context.skips_false_branch(if_statement.condition.span(), condition_type) {
+        if_block_context.locals.clone_from(&old_if_locals);
+        if_block_context.assigned_variable_ids.clear();
+        if_block_context.possibly_assigned_variable_ids.clear();
+    }
+
     for variable_id in &if_block_context.parent_conflicting_clause_variables {
         outer_block_context.remove_variable_from_conflicting_clauses(context, *variable_id, None);
     }

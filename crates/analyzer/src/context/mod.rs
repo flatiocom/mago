@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use foldhash::HashMap;
+use foldhash::HashSet;
 use mago_allocator::Arena;
 use mago_word::Word;
 use mago_word::WordMap;
@@ -68,6 +69,8 @@ where
     pub(super) property_types: HashMap<(Word, bool), PropertyTypes>,
     /// Types come from native declarations only, like PHPStan's scope with promoted native types.
     pub(super) native_types_only: bool,
+    /// `if` conditions the native pass found always false; `None` when docblock types are certain.
+    pub(crate) natively_false_conditions: Option<HashSet<Span>>,
     class_initializers: WordMap<WordSet>,
     pub(crate) constructor_initialized_properties: WordMap<WordSet>,
 }
@@ -106,6 +109,7 @@ where
             additional_symbol_references,
             property_types: HashMap::default(),
             native_types_only: false,
+            natively_false_conditions: None,
             class_initializers: WordMap::default(),
             constructor_initialized_properties: WordMap::default(),
         }
@@ -114,7 +118,31 @@ where
     #[must_use]
     pub(crate) fn with_native_types_only(mut self) -> Self {
         self.native_types_only = true;
+        self.natively_false_conditions = Some(HashSet::default());
         self
+    }
+
+    #[must_use]
+    pub(crate) fn with_natively_false_conditions(mut self, conditions: HashSet<Span>) -> Self {
+        self.natively_false_conditions = Some(conditions);
+        self
+    }
+
+    /// PHPStan skips the scope of a branch whose condition is always false, judged on native types
+    /// under `treatPhpDocTypesAsCertain: false`.
+    pub(crate) fn skips_false_branch(&mut self, condition_span: Span, condition_type: Option<&TUnion>) -> bool {
+        if !condition_type.is_some_and(TUnion::is_always_falsy) {
+            return false;
+        }
+
+        match self.natively_false_conditions.as_mut() {
+            Some(conditions) if self.native_types_only => {
+                conditions.insert(condition_span);
+                true
+            }
+            Some(conditions) => conditions.contains(&condition_span),
+            None => true,
+        }
     }
 
     pub(crate) fn prepare_class_initializers(

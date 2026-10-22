@@ -3323,6 +3323,12 @@ test_case!(array_filter_of_mixed_is_mixed_array);
 test_case!(echo_accepts_stringable_object);
 test_case!(unresolvable_index_access_parameter_is_not_checked);
 test_case!(inherited_callable_signature_is_checked, crate::framework::check_missing_type_hints_settings());
+test_case!(always_false_branch_is_not_merged);
+test_case!(natively_false_branch_is_not_merged, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});
 
 #[test]
 #[cfg_attr(miri, ignore)]

@@ -65,6 +65,8 @@ mod visibility;
 
 const COLLECTOR_CATEGORIES: &[&str] = &["analysis", "analyzer", "analyser"];
 
+type NativeTypeSpans = HashMap<&'static str, HashSet<Span>>;
+
 /// Codes PHPStan reports under `treatPhpDocTypesAsCertain: false` only when the native types prove them.
 const NATIVE_TYPE_CODES: &[IssueCode] = &[
     IssueCode::RedundantCast,
@@ -221,8 +223,12 @@ where
 
         #[cfg(not(target_arch = "wasm32"))]
         let setup_start = trace_enabled.then(std::time::Instant::now);
-        let native_type_spans =
-            if self.settings.treat_docblock_types_as_certain { None } else { Some(self.native_type_spans(program)?) };
+        let (native_type_spans, natively_false_conditions) = if self.settings.treat_docblock_types_as_certain {
+            (None, None)
+        } else {
+            let (spans, conditions) = self.native_type_spans(program)?;
+            (Some(spans), Some(conditions))
+        };
 
         let mut collector = Collector::new(self.arena, self.source_file, program, COLLECTOR_CATEGORIES);
         if self.settings.diff {
@@ -246,6 +252,9 @@ where
             self.external_analysis_session,
             self.additional_symbol_references,
         );
+        if let Some(conditions) = natively_false_conditions {
+            context = context.with_natively_false_conditions(conditions);
+        }
 
         let mut block_context = BlockContext::new(
             ScopeContext::new(ReferenceOrigin::File(word(context.source_file.name.as_ref()))),
@@ -340,11 +349,12 @@ where
     }
 
     /// Analyzes `program` again with native types only, as PHPStan's rules do under
-    /// `treatPhpDocTypesAsCertain: false`, and returns where each of [`NATIVE_TYPE_CODES`] fires.
+    /// `treatPhpDocTypesAsCertain: false`, and returns where each of [`NATIVE_TYPE_CODES`] fires and which
+    /// `if` conditions are always false.
     fn native_type_spans(
         &self,
         program: &'ast Program<'arena>,
-    ) -> Result<HashMap<&'static str, HashSet<Span>>, AnalysisError> {
+    ) -> Result<(NativeTypeSpans, HashSet<Span>), AnalysisError> {
         let statements = program.statements.as_slice();
         let plugin_registry = PluginRegistry::new();
         let mut context = Context::new(
@@ -381,7 +391,7 @@ where
             }
         }
 
-        Ok(spans)
+        Ok((spans, context.natively_false_conditions.unwrap_or_default()))
     }
 }
 
