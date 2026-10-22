@@ -3320,6 +3320,9 @@ test_case!(by_reference_capture_of_assigned_variable);
 test_case!(scalar_conversion_functions_take_phpstan_values);
 test_case!(max_of_nullable_pair);
 test_case!(array_filter_of_mixed_is_mixed_array);
+test_case!(echo_accepts_stringable_object);
+test_case!(unresolvable_index_access_parameter_is_not_checked);
+test_case!(inherited_callable_signature_is_checked, crate::framework::check_missing_type_hints_settings());
 
 #[test]
 #[cfg_attr(miri, ignore)]

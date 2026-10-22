@@ -434,7 +434,9 @@ pub fn check_callable_signatures<A>(
         return;
     }
 
-    let Some(type_metadata) = type_metadata.filter(|type_metadata| !type_metadata.inferred) else {
+    let Some(type_metadata) =
+        type_metadata.filter(|type_metadata| !type_metadata.inferred || type_metadata.from_docblock)
+    else {
         return;
     };
 

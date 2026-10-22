@@ -11,6 +11,7 @@ use mago_codex::ttype::TType;
 use mago_codex::ttype::add_union_type;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::callable::TCallable;
+use mago_codex::ttype::atomic::derived::TDerived;
 use mago_codex::ttype::cast::cast_atomic_to_callable;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
@@ -236,6 +237,10 @@ pub fn verify_argument_type<'arena, A>(
             ),
         );
 
+        return;
+    }
+
+    if has_unresolvable_index_access(parameter_type) {
         return;
     }
 
@@ -484,6 +489,13 @@ pub fn verify_argument_type<'arena, A>(
 }
 
 /// Gets the element type when unpacking an argument with the spread operator.
+fn has_unresolvable_index_access(parameter_type: &TUnion) -> bool {
+    parameter_type.types.iter().any(|atomic| {
+        matches!(atomic, TAtomic::Derived(TDerived::IndexAccess(access))
+            if !access.get_target_type().has_template_types() && !access.get_index_type().has_template_types())
+    })
+}
+
 pub fn get_unpacked_argument_type<A>(
     context: &mut Context<'_, '_, A>,
     argument_value_type: &TUnion,

@@ -2,6 +2,8 @@ use mago_allocator::Arena;
 use std::borrow::Cow;
 
 use mago_codex::ttype::TType;
+use mago_codex::ttype::atomic::TAtomic;
+use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::get_mixed;
@@ -159,6 +161,33 @@ where
     Ok(())
 }
 
+fn stringable_objects_as_strings<'input, A>(
+    context: &Context<'_, '_, A>,
+    input_type: &'input TUnion,
+) -> Cow<'input, TUnion>
+where
+    A: Arena,
+{
+    let is_stringable = |atomic: &TAtomic| match atomic {
+        TAtomic::Object(object) => {
+            object.get_name().is_some_and(|name| context.codebase.method_exists(name.as_bytes(), b"__toString"))
+        }
+        _ => false,
+    };
+
+    if !input_type.types.iter().any(is_stringable) {
+        return Cow::Borrowed(input_type);
+    }
+
+    let types = input_type
+        .types
+        .iter()
+        .map(|atomic| if is_stringable(atomic) { TAtomic::Scalar(TScalar::string()) } else { atomic.clone() })
+        .collect();
+
+    Cow::Owned(TUnion::from_vec(types))
+}
+
 /// Verifies the type of a single input passed to a language construct.
 ///
 /// This function checks for a variety of type mismatches, such as `null` or `false`
@@ -188,6 +217,12 @@ fn verify_construct_input_type<'arena, A>(
 ) where
     A: Arena,
 {
+    let input_type = &*if matches!(construct_kind, "echo" | "print") {
+        stringable_objects_as_strings(context, input_type)
+    } else {
+        Cow::Borrowed(input_type)
+    };
+
     if input_type.is_never() {
         return report_never_input(
             context,
