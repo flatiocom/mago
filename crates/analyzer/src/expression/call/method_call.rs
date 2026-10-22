@@ -57,6 +57,7 @@ use crate::resolver::method::report_non_existent_method;
 use crate::resolver::method::resolve_method_targets;
 use crate::utils::availability;
 use crate::utils::expression::get_block_expression_id;
+use crate::utils::expression::get_nullsafe_base_expressions;
 use crate::visibility::check_method_visibility_by_id;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for MethodCall<'arena> {
@@ -311,11 +312,17 @@ where
     let mut method_resolution =
         resolve_method_targets(context, block_context, artifacts, object, selector, is_null_safe, operator_span, span)?;
 
+    let was_inside_isset = block_context.flags.inside_isset();
+    if is_null_safe {
+        block_context.flags.set_inside_isset(false);
+    }
+
     if artifacts.get_expression_type(object).is_some_and(|ty| ty.is_null() && (is_null_safe || ty.has_nullsafe_null()))
     {
         let mut return_type = get_null();
         return_type.set_nullsafe_null(true);
         artifacts.set_expression_type(&span, return_type);
+        block_context.flags.set_inside_isset(was_inside_isset);
 
         return Ok(());
     }
@@ -414,8 +421,12 @@ where
             this_variable,
             method_resolution.encountered_mixed,
             is_null_safe && method_resolution.encountered_null,
-            artifacts.get_expression_type(object).is_some_and(|t| t.has_nullsafe_null()),
+            artifacts.get_expression_type(object).is_some_and(|t| t.has_nullsafe_null())
+                || get_nullsafe_base_expressions(object)
+                    .into_iter()
+                    .any(|base| artifacts.get_expression_type(base).is_some_and(TUnion::is_nullable)),
             true,
+            method_resolution.reported_non_object_receiver,
         )?;
     }
 
@@ -443,7 +454,18 @@ where
             !has_resolved_methods,
             this_variable.as_ref().map(|variable| variable.as_bytes()),
         )?;
+
+        if is_null_safe
+            && method_resolution.encountered_null
+            && let Some(call_type) = artifacts.get_expression_type(&span).filter(|call_type| !call_type.is_nullable())
+        {
+            let mut call_type = add_optional_union_type(get_null(), Some(call_type), context.codebase);
+            call_type.set_nullsafe_null(true);
+            artifacts.set_expression_type(&span, call_type);
+        }
     }
+
+    block_context.flags.set_inside_isset(was_inside_isset);
 
     Ok(())
 }
@@ -466,13 +488,15 @@ where
     let mut has_invalid_target = false;
     for unresolved in unresolved_methods {
         let Some(class_like_metadata) = context.codebase.get_class_like_by_name(unresolved.classname) else {
-            report_non_existent_method(
-                context,
-                unresolved.target_span,
-                unresolved.selector_span,
-                unresolved.classname,
-                unresolved.method_name,
-            );
+            if unresolved.report_if_missing {
+                report_non_existent_method(
+                    context,
+                    unresolved.target_span,
+                    unresolved.selector_span,
+                    unresolved.classname,
+                    unresolved.method_name,
+                );
+            }
 
             has_invalid_target = true;
             continue;
@@ -499,13 +523,15 @@ where
         if apply_callable_signature(context, artifacts, &identifier, &mut invocation) {
             targets.push(invocation.target);
         } else if !class_like_metadata.has_incomplete_hierarchy() {
-            report_non_existent_method(
-                context,
-                unresolved.target_span,
-                unresolved.selector_span,
-                unresolved.classname,
-                unresolved.method_name,
-            );
+            if unresolved.report_if_missing {
+                report_non_existent_method(
+                    context,
+                    unresolved.target_span,
+                    unresolved.selector_span,
+                    unresolved.classname,
+                    unresolved.method_name,
+                );
+            }
 
             has_invalid_target = true;
         }

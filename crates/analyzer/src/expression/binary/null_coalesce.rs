@@ -14,6 +14,7 @@ use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_syntax::cst::Access;
 use mago_syntax::cst::Binary;
+use mago_syntax::cst::Call;
 use mago_syntax::cst::ClassLikeMemberSelector;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::Variable;
@@ -62,7 +63,10 @@ where
     let was_inside_isset = block_context.flags.inside_isset();
     block_context.flags.set_inside_isset(matches!(
         binary.lhs,
-        Expression::Variable(_) | Expression::Access(_) | Expression::ArrayAccess(_)
+        Expression::Variable(_)
+            | Expression::Access(_)
+            | Expression::ArrayAccess(_)
+            | Expression::Call(Call::NullSafeMethod(_))
     ));
     binary.lhs.analyze(context, block_context, artifacts)?;
     block_context.flags.set_inside_isset(was_inside_isset);

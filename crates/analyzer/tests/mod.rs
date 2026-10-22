@@ -3288,6 +3288,11 @@ fn issue_2478_php84() {
 
 test_case!(chained_logical_or_assignment_subsequent_operand);
 test_case!(switch_paradoxical_unreachable_case_detection);
+test_case!(receiver_with_non_object_part_stops_call_checks);
+test_case!(null_coalesce_allows_nullsafe_call_receiver_chain);
+test_case!(nullsafe_magic_call_can_return_null);
+test_case!(nullsafe_chain_call_can_return_null);
+test_case!(universal_object_crate_behind_error_path_null);
 
 #[test]
 #[cfg_attr(miri, ignore)]

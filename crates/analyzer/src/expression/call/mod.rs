@@ -136,6 +136,7 @@ fn analyze_invocation_targets<'ctx, 'arena, A>(
     should_add_null: bool,
     object_has_nullsafe_null: bool,
     report_deprecation: bool,
+    skip_argument_checks: bool,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
@@ -192,6 +193,7 @@ where
         let new_issues: Vec<Issue> = issues
             .into_iter()
             .filter(|issue| !reported_issues.contains(&(issue.code.clone(), issue.primary_span())))
+            .filter(|issue| !skip_argument_checks || !is_argument_check_of_call(issue, call_span))
             .collect();
         reported_issues.extend(new_issues.iter().map(|issue| (issue.code.clone(), issue.primary_span())));
         context.collector.extend(new_issues);
@@ -258,6 +260,31 @@ where
     artifacts.set_expression_type(&call_span, resulting_type);
 
     Ok(())
+}
+
+fn is_argument_check_of_call(issue: &Issue, call_span: Span) -> bool {
+    const ARGUMENT_CHECK_CODES: [IssueCode; 17] = [
+        IssueCode::MixedArgument,
+        IssueCode::NullArgument,
+        IssueCode::PossiblyNullArgument,
+        IssueCode::FalseArgument,
+        IssueCode::PossiblyFalseArgument,
+        IssueCode::InvalidArgument,
+        IssueCode::PossiblyInvalidArgument,
+        IssueCode::LessSpecificArgument,
+        IssueCode::LessSpecificNestedArgumentType,
+        IssueCode::TooFewArguments,
+        IssueCode::TooManyArguments,
+        IssueCode::InvalidPassByReference,
+        IssueCode::InvalidNamedArgument,
+        IssueCode::DuplicateNamedArgument,
+        IssueCode::NamedArgumentNotAllowed,
+        IssueCode::NamedArgumentOverridesPositional,
+        IssueCode::NamedArgumentAfterPositional,
+    ];
+
+    issue.code.as_deref().is_some_and(|code| ARGUMENT_CHECK_CODES.iter().any(|check| check.as_str() == code))
+        && issue.annotations.iter().any(|annotation| annotation.span == call_span)
 }
 
 fn analyze_invocation_target<'ctx, 'ast, 'arena, A>(

@@ -73,6 +73,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for FunctionCall<'arena> {
             false,
             false, // object_has_nullsafe_null - not applicable for function calls
             matches!(self.function, Expression::Identifier(_)),
+            false,
         )?;
 
         if context.plugin_registry.has_function_call_hooks() {

@@ -22,6 +22,7 @@ use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_specialized_template_type;
 use mago_codex::ttype::template::GenericTemplate;
 use mago_codex::ttype::template::TemplateResult;
+use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
@@ -98,6 +99,7 @@ pub struct UnresolvedMethod {
     pub selector_span: Span,
     /// The receiver used by external signature and return-type providers.
     pub class_type: StaticClassType,
+    pub report_if_missing: bool,
 }
 
 /// Represents a method found in a mixin where the calling class lacks the required magic method.
@@ -150,6 +152,7 @@ pub struct MethodResolutionResult {
     pub encountered_mixed: bool,
     /// True if an access on a `null` type was encountered.
     pub encountered_null: bool,
+    pub reported_non_object_receiver: bool,
 }
 
 /// Resolves all possible method targets from an object expression and a member selector.
@@ -204,6 +207,12 @@ where
             report_redundant_nullsafe(context, operator_span, object, object_type, true);
         }
 
+        let reports_null = !object_type.ignore_nullable_issues()
+            && !is_null_safe
+            && !object_type.has_nullsafe_null()
+            && !object_type.has_error_path_null();
+        result.reported_non_object_receiver = receiver_has_reported_non_object_part(object_type, reports_null);
+
         let mut object_atomics = object_type.types.iter().collect::<Vec<_>>();
 
         while let Some(object_atomic) = object_atomics.pop() {
@@ -218,11 +227,7 @@ where
 
             if object_atomic.is_null() {
                 result.encountered_null = true;
-                if !object_type.ignore_nullable_issues()
-                    && !is_null_safe
-                    && !object_type.has_nullsafe_null()
-                    && !object_type.has_error_path_null()
-                {
+                if reports_null {
                     if object_type.is_null() {
                         result.has_invalid_target = true;
                     }
@@ -320,18 +325,21 @@ where
                                         target_span: object.span(),
                                         selector_span: selector.span(),
                                         class_type: StaticClassType::Object(obj_type.clone()),
+                                        report_if_missing: !result.reported_non_object_receiver,
                                     });
                                     result.encountered_mixed |= has_incomplete_hierarchy;
                                 } else if has_incomplete_hierarchy {
                                     result.encountered_mixed = true;
                                 } else {
-                                    report_non_existent_method(
-                                        context,
-                                        object.span(),
-                                        selector.span(),
-                                        classname,
-                                        method_name,
-                                    );
+                                    if !result.reported_non_object_receiver {
+                                        report_non_existent_method(
+                                            context,
+                                            object.span(),
+                                            selector.span(),
+                                            classname,
+                                            method_name,
+                                        );
+                                    }
 
                                     result.has_invalid_target = true;
                                 }
@@ -352,6 +360,7 @@ where
                     // Check if any resolved method was found in a mixin without magic method support
                     for resolved_method in &resolved_methods {
                         if let Some(mixin_info) = &resolved_method.mixin_without_magic_method
+                            && !result.reported_non_object_receiver
                             && let Some(classname) = obj_type.get_name()
                         {
                             if mixin_info.target_is_final {
@@ -408,6 +417,25 @@ where
     }
 
     Ok(result)
+}
+
+fn receiver_has_reported_non_object_part(object_type: &TUnion, reports_null: bool) -> bool {
+    let mut atomics = object_type.types.iter().collect::<Vec<_>>();
+    while let Some(atomic) = atomics.pop() {
+        match atomic {
+            TAtomic::GenericParameter(TGenericParameter { constraint, .. }) => atomics.extend(constraint.types.iter()),
+            TAtomic::Never | TAtomic::Object(_) => {}
+            TAtomic::Callable(callable) if callable.is_closure() => {}
+            TAtomic::Null => {
+                if reports_null {
+                    return true;
+                }
+            }
+            _ => return true,
+        }
+    }
+
+    false
 }
 
 /// Records references to child methods that can satisfy a `method_exists()` assertion.

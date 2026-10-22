@@ -365,6 +365,7 @@ where
                                 fq_class_id,
                                 class_metadata,
                             ),
+                            report_if_missing: true,
                         });
                         result.encountered_mixed |= has_incomplete_hierarchy;
                     } else if has_incomplete_hierarchy {

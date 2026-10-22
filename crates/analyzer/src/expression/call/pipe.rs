@@ -43,6 +43,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Pipe<'arena> {
             false,
             false, // object_has_nullsafe_null - not applicable for pipe expressions
             false,
+            false,
         )
     }
 }

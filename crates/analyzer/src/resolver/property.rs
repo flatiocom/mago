@@ -144,6 +144,7 @@ where
     let classes = object_type
         .types
         .iter()
+        .filter(|atomic| !(atomic.is_null() && object_type.has_error_path_null()))
         .map(|atomic| match atomic {
             TAtomic::Object(TObject::Named(named_object)) => Some(named_object.get_name()),
             _ => None,
@@ -214,6 +215,13 @@ where
     }
     result.has_literal_name = !property_names.is_empty();
     let checks_receiver = result.has_literal_name && !receiver_already_checked;
+    let reports_null = checks_receiver
+        && !is_null_safe
+        && !object_type.has_nullsafe_null()
+        && !object_type.has_error_path_null()
+        && (is_all_null || !block_context.flags.inside_isset());
+    let reported_non_object_receiver =
+        checks_receiver && receiver_has_reported_non_object_part(&object_type, reports_null);
 
     let mut object_atomics = object_type.types.iter().collect::<Vec<_>>();
     while let Some(object_atomic) = object_atomics.pop() {
@@ -439,20 +447,29 @@ where
             let resolved_property = match external_resolution {
                 Some(ExternalPropertyResolution::Resolved(property)) => Some(property),
                 Some(ExternalPropertyResolution::Invalid) => None,
-                None => find_property_in_class(
-                    context,
-                    block_context,
-                    artifacts,
-                    classname,
-                    *prop_name,
-                    property_selector,
-                    object_expression,
-                    object,
-                    operator_span,
-                    for_assignment,
-                    &mut result,
-                    magic_method.is_some(),
-                ),
+                None => {
+                    let (found, issues) = context.record(|context| {
+                        find_property_in_class(
+                            context,
+                            block_context,
+                            artifacts,
+                            classname,
+                            *prop_name,
+                            property_selector,
+                            object_expression,
+                            object,
+                            operator_span,
+                            for_assignment,
+                            &mut result,
+                            magic_method.is_some(),
+                        )
+                    });
+                    context.collector.extend(
+                        issues.into_iter().filter(|issue| !reported_non_object_receiver || !is_missing_property(issue)),
+                    );
+
+                    found
+                }
             };
 
             let Some(mut resolved_property) = resolved_property else {
@@ -1600,6 +1617,31 @@ fn update_template_types<A>(
 }
 
 /// Reports an error for a property access on a `null` or `void` value.
+fn receiver_has_reported_non_object_part(object_type: &TUnion, reports_null: bool) -> bool {
+    let mut atomics = object_type.types.iter().collect::<Vec<_>>();
+    while let Some(atomic) = atomics.pop() {
+        match atomic {
+            TAtomic::GenericParameter(TGenericParameter { constraint, .. }) => atomics.extend(constraint.types.iter()),
+            TAtomic::Never | TAtomic::Object(_) => {}
+            TAtomic::Callable(callable) if callable.is_closure() => {}
+            TAtomic::Null | TAtomic::Void => {
+                if reports_null {
+                    return true;
+                }
+            }
+            _ => return true,
+        }
+    }
+
+    false
+}
+
+fn is_missing_property(issue: &Issue) -> bool {
+    issue.code.as_deref().is_some_and(|code| {
+        code == IssueCode::NonExistentProperty.as_str() || code == IssueCode::PossiblyNonExistentProperty.as_str()
+    })
+}
+
 pub(crate) fn report_access_on_null<'ctx, A>(
     context: &mut Context<'ctx, '_, A>,
     block_context: &BlockContext<'ctx>,
