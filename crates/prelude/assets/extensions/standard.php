@@ -2312,20 +2312,29 @@ function error_log(
 function boolval(mixed $value): bool {}
 
 /**
+ * @param int|float|string|bool|array<mixed>|resource|GMP|SimpleXMLElement|null $value
+ *
  * @pure
  */
 function intval(mixed $value, int $base = 10): int {}
 
 /**
+ * @param int|float|string|bool|array<mixed>|resource|GMP|SimpleXMLElement|null $value
+ *
  * @pure
  */
 function floatval(mixed $value): float {}
 
 /**
+ * @param int|float|string|bool|array<mixed>|resource|GMP|SimpleXMLElement|null $value
+ *
  * @pure
  */
 function doubleval(mixed $value): float {}
 
+/**
+ * @param string|Stringable|int|float|bool|resource|GMP|null $value
+ */
 function strval(mixed $value): string {}
 
 /**

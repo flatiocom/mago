@@ -3317,6 +3317,9 @@ test_case!(array_key_first_last_and_count_narrowing, {
 });
 test_case!(foreach_over_partly_iterable_union);
 test_case!(by_reference_capture_of_assigned_variable);
+test_case!(scalar_conversion_functions_take_phpstan_values);
+test_case!(max_of_nullable_pair);
+test_case!(array_filter_of_mixed_is_mixed_array);
 
 #[test]
 #[cfg_attr(miri, ignore)]

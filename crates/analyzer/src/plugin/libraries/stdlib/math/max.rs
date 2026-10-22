@@ -88,6 +88,12 @@ impl FunctionReturnTypeProvider for MaxProvider {
 
 #[allow(clippy::similar_names)]
 fn get_max_of_args(context: &ProviderContext<'_, '_, '_>, invocation: &InvocationInfo<'_, '_, '_>) -> Option<TUnion> {
+    if invocation.argument_count() == 2
+        && let Some(max_of_nullable_pair) = get_max_of_nullable_pair(context, invocation)
+    {
+        return Some(max_of_nullable_pair);
+    }
+
     let first = invocation.get_argument(0, &[b"value"])?;
     let first_type = context.get_expression_type(first)?;
     let mut result = get_integer_from_type(first_type)?;
@@ -110,4 +116,22 @@ fn get_max_of_args(context: &ProviderContext<'_, '_, '_>, invocation: &Invocatio
     }
 
     Some(TUnion::from_atomic(TAtomic::Scalar(TScalar::Integer(result))))
+}
+
+fn get_max_of_nullable_pair(
+    context: &ProviderContext<'_, '_, '_>,
+    invocation: &InvocationInfo<'_, '_, '_>,
+) -> Option<TUnion> {
+    let first_type = context.get_expression_type(invocation.get_argument(0, &[b"value"])?)?;
+    let second_type = context.get_expression_type(invocation.get_argument(1, &[])?)?;
+
+    let has_null = first_type.is_nullable() || second_type.is_nullable();
+    let has_array_or_mixed = [first_type, second_type].iter().any(|ty| ty.has_array() || ty.has_mixed());
+    if !has_null || has_array_or_mixed {
+        return None;
+    }
+
+    let first = if second_type.is_always_truthy() { first_type.to_non_nullable() } else { first_type.clone() };
+
+    Some(add_optional_union_type(second_type.to_non_nullable(), Some(&first), context.codebase))
 }

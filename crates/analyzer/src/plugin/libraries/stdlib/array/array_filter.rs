@@ -22,6 +22,7 @@ use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::atomic_comparator;
 use mago_codex::ttype::get_array_parameters;
 use mago_codex::ttype::get_keyed_array;
+use mago_codex::ttype::get_mixed_keyed_array;
 use mago_codex::ttype::union::TUnion;
 use mago_codex::ttype::wrap_atomic;
 
@@ -59,6 +60,9 @@ impl FunctionReturnTypeProvider for ArrayFilterProvider {
     ) -> Option<TUnion> {
         let array_argument = invocation.get_argument(0, &[b"array"])?;
         let array_type = context.get_expression_type(array_argument)?;
+        if array_type.is_mixed() {
+            return Some(get_mixed_keyed_array());
+        }
 
         let callback_argument = invocation.get_argument(1, &[b"callback"]);
 
