@@ -854,7 +854,13 @@ where
 
         let container_reported_on_read = index_read_first || target_is_narrowed;
         context.collector.extend(recorded_issues.into_iter().filter(|issue| {
-            !container_reported_on_read || issue.code.as_deref() != Some(IssueCode::MixedArrayAssignment.as_str())
+            let code = issue.code.as_deref();
+            let null_index_reported_on_read = index_read_first
+                && (code == Some(IssueCode::PossiblyNullArrayIndex.as_str())
+                    || code == Some(IssueCode::NullArrayIndex.as_str()));
+
+            !null_index_reported_on_read
+                && (!container_reported_on_read || code != Some(IssueCode::MixedArrayAssignment.as_str()))
         }));
 
         block_context.flags.set_inside_assignment(false);

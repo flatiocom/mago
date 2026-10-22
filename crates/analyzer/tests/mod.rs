@@ -3293,6 +3293,30 @@ test_case!(null_coalesce_allows_nullsafe_call_receiver_chain);
 test_case!(nullsafe_magic_call_can_return_null);
 test_case!(nullsafe_chain_call_can_return_null);
 test_case!(universal_object_crate_behind_error_path_null);
+test_case!(compound_assignment_reports_null_index_once, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(array_index_naming_unknown_class);
+test_case!(missing_shape_key_read_narrows_like_mixed, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s.treat_docblock_types_as_certain = false;
+    s
+});
+test_case!(foreach_reassigned_key_forgets_outer_reads, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(array_key_first_last_and_count_narrowing, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});
+test_case!(foreach_over_partly_iterable_union);
+test_case!(by_reference_capture_of_assigned_variable);
 
 #[test]
 #[cfg_attr(miri, ignore)]

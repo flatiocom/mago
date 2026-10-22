@@ -67,6 +67,7 @@ use crate::context::scope::control_action::ControlAction;
 use crate::context::scope::is_access_path;
 use crate::context::scope::loop_scope::LoopScope;
 use crate::context::scope::var_has_root;
+use crate::context::scope::var_references_dynamic;
 use crate::context::utils::inherit_branch_context_properties;
 use crate::error::AnalysisError;
 use crate::formula::get_formula;
@@ -657,6 +658,15 @@ where
             let mut different_from_pre_loop_types = HashSet::default();
 
             for (variable_id, continue_context_type) in continue_context.locals.clone() {
+                if original_parent_context.locals.contains_key(&variable_id)
+                    && always_assigned_before_loop_body_variables
+                        .iter()
+                        .any(|assigned_variable_id| var_references_dynamic(variable_id, *assigned_variable_id))
+                {
+                    continue_context.locals.remove(&variable_id);
+                    continue;
+                }
+
                 let has_self_descending_reference = continue_context
                     .references_in_scope
                     .get(&variable_id)
@@ -1424,6 +1434,17 @@ where
     loop_context.flags.set_inside_loop_expressions(false);
     loop_context.flags.set_inside_conditional(false);
 
+    let typed_pre_condition_clauses = get_formula(
+        pre_condition_span,
+        pre_condition_span,
+        pre_condition,
+        context.get_assertion_context_from_block(loop_context),
+        artifacts,
+        &context.settings.algebra_thresholds(),
+        context.settings.formula_size_threshold,
+    );
+    let pre_condition_clauses = typed_pre_condition_clauses.as_deref().unwrap_or(pre_condition_clauses);
+
     if first_application {
         let condition_type = artifacts.get_expression_type(pre_condition);
         let is_always_falsy = condition_type.is_some_and(|ct| ct.is_always_falsy());
@@ -1846,11 +1867,11 @@ where
                 "It could evaluate to one of the following non-iterable types: `{problematic_types_list_str}`. If so, a runtime error will occur or the loop will not execute for that specific type."
             ))
             .with_help(
-                "Ensure all possible types for this expression are iterable, or add checks to handle non-iterable cases before the loop. For analysis, key/value types will include `mixed` due to this uncertainty.",
+                "Ensure all possible types for this expression are iterable, or add checks to handle non-iterable cases before the loop.",
             ),
         );
 
-        return Ok((false, get_mixed(), get_mixed()));
+        return Ok((false, key_type.unwrap_or_else(get_mixed), value_type.unwrap_or_else(get_mixed)));
     }
     // every atomic in the iterator type is iterable; no diagnostic needed
 

@@ -13,6 +13,7 @@ use mago_codex::ttype::union::TUnion;
 use mago_names::ResolvedNames;
 use mago_span::HasSpan;
 use mago_syntax::cst::Access;
+use mago_syntax::cst::Argument;
 use mago_syntax::cst::ArrayAccess;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
@@ -482,8 +483,38 @@ pub fn get_index_id<'ast, 'arena>(
         {
             literal_id
         }
+        Expression::Call(Call::Function(function_call))
+            if let Some(key_id) =
+                get_array_key_first_last_index_id(function_call, this_class_name, resolved_names, codebase) =>
+        {
+            key_id
+        }
         _ => return get_expression_id(expression, this_class_name, resolved_names, codebase),
     })
+}
+
+fn get_array_key_first_last_index_id(
+    function_call: &FunctionCall<'_>,
+    this_class_name: Option<Word>,
+    resolved_names: &ResolvedNames<'_>,
+    codebase: Option<&CodebaseMetadata>,
+) -> Option<Word> {
+    let Expression::Identifier(function) = function_call.function else {
+        return None;
+    };
+
+    let name = [b"array_key_first".as_slice(), b"array_key_last"].into_iter().find(|name| {
+        resolved_names.get(function).eq_ignore_ascii_case(name)
+            || (function.is_local() && function.value().eq_ignore_ascii_case(name))
+    })?;
+
+    let [Argument::Positional(array_argument)] = function_call.argument_list.arguments.as_slice() else {
+        return None;
+    };
+
+    let array_id = get_expression_id(array_argument.value, this_class_name, resolved_names, codebase)?;
+
+    Some(concat_word!(b"(", name, b"(", array_id.as_bytes(), b"))"))
 }
 
 #[inline]

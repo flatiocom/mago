@@ -78,6 +78,15 @@ where
         return get_missing_type(assertion, key, inside_loop);
     };
 
+    let error_path_null_as_mixed;
+    let (existing_var_type, can_report_issues) =
+        if existing_var_type.is_null() && existing_var_type.has_error_path_null() {
+            error_path_null_as_mixed = get_mixed();
+            (&error_path_null_as_mixed, false)
+        } else {
+            (existing_var_type, can_report_issues)
+        };
+
     if is_negation {
         let old_var_type_atom = existing_var_type.get_id();
         return negated_assertion_reconciler::reconcile(

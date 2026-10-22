@@ -35,6 +35,7 @@ use mago_codex::ttype::union::TUnion;
 use mago_span::HasSpan;
 use mago_span::Span;
 use mago_syntax::cst::Access;
+use mago_syntax::cst::Argument;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Call;
@@ -276,6 +277,10 @@ where
         BinaryOperator::GreaterThan(_) | BinaryOperator::GreaterThanOrEqual(_) => {
             let mut assertions = scrape_greater_than_assertions(left, operator, right, artifacts, assertion_context);
 
+            if matches!(operator, BinaryOperator::GreaterThan(_)) {
+                add_index_below_count_assertion(right, left, artifacts, assertion_context, &mut assertions);
+            }
+
             add_comparison_null_assertions(
                 right,
                 left,
@@ -289,6 +294,10 @@ where
         }
         BinaryOperator::LessThan(_) | BinaryOperator::LessThanOrEqual(_) => {
             let mut assertions = scrape_lesser_than_assertions(left, operator, right, artifacts, assertion_context);
+
+            if matches!(operator, BinaryOperator::LessThan(_)) {
+                add_index_below_count_assertion(left, right, artifacts, assertion_context, &mut assertions);
+            }
 
             add_comparison_null_assertions(
                 left,
@@ -366,6 +375,7 @@ enum ComparedLiteral<'value> {
     Int(i64),
     Float(f64),
     String(&'value [u8]),
+    EmptyArray,
 }
 
 impl<'value> ComparedLiteral<'value> {
@@ -375,6 +385,7 @@ impl<'value> ComparedLiteral<'value> {
             .map(Self::Int)
             .or_else(|| union.get_single_literal_float_value().map(Self::Float))
             .or_else(|| union.get_single_literal_string_value().map(Self::String))
+            .or_else(|| union.is_empty_array().then_some(Self::EmptyArray))
     }
 
     fn number(&self) -> Option<f64> {
@@ -410,12 +421,15 @@ impl<'value> ComparedLiteral<'value> {
             (Self::Int(left), Self::Int(right)) => left == right,
             (Self::Float(left), Self::Float(right)) => left == right,
             (Self::String(left), Self::String(right)) => left == right,
+            (Self::EmptyArray, Self::EmptyArray) => true,
             _ => false,
         }
     }
 
     fn is_equal(&self, other: &Self) -> Option<bool> {
         match (self, other) {
+            (Self::EmptyArray, Self::EmptyArray) => Some(true),
+            (Self::EmptyArray, _) | (_, Self::EmptyArray) => None,
             (Self::String(left), Self::String(right)) if left == right => Some(true),
             (Self::String(left), Self::String(right)) => {
                 let has_digit = |value: &[u8]| value.iter().any(u8::is_ascii_digit);
@@ -2447,6 +2461,55 @@ fn get_isset_expression_id<A>(
 
 fn get_expression_array_key(artifacts: &AnalysisArtifacts, expression: &Expression) -> Option<ArrayKey> {
     artifacts.get_expression_type(expression).and_then(mago_codex::ttype::union::TUnion::get_single_array_key)
+}
+
+fn add_index_below_count_assertion<A>(
+    index: &Expression,
+    count_call: &Expression,
+    artifacts: &AnalysisArtifacts,
+    assertion_context: AssertionContext<'_, '_, A>,
+    assertions: &mut Vec<WordMap<AssertionSet>>,
+) where
+    A: Arena,
+{
+    if !is_count_or_size_of_call(count_call, assertion_context) {
+        return;
+    }
+
+    let Expression::Call(Call::Function(FunctionCall { argument_list, .. })) = count_call else {
+        return;
+    };
+
+    let Some(Argument::Positional(list_argument)) = argument_list.arguments.first() else {
+        return;
+    };
+
+    let is_list = artifacts.get_expression_type(list_argument.value).is_some_and(|list_type| {
+        list_type.types.iter().all(|atomic| matches!(atomic, TAtomic::Array(TArray::List(_))))
+    });
+    let is_non_negative_int = artifacts.get_expression_type(index).is_some_and(|index_type| {
+        index_type.types.iter().all(|atomic| {
+            matches!(atomic, TAtomic::Scalar(TScalar::Integer(integer)) if integer.get_minimum_value().is_some_and(|minimum| minimum >= 0))
+        })
+    });
+    if !is_list || !is_non_negative_int {
+        return;
+    }
+
+    let (Some(list_id), Some(index_id)) =
+        (assertion_context.get_expression_id(list_argument.value), assertion_context.get_expression_id(index))
+    else {
+        return;
+    };
+
+    let access_id = concat_word!(list_id.as_bytes(), b"[", index_id.as_bytes(), b"]");
+    if assertions.is_empty() {
+        assertions.push(WordMap::default());
+    }
+
+    for if_types in assertions.iter_mut() {
+        if_types.entry(access_id).or_default().push(vec![Assertion::ArrayKeyExists]);
+    }
 }
 
 fn is_count_or_size_of_call<A>(expression: &Expression, assertion_context: AssertionContext<'_, '_, A>) -> bool

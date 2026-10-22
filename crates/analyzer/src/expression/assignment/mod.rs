@@ -38,12 +38,14 @@ use mago_syntax::cst::AssignmentOperator;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
 use mago_syntax::cst::Call;
+use mago_syntax::cst::ClosureUseClauseVariable;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::FunctionCall;
 use mago_syntax::cst::List;
 use mago_syntax::cst::UnaryPrefix;
 use mago_syntax::cst::UnaryPrefixOperator;
 use mago_syntax::cst::Variable;
+use mago_syntax::walker::MutWalker;
 use mago_word::Word;
 use mago_word::WordSet;
 use mago_word::concat_word;
@@ -65,6 +67,7 @@ use crate::utils::docblock::check_docblock_type_against_native_type;
 use crate::utils::docblock::check_docblock_type_incompatibility;
 use crate::utils::docblock::get_type_from_var_docblock;
 use crate::utils::expression::array::get_array_target_type_given_index;
+use crate::utils::expression::array::get_array_value_union;
 use crate::utils::expression::expression_has_logic;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_expression_id;
@@ -159,6 +162,29 @@ where
         && let Some(preliminary_type) = get_closure_expression_type(context.source_file, source_expression)
     {
         block_context.locals.insert(*target_variable_id, Rc::new(preliminary_type));
+    }
+
+    if let (Some(source_expression), Some(target_variable_id)) = (source_expression, &target_variable_id)
+        && assignment_operator.is_none()
+        && let Expression::Variable(Variable::Direct(target_variable)) = target_expression
+        && !is_closure_expression(source_expression)
+        && captures_by_reference(source_expression, target_variable.name)
+    {
+        let mut preliminary_context = block_context.clone();
+        let (analyzed, _) =
+            context.record(|context| source_expression.analyze(context, &mut preliminary_context, artifacts));
+        analyzed?;
+
+        if let Some(source_type) = artifacts.get_expression_type(source_expression) {
+            let captured_type = match &existing_target_type {
+                Some(existing_type) => {
+                    combine_union_types(existing_type, source_type, context.codebase, CombinerOptions::default())
+                }
+                None => combine_union_types(&get_null(), source_type, context.codebase, CombinerOptions::default()),
+            };
+
+            block_context.locals.insert(*target_variable_id, Rc::new(captured_type));
+        }
     }
 
     let mut assignment_operation_type = None;
@@ -424,9 +450,11 @@ fn add_array_key_first_last_assignment_clauses<'ctx, 'arena, A>(
         return;
     };
 
-    if !artifacts.get_expression_type(array_argument.value).is_some_and(|array_type| array_type.is_array()) {
+    let Some(array_type) =
+        artifacts.get_expression_type(array_argument.value).filter(|array_type| array_type.is_array())
+    else {
         return;
-    }
+    };
 
     let Some(array_id) = get_block_expression_id(array_argument.value, context, block_context) else {
         return;
@@ -439,6 +467,14 @@ fn add_array_key_first_last_assignment_clauses<'ctx, 'arena, A>(
     let key_null = Assertion::IsType(TAtomic::Null);
     let key_exists = Assertion::ArrayKeyExists;
     let access_id = concat_word!(array_id.as_bytes(), b"[", target_variable_id.as_bytes(), b"]");
+
+    if array_type.types.iter().all(TAtomic::is_non_empty_array) {
+        if let Some(value_type) = get_array_value_union(array_type, context.codebase) {
+            block_context.locals.insert(access_id, Rc::new(value_type));
+        }
+
+        return;
+    }
     let possibilities = AssertionMap::from_iter([
         (target_variable_id, AssertionMap::from_iter([(key_null.to_hash(), key_null)])),
         (access_id, AssertionMap::from_iter([(key_exists.to_hash(), key_exists)])),
@@ -1702,6 +1738,28 @@ fn get_value_type_at_path(
     }
 
     Some(current_type)
+}
+
+fn captures_by_reference(expression: &Expression<'_>, variable_name: &[u8]) -> bool {
+    struct ByReferenceCaptureFinder<'name> {
+        variable_name: &'name [u8],
+        found: bool,
+    }
+
+    impl<'ast, 'arena> MutWalker<'ast, 'arena, ()> for ByReferenceCaptureFinder<'_> {
+        fn walk_in_closure_use_clause_variable(
+            &mut self,
+            variable: &'ast ClosureUseClauseVariable<'arena>,
+            _: &mut (),
+        ) {
+            self.found |= variable.ampersand.is_some() && variable.variable.name == self.variable_name;
+        }
+    }
+
+    let mut finder = ByReferenceCaptureFinder { variable_name, found: false };
+    finder.walk_expression(expression, &mut ());
+
+    finder.found
 }
 
 #[cfg(test)]

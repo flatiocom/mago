@@ -34,6 +34,7 @@ use crate::invocation::return_type_fetcher::fetch_declared_invocation_return_typ
 use crate::invocation::return_type_fetcher::fetch_invocation_provider_return_type;
 use crate::invocation::template_result::populate_template_result_from_invocation;
 use crate::utils::expression::array::get_array_target_type_given_index;
+use crate::utils::expression::array::get_array_value_union;
 use crate::utils::expression::expression_is_nullsafe;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_index_id;
@@ -93,6 +94,17 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
         block_context.flags.set_inside_general_use(true);
         self.array.analyze(context, block_context, artifacts)?;
         block_context.flags.set_inside_general_use(was_inside_general_use);
+
+        if let (Some(array_id), Some(keyed_array_var_id)) = (extended_var_id, keyed_array_var_id) {
+            remember_first_or_last_key_of_non_empty_array(
+                context,
+                block_context,
+                artifacts,
+                self,
+                array_id,
+                keyed_array_var_id,
+            );
+        }
 
         if let Some(keyed_array_var_id) = &keyed_array_var_id
             && block_context.has_variable_atom(*keyed_array_var_id)
@@ -187,6 +199,37 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for ArrayAccess<'arena> {
         }
 
         Ok(())
+    }
+}
+
+fn remember_first_or_last_key_of_non_empty_array<'ctx, A>(
+    context: &Context<'ctx, '_, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &AnalysisArtifacts,
+    array_access: &ArrayAccess<'_>,
+    array_id: Word,
+    keyed_array_var_id: Word,
+) where
+    A: Arena,
+{
+    let key_of_same_array = [b"(array_key_first(".as_slice(), b"(array_key_last("].into_iter().any(|prefix| {
+        keyed_array_var_id.as_bytes()
+            == concat_word!(array_id.as_bytes(), b"[", prefix, array_id.as_bytes(), b"))]").as_bytes()
+    });
+    if !key_of_same_array || block_context.locals.contains_key(&keyed_array_var_id) {
+        return;
+    }
+
+    let Some(array_type) = artifacts.get_expression_type(array_access.array) else {
+        return;
+    };
+
+    if array_type.types.is_empty() || !array_type.types.iter().all(TAtomic::is_non_empty_array) {
+        return;
+    }
+
+    if let Some(value_type) = get_array_value_union(array_type, context.codebase) {
+        block_context.locals.insert(keyed_array_var_id, Rc::new(value_type));
     }
 }
 

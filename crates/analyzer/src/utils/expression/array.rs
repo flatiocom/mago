@@ -22,9 +22,11 @@ use mago_codex::ttype::atomic::array::list::TList;
 use mago_codex::ttype::atomic::derived::TDerived;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::object::named::TNamedObject;
+use mago_codex::ttype::atomic::reference::TReference;
 use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::atomic::scalar::int::TInteger;
 use mago_codex::ttype::atomic::scalar::string::TStringLiteral;
+use mago_codex::ttype::combine_union_types;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_identical;
@@ -32,6 +34,7 @@ use mago_codex::ttype::comparator::union_comparator::is_contained_by;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
 use mago_codex::ttype::expander::expand_union;
+use mago_codex::ttype::get_array_value_parameter;
 use mago_codex::ttype::get_arraykey;
 use mago_codex::ttype::get_int;
 use mago_codex::ttype::get_mixed;
@@ -500,7 +503,9 @@ where
         value_type = string_value_rejecting_write;
     }
 
-    let reports_invalid_index = !has_valid_expected_index && reports_index_type;
+    let index_names_unknown_class =
+        index_type.types.iter().any(|atomic| matches!(atomic, TAtomic::Reference(TReference::Symbol { .. })));
+    let reports_invalid_index = !has_valid_expected_index && reports_index_type && !index_names_unknown_class;
     if reports_invalid_index {
         let index_type_str = index_type.get_id();
         let array_like_type_str = array_like_type.get_id();
@@ -1224,12 +1229,10 @@ where
 
                 if has_value_parameter {
                     value_parameter.into_owned()
-                } else if *key_in_other_variant {
+                } else {
                     let mut missing_key_null = get_null();
                     missing_key_null.set_error_path_null(true);
                     missing_key_null
-                } else {
-                    get_null()
                 }
             } else if has_value_parameter {
                 // Inside isset() check on array with generic parameters - the key might exist at runtime
@@ -1884,4 +1887,18 @@ fn can_be_array(atomic: &TAtomic) -> bool {
         TAtomic::GenericParameter(parameter) => parameter.constraint.types.iter().any(can_be_array),
         _ => false,
     }
+}
+
+pub(crate) fn get_array_value_union(array_type: &TUnion, codebase: &CodebaseMetadata) -> Option<TUnion> {
+    array_type.types.iter().fold(None, |value_type, atomic| {
+        let TAtomic::Array(array) = atomic else {
+            return value_type;
+        };
+
+        let item_type = get_array_value_parameter(array, codebase);
+        Some(match value_type {
+            Some(value_type) => combine_union_types(&value_type, &item_type, codebase, CombinerOptions::default()),
+            None => item_type,
+        })
+    })
 }

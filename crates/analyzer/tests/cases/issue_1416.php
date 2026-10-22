@@ -18,6 +18,7 @@ class Foo1416
             }
         }
         foreach (['aa', 'bb'] as $name) {
+            // @mago-expect analysis:redundant-type-comparison,redundant-logical-operation
             if (is_array($this->{$name}) && count($this->{$name}) > 0) {
                 $result[] = $name;
             }
