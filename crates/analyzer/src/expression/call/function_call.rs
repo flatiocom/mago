@@ -25,7 +25,7 @@ use crate::error::AnalysisError;
 use crate::expression::call::analyze_invocation_targets;
 use crate::expression::call::get_function_like_target;
 use crate::expression::call::get_function_like_target_with_skip;
-use crate::expression::call::in_array::report_redundant_in_array;
+use crate::expression::call::in_array::report_constant_in_array;
 use crate::invocation::InvocationArgumentsSource;
 use crate::invocation::InvocationTarget;
 use crate::plugin::ExpressionHookResult;
@@ -94,7 +94,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for FunctionCall<'arena> {
             false,
         )?;
 
-        report_redundant_in_array(context, artifacts, self);
+        report_constant_in_array(context, artifacts, self);
 
         if context.plugin_registry.has_function_call_hooks() {
             let mut hook_context = HookContext::new(context.codebase, context.source_file, block_context, artifacts);

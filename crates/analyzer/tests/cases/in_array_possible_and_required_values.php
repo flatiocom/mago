@@ -171,6 +171,7 @@ function required_null_in_non_empty_array(?int $needle, array $haystack): void
 /** @param list<string> $haystack */
 function disjoint_values(int $needle, array $haystack): int
 {
+    // @mago-expect analysis:impossible-type-comparison
     if (!in_array($needle, $haystack, true)) {
         return $needle;
     }

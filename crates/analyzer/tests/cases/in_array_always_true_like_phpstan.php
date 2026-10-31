@@ -136,6 +136,8 @@ function every_case_of_an_enum(Pair $pair, string $other): void
  * @param list<'a'|'b'> $list
  * @param array{0: 'a', 1?: 'b'} $shape
  * @param array{'a'|'b'} $loose
+ *
+ * @mago-expect analysis:impossible-type-comparison
  */
 function possibly_false(string $value, string $wider, string $any, array $list, array $shape, array $loose, int $int, bool $strict): void
 {

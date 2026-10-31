@@ -5,7 +5,11 @@ use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::scalar::TScalar;
+use mago_codex::ttype::combine_union_types;
+use mago_codex::ttype::combiner::CombinerOptions;
+use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_identical;
 use mago_codex::ttype::get_array_value_parameter;
+use mago_codex::ttype::get_never;
 use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
@@ -31,16 +35,17 @@ enum FiniteValue {
     EnumCase(Word, Word),
 }
 
-/// Reports a strict `in_array()` call whose needle can only hold values that every possible haystack
-/// is sure to contain, so the call always returns `true`, like PHPStan's `function.alreadyNarrowedType`.
-pub(super) fn report_redundant_in_array<A>(
+/// Reports a strict `in_array()` call that always returns `false`, its needle sharing no value with the
+/// haystack, like PHPStan's `function.impossibleType`, or always `true`, its needle holding only values
+/// that every possible haystack is sure to contain, like PHPStan's `function.alreadyNarrowedType`.
+pub(super) fn report_constant_in_array<A>(
     context: &mut Context<'_, '_, A>,
     artifacts: &AnalysisArtifacts,
     function_call: &FunctionCall<'_>,
 ) where
     A: Arena,
 {
-    if !is_in_array(context, function_call) || context.last_conditions.contains(&function_call.span()) {
+    if !is_in_array(context, function_call) {
         return;
     }
 
@@ -55,19 +60,44 @@ pub(super) fn report_redundant_in_array<A>(
     };
 
     let codebase = context.codebase;
-    let Some(needle_values) = get_finite_values(codebase, needle_type) else {
-        return;
-    };
+    let needle_values = get_finite_values(codebase, needle_type);
 
     let is_strict = strict.and_then(|strict| artifacts.get_expression_type(strict)).is_some_and(TUnion::is_true)
-        || needle_values.iter().all(|value| matches!(value, FiniteValue::EnumCase(..)))
+        || needle_values
+            .as_ref()
+            .is_some_and(|values| values.iter().all(|value| matches!(value, FiniteValue::EnumCase(..))))
         || haystack_holds_only_enums(codebase, haystack_type);
 
-    if !is_strict || !is_always_in_haystack(codebase, &needle_values, haystack_type) {
+    if !is_strict {
         return;
     }
 
     let needle_type_id = needle_type.get_id();
+    if is_never_in_haystack(codebase, needle_type, haystack_type) {
+        context.collector.report_with_code(
+            IssueCode::ImpossibleTypeComparison,
+            Issue::warning(format!(
+                "Impossible `in_array()` call: the needle of type `{needle_type_id}` is never in the haystack."
+            ))
+            .with_annotation(
+                Annotation::primary(function_call.span()).with_message("This call always returns `false`."),
+            )
+            .with_help("Consider removing this check, or fix the needle or the haystack."),
+        );
+
+        return;
+    }
+
+    let Some(needle_values) = needle_values else {
+        return;
+    };
+
+    if context.last_conditions.contains(&function_call.span())
+        || !is_always_in_haystack(codebase, &needle_values, haystack_type)
+    {
+        return;
+    }
+
     context.collector.report_with_code(
         IssueCode::RedundantTypeComparison,
         Issue::warning(format!(
@@ -176,6 +206,58 @@ fn haystack_holds_only_enums(codebase: &CodebaseMetadata, haystack_type: &TUnion
                 _ => false,
             })
     })
+}
+
+fn is_never_in_haystack(codebase: &CodebaseMetadata, needle_type: &TUnion, haystack_type: &TUnion) -> bool {
+    let mut arrays = vec![];
+    for atomic in haystack_type.types.as_ref() {
+        let TAtomic::Array(array) = atomic else {
+            return false;
+        };
+
+        arrays.push(array);
+    }
+
+    if arrays.is_empty() {
+        return false;
+    }
+
+    let value_type = arrays.iter().fold(get_never(), |value_type, array| {
+        combine_union_types(
+            &value_type,
+            &get_array_value_parameter(array, codebase),
+            codebase,
+            CombinerOptions::default(),
+        )
+    });
+
+    let finite_values = get_finite_values(codebase, needle_type).zip(get_finite_values(codebase, &value_type));
+    if arrays.iter().all(|array| !array.is_sealed() && is_sure_to_be_non_empty(array)) {
+        return finite_values.is_some_and(|(needle_values, haystack_values)| {
+            matches!(
+                (needle_values.as_slice(), haystack_values.as_slice()),
+                ([needle_value], [haystack_value]) if needle_value != haystack_value
+            )
+        });
+    }
+
+    value_type.is_never()
+        || finite_values.is_some_and(|(needle_values, haystack_values)| {
+            needle_values.iter().all(|value| !haystack_values.contains(value))
+        })
+        || !can_expression_types_be_identical(codebase, needle_type, &value_type, false, false)
+}
+
+fn is_sure_to_be_non_empty(array: &TArray) -> bool {
+    array.is_non_empty()
+        || match array {
+            TArray::List(list) => {
+                list.get_known_elements().is_some_and(|elements| elements.values().any(|(optional, _)| !optional))
+            }
+            TArray::Keyed(keyed) => {
+                keyed.get_known_items().is_some_and(|items| items.values().any(|(optional, _)| !optional))
+            }
+        }
 }
 
 fn is_always_in_haystack(codebase: &CodebaseMetadata, needle_values: &[FiniteValue], haystack_type: &TUnion) -> bool {
