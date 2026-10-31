@@ -3626,3 +3626,4 @@ test_case!(negated_in_array_over_values_it_may_lack_keeps_offset_read);
 test_case!(in_array_never_true_like_phpstan);
 test_case!(in_array_class_string_values_like_phpstan);
 test_case!(in_array_int_range_values_like_phpstan);
+test_case!(last_condition_counts_a_trailing_comment_as_a_statement);
