@@ -5,6 +5,7 @@ use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::scalar::TScalar;
+use mago_codex::ttype::atomic::scalar::class_like_string::TClassLikeString;
 use mago_codex::ttype::combine_union_types;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_identical;
@@ -159,6 +160,9 @@ fn get_atomic_finite_values(codebase: &CodebaseMetadata, atomic: &TAtomic) -> Op
     let value = match atomic {
         TAtomic::Null => FiniteValue::Null,
         TAtomic::Scalar(TScalar::String(string)) => FiniteValue::String(string.get_known_literal_value()?.to_vec()),
+        TAtomic::Scalar(TScalar::ClassLikeString(TClassLikeString::Literal { value })) => {
+            FiniteValue::String(value.as_bytes().to_vec())
+        }
         TAtomic::Scalar(TScalar::Integer(integer)) => FiniteValue::Int(integer.get_literal_value()?),
         TAtomic::Scalar(TScalar::Float(float)) => FiniteValue::Float(float.get_literal_value()?),
         TAtomic::Scalar(TScalar::Bool(boolean)) => match boolean.value {
