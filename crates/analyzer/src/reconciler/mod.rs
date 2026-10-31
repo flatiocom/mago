@@ -1684,13 +1684,14 @@ where
 }
 
 /// Like PHPStan, which specifies no type for `$x` in these conditions, so a remembered offset read
-/// of `$x` stays unnarrowed: `$x !== $y`, `$x != $y` and `!in_array($x, $list)` where `$y` or the
-/// list values have no finite type, and `$x === $y` where `$x` has only finite types and `$y` none.
+/// of `$x` stays unnarrowed: `$x !== $y` and `$x != $y` where `$y` is not a single value,
+/// `!in_array($x, $list)` for the list values it is not sure to hold, and `$x === $y` where `$x`
+/// has only single-value types and `$y` none.
 fn leaves_type_unspecified(assertions: &AssertionSet, before: Option<&TUnion>) -> bool {
     assertions.iter().flatten().all(|assertion| match assertion {
         Assertion::IsNotIdentical(atomic) => !is_finite_atomic(atomic),
         Assertion::IsNotEqual(atomic) => !is_finite_atomic(atomic) || !loose_inequality_narrows(atomic, before),
-        Assertion::NotInArray(values) => !values.types.iter().any(is_finite_atomic),
+        Assertion::NotInArray(_) => true,
         Assertion::IsIdentical(atomic) => {
             !is_finite_atomic(atomic) && before.is_some_and(|before| before.types.iter().all(is_finite_atomic))
         }

@@ -3622,3 +3622,4 @@ test_case!(comparison_with_a_general_bool_keeps_offset_read, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(negated_in_array_over_values_it_may_lack_keeps_offset_read);
