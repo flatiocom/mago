@@ -3617,3 +3617,8 @@ test_case!(static_in_a_callable_property_type_is_the_receiver_type, {
     s
 });
 test_case!(an_out_parameter_narrowed_in_the_condition_that_writes_it);
+test_case!(comparison_with_a_general_bool_keeps_offset_read, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});

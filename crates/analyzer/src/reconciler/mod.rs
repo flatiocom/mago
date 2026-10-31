@@ -1737,11 +1737,7 @@ fn drops_only_error_path_null(before: &TUnion, after: &TUnion) -> bool {
 }
 
 fn is_finite_atomic(atomic: &TAtomic) -> bool {
-    atomic.is_literal()
-        || matches!(
-            atomic,
-            TAtomic::Scalar(TScalar::Bool(_)) | TAtomic::Object(TObject::Enum(TEnum { case: Some(_), .. }))
-        )
+    atomic.is_literal() || matches!(atomic, TAtomic::Object(TObject::Enum(TEnum { case: Some(_), .. })))
 }
 
 fn is_null_assertion(assertion: &Assertion) -> bool {
