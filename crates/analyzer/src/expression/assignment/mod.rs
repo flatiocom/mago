@@ -1052,15 +1052,13 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
     if !from_docblock
         && assigned_type.is_bool()
         && let Some(source_expression) = source_expression
-        && match unwrap_expression(source_expression) {
-            Expression::Binary(_) => true,
-            Expression::Call(call) => {
-                let span = call.span();
-                let range = (span.start.offset, span.end.offset);
-
-                artifacts.if_true_assertions.contains_key(&range) || artifacts.if_false_assertions.contains_key(&range)
+        && let Some(keeps_call_result_clauses) = match unwrap_expression(source_expression) {
+            Expression::Binary(_) => Some(true),
+            Expression::Call(call) => Some(has_call_assertions(artifacts, call)),
+            Expression::UnaryPrefix(UnaryPrefix { operator: UnaryPrefixOperator::Not(_), operand }) => {
+                matches!(unwrap_expression(operand), Expression::Call(_)).then_some(false)
             }
-            _ => false,
+            _ => None,
         }
     {
         handle_assignment_with_boolean_logic(
@@ -1070,6 +1068,7 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
             variable_span,
             source_expression,
             variable_id,
+            keeps_call_result_clauses,
         );
     }
 
@@ -1649,6 +1648,7 @@ fn handle_assignment_with_boolean_logic<'ctx, 'arena, A>(
     variable_expression_id: Span,
     source_expression: &Expression<'arena>,
     variable_id: Word,
+    keeps_call_result_clauses: bool,
 ) where
     A: Arena,
 {
@@ -1669,8 +1669,16 @@ fn handle_assignment_with_boolean_logic<'ctx, 'arena, A>(
         return;
     };
 
-    let right_clauses =
-        BlockContext::filter_clauses(context, variable_id, right_clauses.into_iter().map(Rc::new).collect(), None);
+    let right_clauses = BlockContext::filter_clauses(
+        context,
+        variable_id,
+        right_clauses
+            .into_iter()
+            .filter(|clause| keeps_call_result_clauses || !clause.possibilities.keys().any(is_result_id))
+            .map(Rc::new)
+            .collect(),
+        None,
+    );
 
     if right_clauses.is_empty() {
         return;
@@ -1699,6 +1707,19 @@ fn handle_assignment_with_boolean_logic<'ctx, 'arena, A>(
         .into_iter()
         .map(Rc::new),
     );
+}
+
+fn has_call_assertions(artifacts: &AnalysisArtifacts, call: &Call<'_>) -> bool {
+    let span = call.span();
+    let range = (span.start.offset, span.end.offset);
+
+    artifacts.if_true_assertions.contains_key(&range) || artifacts.if_false_assertions.contains_key(&range)
+}
+
+fn is_result_id(id: &Word) -> bool {
+    let id = id.as_bytes();
+
+    id.starts_with(b"*") || id.ends_with(b")")
 }
 
 fn is_closure_expression<'arena>(expression: &'arena Expression<'arena>) -> bool {
