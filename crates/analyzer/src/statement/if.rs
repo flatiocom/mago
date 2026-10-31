@@ -255,8 +255,14 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             .definitely_uninitialized_property_ids
             .clone_from(&temporary_else_context.definitely_uninitialized_property_ids);
 
+        let negated_disjunction_consequences = context.resolve_disjunctions(
+            self.span(),
+            &if_scope.negated_clauses,
+            else_block_context.clauses.iter().map(Rc::as_ref),
+        );
+        let else_entry_clauses = if_scope.negated_clauses.iter().cloned().chain(negated_disjunction_consequences);
         else_block_context.clauses = mago_algebra::saturate_shared_clauses(
-            else_block_context.clauses.iter().cloned().chain(if_scope.negated_clauses.iter().cloned().map(Rc::new)),
+            else_block_context.clauses.iter().cloned().chain(else_entry_clauses.map(Rc::new)),
             &context.settings.algebra_thresholds(),
         );
 

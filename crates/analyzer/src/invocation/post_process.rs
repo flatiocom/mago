@@ -1502,8 +1502,13 @@ where
                         has_non_redundant_assertion = true;
                     }
 
-                    for clause in &new_clauses {
-                        block_context.clauses.push(Rc::new(clause.clone()));
+                    let disjunction_consequences = context.resolve_disjunctions(
+                        assertion_expression.span(),
+                        &new_clauses,
+                        block_context.clauses.iter().map(Rc::as_ref),
+                    );
+                    for clause in new_clauses.iter().cloned().chain(disjunction_consequences) {
+                        block_context.clauses.push(Rc::new(clause));
                     }
 
                     let clauses = saturate_clauses(
