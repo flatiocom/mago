@@ -6,6 +6,7 @@ use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::atomic::scalar::class_like_string::TClassLikeString;
+use mago_codex::ttype::atomic::scalar::int::TInteger;
 use mago_codex::ttype::combine_union_types;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_identical;
@@ -24,6 +25,8 @@ use mago_word::ascii_lowercase_word;
 use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
 use crate::context::Context;
+
+const MAX_FINITE_VALUES: usize = 128;
 
 /// One value a type can hold, compared as `===` compares it.
 #[derive(Debug, Clone, PartialEq)]
@@ -153,7 +156,7 @@ fn get_finite_values(codebase: &CodebaseMetadata, union: &TUnion) -> Option<Vec<
         }
     }
 
-    (!values.is_empty()).then_some(values)
+    (!values.is_empty() && values.len() <= MAX_FINITE_VALUES).then_some(values)
 }
 
 fn get_atomic_finite_values(codebase: &CodebaseMetadata, atomic: &TAtomic) -> Option<Vec<FiniteValue>> {
@@ -162,6 +165,11 @@ fn get_atomic_finite_values(codebase: &CodebaseMetadata, atomic: &TAtomic) -> Op
         TAtomic::Scalar(TScalar::String(string)) => FiniteValue::String(string.get_known_literal_value()?.to_vec()),
         TAtomic::Scalar(TScalar::ClassLikeString(TClassLikeString::Literal { value })) => {
             FiniteValue::String(value.as_bytes().to_vec())
+        }
+        TAtomic::Scalar(TScalar::Integer(TInteger::Range(from, to)))
+            if usize::try_from(to.checked_sub(*from)?).ok()? <= MAX_FINITE_VALUES =>
+        {
+            return Some((*from..=*to).map(FiniteValue::Int).collect());
         }
         TAtomic::Scalar(TScalar::Integer(integer)) => FiniteValue::Int(integer.get_literal_value()?),
         TAtomic::Scalar(TScalar::Float(float)) => FiniteValue::Float(float.get_literal_value()?),
