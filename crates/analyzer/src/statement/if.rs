@@ -6,6 +6,7 @@ use std::str::FromStr;
 use foldhash::HashSet;
 
 use mago_algebra::AssertionMap;
+use mago_algebra::assertion_set::AssertionSet;
 use mago_word::Word;
 use mago_word::WordMap;
 use mago_word::WordSet;
@@ -1262,7 +1263,8 @@ where
         if_scope.reasonable_clauses = vec![];
     }
 
-    if !if_scope.negated_types.is_empty() {
+    if !if_scope.negated_types.is_empty() && (!has_leaving_statements || narrows_one_variable(&if_scope.negated_types))
+    {
         let variables_to_update = if_scope
             .negated_types
             .keys()
@@ -1543,6 +1545,12 @@ fn is_offset_under_mixed(block_context: &BlockContext<'_>, variable_id: Word, mi
     block_context.locals.get(&mixed_variable_id).is_some_and(|mixed_type| mixed_type.is_mixed())
         && variable_id.as_bytes()[mixed_variable_id.as_bytes().len()..].starts_with(b"[")
         && memchr::memmem::find(variable_id.as_bytes(), b"->").is_none()
+}
+
+/// A leaving `else` takes its types out of the outer scope only when they narrow one variable: after
+/// `if ($a === null || $b === null) {…} else { throw … }` either variable may hold an object.
+fn narrows_one_variable(negated_types: &AssertionMap<Word, AssertionSet>) -> bool {
+    negated_types.keys().any(|root| negated_types.keys().all(|variable_id| var_has_root(*variable_id, *root)))
 }
 
 fn updates_from_branch(variable_id: &Word, branch_context: &BlockContext<'_>, has_leaving_statements: bool) -> bool {
