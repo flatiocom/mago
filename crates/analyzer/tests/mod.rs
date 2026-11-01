@@ -3644,3 +3644,4 @@ test_case!(never_identical_to_empty_array_native, {
     s
 });
 test_case!(loop_condition_reports_comparison);
+test_case!(nullsafe_chain_narrowed_by_comparison);

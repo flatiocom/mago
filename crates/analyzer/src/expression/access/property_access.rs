@@ -41,6 +41,7 @@ use crate::statement::class_like::initialization::report_read_before_initializat
 use crate::utils::deprecation::report_deprecated_property;
 use crate::utils::expression::get_block_expression_id;
 use crate::utils::expression::get_expression_id;
+use crate::utils::expression::get_non_nullsafe_expression_id;
 use crate::utils::expression::get_property_access_expression_id;
 use crate::utils::expression::get_variable_id;
 
@@ -130,9 +131,18 @@ where
         Some(context.codebase),
     );
 
-    let memoized_type = property_access_id
-        .filter(|_| context.settings.memoize_properties)
-        .and_then(|property_access_id| block_context.locals.get(&property_access_id).cloned());
+    let memoized_type =
+        property_access_id.filter(|_| context.settings.memoize_properties).and_then(|property_access_id| {
+            let narrowed_type = is_null_safe
+                .then(|| get_narrowed_non_nullsafe_type(context, block_context, object, property_access_id))
+                .flatten();
+            if let Some(narrowed_type) = narrowed_type {
+                block_context.locals.insert(property_access_id, Rc::clone(&narrowed_type));
+                return Some(narrowed_type);
+            }
+
+            block_context.locals.get(&property_access_id).cloned()
+        });
     let reads_through_call = property_access_id
         .is_some_and(|property_access_id| memchr::memmem::find(property_access_id.as_bytes(), b"()").is_some());
 
@@ -143,6 +153,8 @@ where
         add_memoized_property_reference(context, block_context, artifacts, object, property_selector, is_null_safe)?;
         if let Expression::ArrayAccess(array_access) = object {
             array_access.analyze(context, block_context, artifacts)?;
+        } else if let Expression::Access(Access::NullSafeProperty(_)) = object {
+            object.analyze(context, block_context, artifacts)?;
         }
 
         report_memoized_receiver(
@@ -379,6 +391,28 @@ fn record_memoized_receiver<A>(
         Some(receiver_type) => artifacts.read_memoized_property_receivers.insert(property_access_id, receiver_type),
         None => artifacts.read_memoized_property_receivers.remove(&property_access_id),
     };
+}
+
+fn get_narrowed_non_nullsafe_type<'ctx, 'arena, A>(
+    context: &Context<'ctx, 'arena, A>,
+    block_context: &BlockContext<'ctx>,
+    object: &Expression<'arena>,
+    property_access_id: Word,
+) -> Option<Rc<TUnion>>
+where
+    A: Arena,
+{
+    let object_id = get_block_expression_id(object, context, block_context)?;
+    let object_type = get_non_nullsafe_expression_id(object_id)
+        .and_then(|non_nullsafe_object_id| block_context.locals.get(&non_nullsafe_object_id))
+        .or_else(|| block_context.locals.get(&object_id))?;
+    if object_type.can_be_null() || object_type.possibly_undefined() {
+        return None;
+    }
+
+    let non_nullsafe_id = get_non_nullsafe_expression_id(property_access_id)?;
+
+    block_context.locals.get(&non_nullsafe_id).cloned()
 }
 
 /// A remembered nullsafe read skips the property resolution, so the receiver is checked here.
