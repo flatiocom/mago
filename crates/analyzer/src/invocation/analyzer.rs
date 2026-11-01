@@ -964,7 +964,20 @@ where
                     method_class_type,
                 );
 
-                infer_parameter_templates_from_default(context, &parameter_type, &default_type, template_result);
+                let mut default_bounds =
+                    TemplateResult::new(template_result.template_types.clone(), HashMap::default());
+                infer_parameter_templates_from_default(context, &parameter_type, &default_type, &mut default_bounds);
+                for (template_name, bounds_by_parent) in default_bounds.lower_bounds {
+                    for (generic_parent, bounds) in bounds_by_parent {
+                        template_result
+                            .lower_bounds
+                            .entry(template_name)
+                            .or_default()
+                            .entry(generic_parent)
+                            .or_default()
+                            .extend(bounds);
+                    }
+                }
             }
 
             let Some(parameter_name) = unused_parameter.get_name() else {
