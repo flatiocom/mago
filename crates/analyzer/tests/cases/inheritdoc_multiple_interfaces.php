@@ -23,7 +23,11 @@ interface Writable
 
 class FileHandler implements Readable, Writable
 {
-    /** @inheritDoc */
+    /**
+     * @inheritDoc
+     *
+     * @mago-expect analysis:incompatible-parameter-type
+     */
     public function read(int $offset)
     {
         // Should inherit: @param int $offset, @return string

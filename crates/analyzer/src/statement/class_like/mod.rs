@@ -2982,7 +2982,7 @@ fn report_signature_compatibility_issue<'ctx, A>(
                 .with_help("Add optional parameters or reduce the number of required parameters in the child method."),
             );
         }
-        SignatureCompatibilityIssue::IncompatibleParameterType { parameter_index, child_type, parent_type } => {
+        SignatureCompatibilityIssue::IncompatibleParameterType { parameter_index, child_type, parent_type, native } => {
             let param_name: String = parent_method
                 .parameters
                 .get(parameter_index)
@@ -3004,11 +3004,15 @@ fn report_signature_compatibility_issue<'ctx, A>(
                 .with_annotation(
                     Annotation::secondary(child_class_span).with_message(format!("In class `{child_name}`")),
                 )
-                .with_note("Parameter types must be contravariant: child must accept equal or wider types than parent.")
+                .with_note(if native {
+                    method_signature::NATIVE_SIGNATURE_NOTE
+                } else {
+                    "Parameter types must be contravariant: child must accept equal or wider types than parent."
+                })
                 .with_help("Change the parameter type to be compatible with the parent method."),
             );
         }
-        SignatureCompatibilityIssue::IncompatibleReturnType { child_type, parent_type } => {
+        SignatureCompatibilityIssue::IncompatibleReturnType { child_type, parent_type, native } => {
             context.collector.report_with_code(
                 IssueCode::IncompatibleReturnType,
                 Issue::error(format!(
@@ -3024,7 +3028,11 @@ fn report_signature_compatibility_issue<'ctx, A>(
                 .with_annotation(
                     Annotation::secondary(child_class_span).with_message(format!("In class `{child_name}`")),
                 )
-                .with_note("Return types must be covariant: child must return equal or narrower types than parent.")
+                .with_note(if native {
+                    method_signature::NATIVE_SIGNATURE_NOTE
+                } else {
+                    "Return types must be covariant: child must return equal or narrower types than parent."
+                })
                 .with_help("Change the return type to be compatible with the parent method."),
             );
         }

@@ -8,9 +8,13 @@ use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
 use mago_codex::ttype::expander::expand_union;
+use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::union::TUnion;
 use mago_codex::visibility::Visibility;
 use mago_word::Word;
+
+pub const NATIVE_SIGNATURE_NOTE: &str =
+    "PHP refuses to load a class whose native types do not match the parent method's.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureCompatibilityIssue {
@@ -18,8 +22,8 @@ pub enum SignatureCompatibilityIssue {
     StaticModifierMismatch { child_is_static: bool, parent_is_static: bool },
     VisibilityNarrowed { child_visibility: Visibility, parent_visibility: Visibility },
     ParameterCountMismatch { child_required_count: usize, parent_required_count: usize },
-    IncompatibleParameterType { parameter_index: usize, child_type: Word, parent_type: Word },
-    IncompatibleReturnType { child_type: Word, parent_type: Word },
+    IncompatibleParameterType { parameter_index: usize, child_type: Word, parent_type: Word, native: bool },
+    IncompatibleReturnType { child_type: Word, parent_type: Word, native: bool },
     MissingReturnTypeDeclaration { parent_type: Word },
     ParameterNameMismatch { parameter_index: usize, child_name: Word, parent_name: Word },
 }
@@ -145,10 +149,46 @@ pub fn validate_method_signature_compatibility(
         }
     }
 
+    let expansion_options = TypeExpansionOptions {
+        self_class: Some(child_class_name),
+        static_class_type: StaticClassType::Name(child_class_name),
+        function_is_final: child_method_meta.is_final,
+        ..Default::default()
+    };
+
     for (index, parent_param) in parent_method.parameters.iter().enumerate() {
         let Some(child_param) = child_method.parameters.get(index) else {
             continue;
         };
+
+        if let Some(child_native) = &child_param.type_declaration_metadata {
+            let mut child_native_type = child_native.type_union.clone();
+            let mut parent_native_type = parent_param
+                .type_declaration_metadata
+                .as_ref()
+                .map_or_else(get_mixed, |native| native.type_union.clone());
+            expand_union(codebase, &mut child_native_type, &expansion_options);
+            expand_union(codebase, &mut parent_native_type, &expansion_options);
+
+            if !union_comparator::is_contained_by(
+                codebase,
+                &parent_native_type,
+                &child_native_type,
+                false,
+                false,
+                false,
+                &mut ComparisonResult::new(),
+            ) {
+                issues.push(SignatureCompatibilityIssue::IncompatibleParameterType {
+                    parameter_index: index,
+                    child_type: child_native_type.get_id(),
+                    parent_type: parent_native_type.get_id(),
+                    native: true,
+                });
+
+                continue;
+            }
+        }
 
         let parent_param_type = match &parent_param.type_metadata {
             Some(t) => &t.type_union,
@@ -162,13 +202,6 @@ pub fn validate_method_signature_compatibility(
 
         let mut expanded_parent_param_type = parent_param_type.clone();
         let mut expanded_child_param_type = child_param_type.clone();
-
-        let expansion_options = TypeExpansionOptions {
-            self_class: Some(child_class_name),
-            static_class_type: StaticClassType::Name(child_class_name),
-            function_is_final: child_method_meta.is_final,
-            ..Default::default()
-        };
 
         if expanded_parent_param_type.is_expandable() {
             expand_union(codebase, &mut expanded_parent_param_type, &expansion_options);
@@ -195,6 +228,7 @@ pub fn validate_method_signature_compatibility(
                 parameter_index: index,
                 child_type: expanded_child_param_type.get_id(),
                 parent_type: expanded_parent_param_type.get_id(),
+                native: false,
             });
         }
     }
@@ -273,6 +307,7 @@ pub fn validate_method_signature_compatibility(
             issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
                 child_type: expanded_child_return_type.get_id(),
                 parent_type: expanded_parent_return_type.get_id(),
+                native: true,
             });
             return issues;
         }
@@ -313,6 +348,7 @@ pub fn validate_method_signature_compatibility(
                 issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
                     child_type: expanded_child_return_type.get_id(),
                     parent_type: expanded_parent_return_type.get_id(),
+                    native: false,
                 });
                 return issues;
             }
@@ -357,6 +393,7 @@ pub fn validate_method_signature_compatibility(
                 issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
                     child_type: expanded_child_return_type.get_id(),
                     parent_type: parent_return.type_union.get_id(),
+                    native: false,
                 });
                 return issues;
             }
