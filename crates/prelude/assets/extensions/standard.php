@@ -3271,8 +3271,9 @@ function socket_set_blocking($stream, bool $enable): bool {}
  *   mode: string,
  *   seekable: bool,
  *   uri: string,
- *   crypto: array,
- *   mediatype: string,
+ *   crypto?: array{protocol: string, cipher_name: string, cipher_bits: int, cipher_version: string, alpn_protocol?: string},
+ *   mediatype?: string,
+ *   base64?: bool,
  * }
  */
 function stream_get_meta_data($stream): array {}

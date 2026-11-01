@@ -720,7 +720,7 @@ namespace {
          *   'oci:decl_type': int|string,
          *   'native_type': string,
          *   'scale': int,
-         *   'flags': array,
+         *   'flags': array<int, string>,
          *   'pdo_type': int,
          * }|false
          */
