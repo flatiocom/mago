@@ -3637,3 +3637,9 @@ test_case!(natively_true_condition_merges_no_else, {
     s.treat_docblock_types_as_certain = false;
     s
 });
+test_case!(never_identical_to_empty_array);
+test_case!(never_identical_to_empty_array_native, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});

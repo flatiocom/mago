@@ -10,6 +10,7 @@ namespace NativeTypesOfBuiltInCalls;
  * @return list<string|null>
  *
  * @mago-expect analysis:impossible-type-comparison
+ * @mago-expect analysis:redundant-comparison
  */
 function first_row($handle): array
 {

@@ -5,7 +5,7 @@ declare(strict_types=1);
 function ternary_keeps_the_exclusion(mixed $value): bool
 {
     $data = $value !== [] ? $value : null; // @mago-expect analysis:mixed-assignment
-    if ($data === [] || $data === null) { // @mago-expect analysis:redundant-type-comparison
+    if ($data === [] || $data === null) { // @mago-expect analysis:redundant-comparison,redundant-type-comparison
         return false;
     }
 

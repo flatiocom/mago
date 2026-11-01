@@ -256,6 +256,16 @@ fn is_truthy_string_or_mixed_against_falsy(truthy: &TUnion, falsy: &TUnion) -> b
         && !falsy.has_array()
 }
 
+fn is_never_the_empty_array(value: &TUnion, empty_array: &TUnion) -> bool {
+    empty_array.is_empty_array()
+        && value.types.iter().all(|atomic| match atomic {
+            TAtomic::Array(array) => array.is_non_empty(),
+            TAtomic::Mixed(mixed) => mixed.excludes_empty_array() || mixed.is_truthy(),
+            TAtomic::Null | TAtomic::Scalar(_) | TAtomic::Object(_) => true,
+            _ => false,
+        })
+}
+
 pub fn are_definitely_not_identical(
     codebase: &CodebaseMetadata,
     lhs: &TUnion,
@@ -267,6 +277,10 @@ pub fn are_definitely_not_identical(
     }
 
     if is_truthy_string_or_mixed_against_falsy(lhs, rhs) || is_truthy_string_or_mixed_against_falsy(rhs, lhs) {
+        return true;
+    }
+
+    if is_never_the_empty_array(lhs, rhs) || is_never_the_empty_array(rhs, lhs) {
         return true;
     }
 

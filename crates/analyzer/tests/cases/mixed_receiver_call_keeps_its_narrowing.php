@@ -8,7 +8,7 @@ function narrowed_call_on_mixed(mixed $item): bool
     // @mago-expect analysis:mixed-method-access
     // @mago-expect analysis:mixed-method-access
     $data = $item->getData() !== [] ? $item->getData() : null;
-    if ($data === [] || $data === null) { // @mago-expect analysis:redundant-type-comparison
+    if ($data === [] || $data === null) { // @mago-expect analysis:redundant-comparison,redundant-type-comparison
         return false;
     }
 

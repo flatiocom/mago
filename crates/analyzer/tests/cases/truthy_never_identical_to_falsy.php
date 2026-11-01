@@ -22,5 +22,5 @@ function missing_entry(mixed $entry): bool
  */
 function empty_row(array $row): bool
 {
-    return $row === [];
+    return $row === []; // @mago-expect analysis:redundant-comparison
 }
