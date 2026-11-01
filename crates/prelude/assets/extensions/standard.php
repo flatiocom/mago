@@ -2126,6 +2126,9 @@ function intdiv(int $num1, int $num2): int {}
 function is_infinite(float $num): bool {}
 
 /**
+ * @param int|float|numeric-string|bool|null|GMP|BcMath\Number $num
+ * @param int|float|numeric-string|bool|null|GMP|BcMath\Number $exponent
+ *
  * @pure
  *
  * @return (

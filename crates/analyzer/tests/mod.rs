@@ -3657,3 +3657,4 @@ test_case!(narrowed_call_argument_keys, {
     s.treat_docblock_types_as_certain = false;
     s
 });
+test_case!(pow_operands_like_php);
