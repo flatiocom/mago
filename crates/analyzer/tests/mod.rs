@@ -3631,3 +3631,9 @@ test_case!(bool_variable_from_a_call_keeps_its_narrowing);
 test_case!(disjunction_of_flags_after_an_early_return_or_assert);
 test_case!(leaving_right_operand_keeps_the_other_outcome_of_the_left);
 test_case!(leaving_else_takes_out_the_types_of_one_variable_only);
+test_case!(always_true_condition_merges_no_else_like_phpstan);
+test_case!(natively_true_condition_merges_no_else, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});

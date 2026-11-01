@@ -76,6 +76,7 @@ function check_uri(Uri $uri): string
         return (string) $uri;
     }
 
+    // @mago-expect analysis:unevaluated-code
     return '';
 }
 

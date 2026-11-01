@@ -9,6 +9,7 @@ namespace LastConditionCountsATrailingCommentAsAStatement;
  *
  * @mago-expect analysis:redundant-type-comparison(2)
  * @mago-expect analysis:unreachable-else-clause
+ * @mago-expect analysis:unevaluated-code
  */
 function comment_after_the_closing_throw(string $extension, int $kind): void
 {
@@ -61,6 +62,8 @@ function comment_before_the_closing_throw(string $extension, int $kind): void
 
 /**
  * @throws \LogicException
+ *
+ * @mago-expect analysis:unevaluated-code
  */
 function comment_at_the_end_of_a_case(string $extension, int $kind): void
 {

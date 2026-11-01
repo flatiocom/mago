@@ -42,6 +42,7 @@ function narrowed_by_switch(string $extension): void
  * @param 'a'|'b' $value
  *
  * @mago-expect analysis:redundant-type-comparison(3)
+ * @mago-expect analysis:redundant-condition
  */
 function literal_union(string $value): void
 {
@@ -189,7 +190,7 @@ function possibly_false(string $value, string $wider, string $any, array $list, 
  *
  * @mago-expect analysis:redundant-type-comparison(4)
  * @mago-expect analysis:unreachable-else-clause(2)
- * @mago-expect analysis:unevaluated-code(3)
+ * @mago-expect analysis:unevaluated-code(4)
  */
 function last_conditions(string $value, int $kind): int
 {

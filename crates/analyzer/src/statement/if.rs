@@ -271,6 +271,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             analyze_else_if_clause(context, &mut if_scope, &mut else_block_context, block_context, artifacts, clause)?;
         }
 
+        let is_condition_always_true = !self.body.has_else_if_clauses()
+            && context.is_always_true_condition(self.condition.span(), artifacts.get_expression_type(self.condition));
+
         analyze_else_statements(
             context,
             &mut if_scope,
@@ -279,6 +282,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for If<'arena> {
             artifacts,
             self.body.else_statements(),
             self.span(),
+            is_condition_always_true,
         )?;
 
         let branch_ends = (if_scope.if_branch_end.take(), if_scope.else_branch_end.take());
@@ -1092,11 +1096,16 @@ fn analyze_else_statements<'ctx, 'arena, A>(
     artifacts: &mut AnalysisArtifacts,
     else_statements: Option<&[Statement<'arena>]>,
     if_span: Span,
+    is_condition_always_true: bool,
 ) -> Result<(), AnalysisError>
 where
     A: Arena,
 {
-    if else_statements.is_none() && if_scope.negated_clauses.is_empty() && else_block_context.clauses.is_empty() {
+    if else_statements.is_none()
+        && if_scope.negated_clauses.is_empty()
+        && else_block_context.clauses.is_empty()
+        && !is_condition_always_true
+    {
         if_scope.final_actions.insert(ControlAction::None);
         if_scope.assigned_variable_ids = None;
         if_scope.new_variables = None;
@@ -1182,8 +1191,8 @@ where
     let is_unreachable =
         else_types.keys().any(|var_id| else_block_context.locals.get(var_id).is_some_and(|t| t.is_never()));
 
-    if is_unreachable {
-        if else_statements.is_some() {
+    if is_unreachable || is_condition_always_true {
+        if is_unreachable && else_statements.is_some() {
             context.collector.report_with_code(
                 IssueCode::UnreachableElseClause,
                 Issue::error("Unreachable else clause")
@@ -1200,7 +1209,7 @@ where
         }
 
         if let Some(statements) = else_statements
-            && context.analyzes_unreachable_else(else_span)
+            && (!is_unreachable || context.analyzes_unreachable_else(else_span))
         {
             let (result, issues) = context.record(|context| {
                 analyze_body_statements(statements, context, &mut else_block_context.clone(), artifacts)
@@ -1209,7 +1218,9 @@ where
             context.collector.extend(issues.into_iter().filter(|issue| !is_issue_on_never_value(issue)));
         }
 
-        if_scope.final_actions.insert(ControlAction::None);
+        if !is_condition_always_true {
+            if_scope.final_actions.insert(ControlAction::None);
+        }
 
         return Ok(());
     }

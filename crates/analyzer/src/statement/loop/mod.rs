@@ -197,6 +197,7 @@ where
     loop_block_context.loop_bounds = previous_loop_bounds;
 
     let always_enters_loop = infinite_loop || loop_scope.truthy_pre_conditions;
+    let never_leaves = infinite_loop || (loop_scope.condition_always_true && body_always_ends(statements, artifacts));
 
     if loop_scope.condition_always_false {
         for condition in conditions {
@@ -224,7 +225,7 @@ where
         inner_loop_block_context,
         loop_scope,
         always_enters_loop,
-        infinite_loop,
+        never_leaves,
     );
 
     if always_enters_loop && !infinite_loop {
@@ -237,6 +238,13 @@ where
     }
 
     Ok(())
+}
+
+/// PHPStan's loop entered on an always-true condition ends the flow when its body always leaves.
+fn body_always_ends(statements: &[Statement<'_>], artifacts: &AnalysisArtifacts) -> bool {
+    let final_actions = ControlAction::from_statements(statements.iter().collect(), vec![], Some(artifacts), true);
+
+    final_actions.len() == 1 && final_actions.contains(ControlAction::End)
 }
 
 fn inherit_loop_block_context<'ctx, A>(
@@ -1626,6 +1634,11 @@ where
         let condition_type = artifacts.get_expression_type(pre_condition);
         let is_always_falsy = condition_type.is_some_and(|ct| ct.is_always_falsy());
         let is_always_truthy = condition_type.is_some_and(|ct| ct.is_always_truthy());
+        if context.is_always_true_condition(pre_condition_span, condition_type)
+            && let Some(loop_scope) = artifacts.get_loop_scope_mut()
+        {
+            loop_scope.condition_always_true = true;
+        }
 
         if is_always_falsy {
             if let Some(loop_scope) = artifacts.get_loop_scope_mut() {

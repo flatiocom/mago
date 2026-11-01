@@ -802,6 +802,7 @@ mod tests {
         "},
         issues = [
             IssueCode::RedundantCondition,
+            IssueCode::UnevaluatedCode,
         ]
     }
 

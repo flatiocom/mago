@@ -245,6 +245,23 @@ where
         }
     }
 
+    /// PHPStan takes a condition whose type is always true as always true, judged on native types under
+    /// `treatPhpDocTypesAsCertain: false`: an `if` merges no `else`, and a `while` it enters runs until its body leaves.
+    pub(crate) fn is_always_true_condition(&mut self, condition_span: Span, condition_type: Option<&TUnion>) -> bool {
+        if !condition_type.is_some_and(TUnion::is_always_truthy) {
+            return false;
+        }
+
+        match self.natively_false_conditions.as_mut() {
+            Some(conditions) if self.native_types_only => {
+                conditions.insert(condition_span);
+                true
+            }
+            Some(conditions) => conditions.contains(&condition_span),
+            None => true,
+        }
+    }
+
     /// PHPStan analyses an `else` the docblock types make unreachable; under `treatPhpDocTypesAsCertain:
     /// false` Mago does so when the native types leave it reachable.
     pub(crate) fn analyzes_unreachable_else(&mut self, else_span: Span) -> bool {

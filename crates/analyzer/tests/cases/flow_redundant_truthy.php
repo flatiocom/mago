@@ -12,5 +12,6 @@ function flow_redundant_truthy(string $s): string
         return $s;
     }
 
+    /** @mago-expect analysis:unevaluated-code */
     return '';
 }

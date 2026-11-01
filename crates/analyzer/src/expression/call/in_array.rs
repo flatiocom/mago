@@ -11,7 +11,9 @@ use mago_codex::ttype::combine_union_types;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_identical;
 use mago_codex::ttype::get_array_value_parameter;
+use mago_codex::ttype::get_false;
 use mago_codex::ttype::get_never;
+use mago_codex::ttype::get_true;
 use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
@@ -41,10 +43,11 @@ enum FiniteValue {
 
 /// Reports a strict `in_array()` call that always returns `false`, its needle sharing no value with the
 /// haystack, like PHPStan's `function.impossibleType`, or always `true`, its needle holding only values
-/// that every possible haystack is sure to contain, like PHPStan's `function.alreadyNarrowedType`.
+/// that every possible haystack is sure to contain, like PHPStan's `function.alreadyNarrowedType`; the call
+/// is then typed as the constant it returns.
 pub(super) fn report_constant_in_array<A>(
     context: &mut Context<'_, '_, A>,
-    artifacts: &AnalysisArtifacts,
+    artifacts: &mut AnalysisArtifacts,
     function_call: &FunctionCall<'_>,
 ) where
     A: Arena,
@@ -88,6 +91,7 @@ pub(super) fn report_constant_in_array<A>(
             )
             .with_help("Consider removing this check, or fix the needle or the haystack."),
         );
+        set_constant_type(context, artifacts, function_call, get_false());
 
         return;
     }
@@ -96,9 +100,12 @@ pub(super) fn report_constant_in_array<A>(
         return;
     };
 
-    if context.last_conditions.contains(&function_call.span())
-        || !is_always_in_haystack(codebase, &needle_values, haystack_type)
-    {
+    if !is_always_in_haystack(codebase, &needle_values, haystack_type) {
+        return;
+    }
+
+    set_constant_type(context, artifacts, function_call, get_true());
+    if context.last_conditions.contains(&function_call.span()) {
         return;
     }
 
@@ -110,6 +117,20 @@ pub(super) fn report_constant_in_array<A>(
         .with_annotation(Annotation::primary(function_call.span()).with_message("This call always returns `true`."))
         .with_help("Consider removing this check as it has no effect."),
     );
+}
+
+/// PHPStan's native scope keeps the signature's `bool`, so the native pass leaves the call's type alone.
+fn set_constant_type<A>(
+    context: &Context<'_, '_, A>,
+    artifacts: &mut AnalysisArtifacts,
+    function_call: &FunctionCall<'_>,
+    constant_type: TUnion,
+) where
+    A: Arena,
+{
+    if !context.native_types_only {
+        artifacts.set_expression_type(function_call, constant_type);
+    }
 }
 
 fn is_in_array<A>(context: &Context<'_, '_, A>, function_call: &FunctionCall<'_>) -> bool

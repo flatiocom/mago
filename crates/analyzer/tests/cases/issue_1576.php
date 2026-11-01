@@ -44,6 +44,7 @@ function test_not_equal(): string
         return 'nonzero';
     }
 
+    /** @mago-expect analysis:unevaluated-code */
     return 'some';
 }
 
@@ -59,6 +60,7 @@ function test_not_equal_ang(): string
         return 'nonzero';
     }
 
+    /** @mago-expect analysis:unevaluated-code */
     return 'some';
 }
 

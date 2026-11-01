@@ -10,8 +10,11 @@ use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_syntax::cst::BinaryOperator;
+use mago_syntax::cst::Call;
 use mago_syntax::cst::Construct;
 use mago_syntax::cst::Expression;
+use mago_syntax::cst::FunctionCall;
+use mago_syntax::cst::UnaryPrefix;
 use mago_syntax::cst::UnaryPrefixOperator;
 use mago_word::Word;
 use mago_word::WordMap;
@@ -327,11 +330,27 @@ pub(crate) fn is_isset_or_empty(operand: &Expression<'_>) -> bool {
     }
 }
 
+/// A comparison other than `<=>` reports its own constant result, and so does an `in_array()` call or its
+/// negation, which PHPStan's constant-condition rules leave to its type-check rule.
 pub(crate) fn is_reported_as_comparison(condition: &Expression<'_>) -> bool {
     match condition {
         Expression::Parenthesized(parenthesized) => is_reported_as_comparison(parenthesized.expression),
         Expression::Binary(binary) => {
             binary.operator.is_comparison() && !matches!(binary.operator, BinaryOperator::Spaceship(_))
+        }
+        Expression::UnaryPrefix(UnaryPrefix { operator: UnaryPrefixOperator::Not(_), operand }) => {
+            is_in_array_call(operand)
+        }
+        condition => is_in_array_call(condition),
+    }
+}
+
+fn is_in_array_call(expression: &Expression<'_>) -> bool {
+    match expression {
+        Expression::Parenthesized(parenthesized) => is_in_array_call(parenthesized.expression),
+        Expression::Call(Call::Function(FunctionCall { function: Expression::Identifier(identifier), .. })) => {
+            let name = identifier.value();
+            name.strip_prefix(b"\\").unwrap_or(name).eq_ignore_ascii_case(b"in_array")
         }
         _ => false,
     }

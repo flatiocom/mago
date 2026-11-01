@@ -11,5 +11,6 @@ function flow_isset_with_array_access_local(): string
         return $arr['name'];
     }
 
+    /** @mago-expect analysis:unevaluated-code */
     return '';
 }

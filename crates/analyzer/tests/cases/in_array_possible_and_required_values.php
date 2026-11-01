@@ -176,5 +176,6 @@ function disjoint_values(int $needle, array $haystack): int
         return $needle;
     }
 
+    // @mago-expect analysis:unevaluated-code
     return 0;
 }
