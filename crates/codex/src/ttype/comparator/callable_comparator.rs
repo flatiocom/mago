@@ -148,13 +148,5 @@ pub(crate) fn is_contained_by(
 /// `callable` and `Closure` written without a signature accept any callable, like PHPStan's common callable,
 /// and so does a signature with an untyped parameter, which PHPStan cannot parse.
 fn accepts_any_callable(signature: &TCallableSignature) -> bool {
-    let parameters = signature.get_parameters();
-    if parameters.iter().any(|parameter| parameter.get_type_signature().is_none()) {
-        return true;
-    }
-
-    matches!(
-        parameters,
-        [parameter] if parameter.is_variadic() && parameter.get_type_signature().is_some_and(|parameter_type| parameter_type.is_mixed())
-    ) && signature.get_return_type().is_none_or(|return_type| return_type.is_mixed())
+    signature.get_parameters().iter().any(|parameter| parameter.get_type_signature().is_none())
 }

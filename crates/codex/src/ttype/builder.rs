@@ -843,9 +843,7 @@ fn get_callable_from_type(
             return_type = Some(get_union_from_type(ret.return_type, scope, type_context, classname)?);
         }
     } else {
-        // `callable` without a specification should be treated the same as
-        // `callable(mixed...): mixed`
-        parameters.push(TCallableParameter::new(Some(Arc::new(get_mixed())), false, true, false));
+        parameters.push(TCallableParameter::new(None, false, true, false));
         return_type = Some(get_mixed());
     }
 
@@ -902,11 +900,10 @@ fn get_reference_from_kind(
 
             let (fq_reference_name, _) = scope.resolve_word(NameKind::Default, reference_name);
 
-            // `Closure` -> `Closure(mixed...): mixed`
             if generics.is_none() && fq_reference_name.as_bytes().eq_ignore_ascii_case(b"Closure") {
                 return Ok(TAtomic::Callable(TCallable::Signature(
                     TCallableSignature::new(false, true)
-                        .with_parameters(vec![TCallableParameter::new(Some(Arc::new(get_mixed())), false, true, false)])
+                        .with_parameters(vec![TCallableParameter::new(None, false, true, false)])
                         .with_return_type(Some(Arc::new(get_mixed()))),
                 )));
             }

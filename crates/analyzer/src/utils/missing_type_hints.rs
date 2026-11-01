@@ -14,7 +14,6 @@ use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::array::keyed::TKeyedArray;
 use mago_codex::ttype::atomic::callable::TCallable;
-use mago_codex::ttype::atomic::callable::TCallableSignature;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator::is_contained_by_with_erased_template_arguments;
@@ -497,7 +496,7 @@ pub fn check_callable_signatures<A>(
 
 fn unsigned_callable_name(atomic: &TAtomic) -> Option<&'static str> {
     match atomic {
-        TAtomic::Callable(TCallable::Signature(signature)) if is_unsigned(signature) => {
+        TAtomic::Callable(TCallable::Signature(signature)) if signature.has_no_signature() => {
             Some(if signature.is_closure { "Closure" } else { "callable" })
         }
         TAtomic::Object(TObject::Named(object))
@@ -507,16 +506,6 @@ fn unsigned_callable_name(atomic: &TAtomic) -> Option<&'static str> {
         }
         _ => None,
     }
-}
-
-fn is_unsigned(signature: &TCallableSignature) -> bool {
-    signature.source.is_none()
-        && !signature.is_partial
-        && signature.get_return_type().is_some_and(|return_type| return_type.is_mixed())
-        && matches!(
-            signature.get_parameters(),
-            [parameter] if parameter.is_variadic() && parameter.get_type_signature().is_some_and(|parameter_type| parameter_type.is_mixed())
-        )
 }
 
 pub fn check_function_like_template_arguments<A>(

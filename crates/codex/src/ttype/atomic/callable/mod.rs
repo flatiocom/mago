@@ -161,8 +161,16 @@ impl TCallableSignature {
     #[must_use]
     pub fn mixed(is_closure: bool) -> Self {
         TCallableSignature::new(false, is_closure)
-            .with_parameters(vec![TCallableParameter::new(Some(Arc::new(get_mixed())), false, true, true)])
+            .with_parameters(vec![TCallableParameter::new(None, false, true, true)])
             .with_return_type(Some(Arc::new(get_mixed())))
+    }
+
+    #[must_use]
+    pub fn has_no_signature(&self) -> bool {
+        self.source.is_none()
+            && !self.is_partial
+            && self.return_type.as_deref().is_none_or(TUnion::is_mixed)
+            && matches!(self.parameters.as_slice(), [parameter] if parameter.is_variadic() && parameter.get_type_signature().is_none())
     }
 
     /// Returns a slice of the callable parameters.

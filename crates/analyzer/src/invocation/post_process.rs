@@ -21,7 +21,6 @@ use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::array::keyed::TKeyedArray;
-use mago_codex::ttype::atomic::callable::TCallableSignature;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::resource::TResource;
 use mago_codex::ttype::atomic::scalar::TScalar;
@@ -809,7 +808,7 @@ where
 {
     let calls_closure = match &invocation.target {
         InvocationTarget::Callable { signature, .. } => {
-            signature.is_closure() && !signature.is_pure() && !is_bare_closure_object(signature)
+            signature.is_closure() && !signature.is_pure() && !signature.has_no_signature()
         }
         InvocationTarget::FunctionLike { identifier: FunctionLikeIdentifier::Closure(..), metadata, .. } => {
             !metadata.flags.is_pure()
@@ -878,14 +877,6 @@ where
     }
 
     invalidated
-}
-
-fn is_bare_closure_object(signature: &TCallableSignature) -> bool {
-    signature.get_return_type().is_some_and(TUnion::is_mixed)
-        && matches!(
-            signature.get_parameters(),
-            [parameter] if parameter.is_variadic() && parameter.get_type_signature().is_some_and(TUnion::is_mixed)
-        )
 }
 
 fn narrow_mixed_array_of_literal_key_lookup<'ctx, A>(
