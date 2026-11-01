@@ -3652,3 +3652,8 @@ test_case!(narrowed_call_after_write, {
     s.treat_docblock_types_as_certain = false;
     s
 });
+test_case!(narrowed_call_argument_keys, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});

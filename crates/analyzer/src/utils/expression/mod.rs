@@ -18,10 +18,13 @@ use mago_syntax::cst::ArrayAccess;
 use mago_syntax::cst::ArrayElement;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
+use mago_syntax::cst::BracedExpressionStringPart;
 use mago_syntax::cst::Call;
 use mago_syntax::cst::ClassConstantAccess;
 use mago_syntax::cst::ClassLikeConstantSelector;
 use mago_syntax::cst::ClassLikeMemberSelector;
+use mago_syntax::cst::CompositeString;
+use mago_syntax::cst::Conditional;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::FunctionCall;
 use mago_syntax::cst::Literal;
@@ -31,6 +34,7 @@ use mago_syntax::cst::NullSafeMethodCall;
 use mago_syntax::cst::PositionalArgument;
 use mago_syntax::cst::PropertyAccess;
 use mago_syntax::cst::StaticMethodCall;
+use mago_syntax::cst::StringPart;
 use mago_syntax::cst::TokenSeparatedSequence;
 use mago_syntax::cst::UnaryPostfixOperator;
 use mago_syntax::cst::UnaryPrefix;
@@ -573,8 +577,14 @@ fn get_call_argument_id(
     codebase: &CodebaseMetadata,
 ) -> Option<Word> {
     let expression = unwrap_expression(expression);
-    if let Expression::Call(Call::Function(argument_call)) = expression {
-        return get_function_call_id(argument_call, this_class_name, resolved_names, codebase);
+    match expression {
+        Expression::Call(Call::Function(argument_call)) => {
+            return get_function_call_id(argument_call, this_class_name, resolved_names, codebase);
+        }
+        Expression::Access(Access::ClassConstant(_) | Access::Property(_)) => {
+            return get_expression_id(expression, this_class_name, resolved_names, Some(codebase));
+        }
+        _ => {}
     }
 
     if let Some(index_id) = get_index_id(expression, this_class_name, resolved_names, Some(codebase)) {
@@ -585,8 +595,55 @@ fn get_call_argument_id(
 
     Some(match expression {
         Expression::ConstantAccess(constant_access) => word(resolved_names.get(&constant_access.name)),
+        Expression::Literal(Literal::Float(literal_float)) => word(literal_float.raw),
+        Expression::Literal(Literal::Null(_)) => word(b"null"),
+        Expression::Literal(Literal::True(_)) => word(b"true"),
+        Expression::Literal(Literal::False(_)) => word(b"false"),
+        Expression::Conditional(Conditional { condition, then, r#else, .. }) => {
+            let then = match then {
+                Some(then) => concat_word!(b" ", argument_id(then)?.as_bytes(), b" "),
+                None => empty_word(),
+            };
+
+            concat_word!(
+                b"(",
+                argument_id(condition)?.as_bytes(),
+                b" ?",
+                then.as_bytes(),
+                b": ",
+                argument_id(r#else)?.as_bytes(),
+                b")"
+            )
+        }
+        Expression::CompositeString(CompositeString::Interpolated(interpolated)) => {
+            let mut id = b"\"".to_vec();
+            for part in interpolated.parts.iter() {
+                match part {
+                    StringPart::Literal(literal) => id.extend_from_slice(literal.raw),
+                    StringPart::Expression(part)
+                    | StringPart::BracedExpression(BracedExpressionStringPart { expression: part, .. }) => {
+                        id.push(b'{');
+                        id.extend_from_slice(argument_id(part)?.as_bytes());
+                        id.push(b'}');
+                    }
+                }
+            }
+
+            id.push(b'"');
+            word(id)
+        }
         Expression::UnaryPrefix(UnaryPrefix { operator, operand }) => {
-            concat_word!(b"(", operator.to_string().as_bytes(), b" ", argument_id(operand)?.as_bytes(), b")")
+            let operator = match operator {
+                UnaryPrefixOperator::BoolCast(..) | UnaryPrefixOperator::BooleanCast(..) => "(bool)".to_owned(),
+                UnaryPrefixOperator::IntCast(..) | UnaryPrefixOperator::IntegerCast(..) => "(int)".to_owned(),
+                UnaryPrefixOperator::FloatCast(..)
+                | UnaryPrefixOperator::DoubleCast(..)
+                | UnaryPrefixOperator::RealCast(..) => "(float)".to_owned(),
+                UnaryPrefixOperator::StringCast(..) | UnaryPrefixOperator::BinaryCast(..) => "(string)".to_owned(),
+                operator => operator.to_string(),
+            };
+
+            concat_word!(b"(", operator.as_bytes(), b" ", argument_id(operand)?.as_bytes(), b")")
         }
         Expression::Binary(Binary { lhs, operator, rhs }) => concat_word!(
             b"(",
