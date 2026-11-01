@@ -3658,3 +3658,4 @@ test_case!(narrowed_call_argument_keys, {
     s
 });
 test_case!(pow_operands_like_php);
+test_case!(md5_and_sha1_return_types);

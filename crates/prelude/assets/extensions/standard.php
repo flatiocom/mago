@@ -1096,6 +1096,8 @@ function get_html_translation_table(
 ): array {}
 
 /**
+ * @return ($binary is true ? non-falsy-string : lowercase-string&non-falsy-string)
+ *
  * @pure
  */
 function sha1(string $string, bool $binary = false): string {}
@@ -1103,6 +1105,8 @@ function sha1(string $string, bool $binary = false): string {}
 function sha1_file(string $filename, bool $binary = false): string|false {}
 
 /**
+ * @return ($binary is true ? non-falsy-string : lowercase-string&non-falsy-string)
+ *
  * @pure
  */
 function md5(string $string, bool $binary = false): string {}
