@@ -3673,3 +3673,4 @@ test_case!(method_signature_return_checked_beside_parameter_issue);
 test_case!(callable_written_with_mixed_variadic_signature);
 test_case!(method_signature_closure_parent_without_signature);
 test_case!(method_signature_native_parameter_contravariance);
+test_case!(method_signature_through_magic_method_tag);

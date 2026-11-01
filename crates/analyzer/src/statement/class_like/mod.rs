@@ -2189,8 +2189,13 @@ fn check_abstract_method_signatures<'ctx, A>(
             continue;
         };
 
-        let overridden_declaring_classes: Vec<Word> =
-            overridden_method_ids.values().map(|id| id.get_class_name()).collect();
+        let overridden_declaring_classes: Vec<Word> = overridden_method_ids
+            .values()
+            .filter(|id| {
+                !context.codebase.get_declaring_method_by_id(id).is_some_and(|method| method.flags.is_magic_method())
+            })
+            .map(|id| id.get_class_name())
+            .collect();
 
         for parent_declaring_method_id in overridden_method_ids.values() {
             let declaring_class_name = parent_declaring_method_id.get_class_name();
