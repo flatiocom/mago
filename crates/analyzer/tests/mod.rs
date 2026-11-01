@@ -3665,3 +3665,4 @@ test_case!(native_types_of_generic_built_in_calls, {
     s.treat_docblock_types_as_certain = false;
     s
 });
+test_case!(assigned_call_result_keeps_its_narrowing);

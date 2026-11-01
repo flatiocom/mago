@@ -1050,12 +1050,14 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
     }
 
     if !from_docblock
-        && assigned_type.is_bool()
         && let Some(source_expression) = source_expression
         && let Some(keeps_call_result_clauses) = match unwrap_expression(source_expression) {
-            Expression::Binary(_) => Some(true),
-            Expression::Call(call) => Some(has_call_assertions(artifacts, call)),
-            Expression::UnaryPrefix(UnaryPrefix { operator: UnaryPrefixOperator::Not(_), operand }) => {
+            Expression::Binary(_) if assigned_type.is_bool() => Some(true),
+            Expression::Call(call) if assigned_type.is_bool() => Some(has_call_assertions(artifacts, call)),
+            Expression::Call(call) if has_call_assertions(artifacts, call) => Some(true),
+            Expression::UnaryPrefix(UnaryPrefix { operator: UnaryPrefixOperator::Not(_), operand })
+                if assigned_type.is_bool() =>
+            {
                 matches!(unwrap_expression(operand), Expression::Call(_)).then_some(false)
             }
             _ => None,
@@ -1069,6 +1071,7 @@ pub fn analyze_assignment_to_variable<'ctx, 'arena, A>(
             source_expression,
             variable_id,
             keeps_call_result_clauses,
+            if assigned_type.is_bool() { None } else { get_single_truthy_literal(&assigned_type) },
         );
     }
 
@@ -1649,6 +1652,7 @@ fn handle_assignment_with_boolean_logic<'ctx, 'arena, A>(
     source_expression: &Expression<'arena>,
     variable_id: Word,
     keeps_call_result_clauses: bool,
+    truthy_literal: Option<TAtomic>,
 ) where
     A: Arena,
 {
@@ -1694,19 +1698,32 @@ fn handle_assignment_with_boolean_logic<'ctx, 'arena, A>(
 
     block_context.parent_conflicting_clause_variables.retain(|var| !covered_variable_ids.contains(var));
 
-    let mut possibilities = AssertionMap::default();
-    possibilities.insert(variable_id, AssertionMap::from_iter([(Assertion::Falsy.to_hash(), Assertion::Falsy)]));
+    let right_clauses: Vec<Clause> = right_clauses.into_iter().map(|v| (*v).clone()).collect();
+    let assigned_value_conditions =
+        std::iter::once(Assertion::Falsy).chain(truthy_literal.map(Assertion::IsNotIdentical));
+    for condition in assigned_value_conditions {
+        let mut possibilities = AssertionMap::default();
+        possibilities.insert(variable_id, AssertionMap::from_iter([(condition.to_hash(), condition)]));
 
-    block_context.clauses.extend(
-        disjoin_clauses(
-            vec![Clause::new(possibilities, variable_expression_id, variable_expression_id, None, None, None)],
-            right_clauses.into_iter().map(|v| (*v).clone()).collect(),
-            source_expression.span(),
-            &context.settings.algebra_thresholds(),
-        )
-        .into_iter()
-        .map(Rc::new),
-    );
+        block_context.clauses.extend(
+            disjoin_clauses(
+                vec![Clause::new(possibilities, variable_expression_id, variable_expression_id, None, None, None)],
+                right_clauses.clone(),
+                source_expression.span(),
+                &context.settings.algebra_thresholds(),
+            )
+            .into_iter()
+            .map(Rc::new),
+        );
+    }
+}
+
+fn get_single_truthy_literal(assigned_type: &TUnion) -> Option<TAtomic> {
+    let mut truthy_values = assigned_type.types.iter().filter(|atomic| !atomic.is_falsy());
+    let truthy_value = truthy_values.next()?;
+
+    (truthy_values.next().is_none() && truthy_value.is_literal() && truthy_value.is_truthy())
+        .then(|| truthy_value.clone())
 }
 
 fn has_call_assertions(artifacts: &AnalysisArtifacts, call: &Call<'_>) -> bool {
