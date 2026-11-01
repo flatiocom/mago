@@ -3646,3 +3646,4 @@ test_case!(never_identical_to_empty_array_native, {
 test_case!(loop_condition_reports_comparison);
 test_case!(nullsafe_chain_narrowed_by_comparison);
 test_case!(array_key_exists_variable_key_on_mixed);
+test_case!(elseif_and_switch_merges_link_variables);

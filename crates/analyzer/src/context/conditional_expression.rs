@@ -3,6 +3,8 @@ use std::rc::Rc;
 use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
+use mago_codex::ttype::combine_union_types;
+use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::union::TUnion;
@@ -58,6 +60,50 @@ impl BranchEnd {
         }
     }
 
+    fn merge(self, codebase: &CodebaseMetadata, other: &BranchEnd) -> BranchEnd {
+        let mut locals = WordMap::default();
+        let mut possibly_undefined_variable_ids = self
+            .possibly_undefined_variable_ids
+            .union(&other.possibly_undefined_variable_ids)
+            .copied()
+            .collect::<WordSet>();
+        for (variable_id, variable_type) in self.locals.iter().chain(other.locals.iter()) {
+            if locals.contains_key(variable_id) {
+                continue;
+            }
+
+            let merged_type = match (self.locals.get(variable_id), other.locals.get(variable_id)) {
+                (Some(first_type), Some(second_type)) => {
+                    combine_union_types(first_type, second_type, codebase, CombinerOptions::default())
+                }
+                _ => {
+                    let mut possibly_undefined_type = (**variable_type).clone();
+                    possibly_undefined_type.set_possibly_undefined(true, None);
+                    possibly_undefined_variable_ids.insert(*variable_id);
+                    possibly_undefined_type
+                }
+            };
+
+            locals.insert(*variable_id, Rc::new(merged_type));
+        }
+
+        let mut merged = BranchEnd {
+            locals,
+            possibly_undefined_variable_ids,
+            conditional_expressions: self
+                .conditional_expressions
+                .iter()
+                .filter(|conditional_expression| other.conditional_expressions.contains(conditional_expression))
+                .cloned()
+                .collect(),
+        };
+
+        let links = create_merge_links(codebase, &self, other, Merged::of_branch(&merged));
+        merged.conditional_expressions.extend(links);
+
+        merged
+    }
+
     fn defined_type(&self, variable_id: &Word) -> Option<&Rc<TUnion>> {
         let variable_type = self.locals.get(variable_id)?;
         let possibly_undefined = variable_type.possibly_undefined_from_try()
@@ -67,12 +113,63 @@ impl BranchEnd {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Merged<'merge> {
+    locals: &'merge WordMap<Rc<TUnion>>,
+    possibly_undefined_variable_ids: &'merge WordSet,
+    conditional_expressions: &'merge [Rc<ConditionalExpression>],
+}
+
+impl<'merge> Merged<'merge> {
+    fn of_block(block_context: &'merge BlockContext<'_>) -> Self {
+        Self {
+            locals: &block_context.locals,
+            possibly_undefined_variable_ids: &block_context.possibly_undefined_variable_ids,
+            conditional_expressions: &block_context.conditional_expressions,
+        }
+    }
+
+    fn of_branch(branch_end: &'merge BranchEnd) -> Self {
+        Self {
+            locals: &branch_end.locals,
+            possibly_undefined_variable_ids: &branch_end.possibly_undefined_variable_ids,
+            conditional_expressions: &branch_end.conditional_expressions,
+        }
+    }
+}
+
 /// The links a merge of two branches into `merged` leaves, in both directions.
 pub fn create_conditional_expressions(
     codebase: &CodebaseMetadata,
     first: &BranchEnd,
     second: &BranchEnd,
     merged: &BlockContext<'_>,
+) -> Vec<Rc<ConditionalExpression>> {
+    create_merge_links(codebase, first, second, Merged::of_block(merged))
+}
+
+pub fn create_chain_conditional_expressions(
+    codebase: &CodebaseMetadata,
+    branch_ends: &[BranchEnd],
+    merged: &BlockContext<'_>,
+) -> Vec<Rc<ConditionalExpression>> {
+    let Some((last, earlier)) = branch_ends.split_last() else {
+        return vec![];
+    };
+
+    let Some(accumulated) = earlier.iter().cloned().reduce(|accumulated, next| accumulated.merge(codebase, &next))
+    else {
+        return vec![];
+    };
+
+    create_conditional_expressions(codebase, &accumulated, last, merged)
+}
+
+fn create_merge_links(
+    codebase: &CodebaseMetadata,
+    first: &BranchEnd,
+    second: &BranchEnd,
+    merged: Merged<'_>,
 ) -> Vec<Rc<ConditionalExpression>> {
     let mut conditional_expressions = vec![];
     add_branch_conditional_expressions(codebase, first, second, merged, &mut conditional_expressions);
@@ -89,7 +186,7 @@ fn keep_vacuous_conditional_expressions(
     codebase: &CodebaseMetadata,
     branch: &BranchEnd,
     other_branch: &BranchEnd,
-    merged: &BlockContext<'_>,
+    merged: Merged<'_>,
     conditional_expressions: &mut Vec<Rc<ConditionalExpression>>,
 ) {
     for conditional_expression in &branch.conditional_expressions {
@@ -114,7 +211,7 @@ fn add_branch_conditional_expressions(
     codebase: &CodebaseMetadata,
     branch: &BranchEnd,
     other_branch: &BranchEnd,
-    merged: &BlockContext<'_>,
+    merged: Merged<'_>,
     conditional_expressions: &mut Vec<Rc<ConditionalExpression>>,
 ) {
     let guards = branch

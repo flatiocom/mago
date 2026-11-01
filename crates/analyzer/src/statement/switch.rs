@@ -19,6 +19,7 @@ use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_span::Span;
+use mago_syntax::cst::Break;
 use mago_syntax::cst::Expression;
 use mago_syntax::cst::Statement;
 use mago_syntax::cst::Switch;
@@ -40,6 +41,8 @@ use crate::common::synthetic::new_synthetic_variable;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::context::block::BreakContext;
+use crate::context::conditional_expression::BranchEnd;
+use crate::context::conditional_expression::create_chain_conditional_expressions;
 use crate::context::scope::case_scope::CaseScope;
 use crate::context::scope::control_action::BreakType;
 use crate::context::scope::control_action::ControlAction;
@@ -103,6 +106,8 @@ where
     definitely_called_methods: Option<HashSet<Word>>,
     removed_narrowed_function_calls: WordSet,
     case_written_variables: WordSet,
+    branch_ends: Vec<BranchEnd>,
+    has_unlinked_exit: bool,
 }
 
 impl<'anlyz, 'ctx, 'arena, A> SwitchAnalyzer<'anlyz, 'ctx, 'arena, A>
@@ -142,6 +147,8 @@ where
             definitely_called_methods: None,
             removed_narrowed_function_calls: WordSet::default(),
             case_written_variables: WordSet::default(),
+            branch_ends: Vec::new(),
+            has_unlinked_exit: false,
         }
     }
 
@@ -369,7 +376,33 @@ where
         self.block_context.assigned_variable_ids.extend(self.new_assigned_variable_ids);
         self.block_context.flags.set_has_returned(all_options_exit && is_exhaustive);
 
+        if !self.has_unlinked_exit && !self.context.native_types_only {
+            if !is_exhaustive {
+                self.branch_ends.push(BranchEnd::of(&self.running_else_context));
+            }
+
+            let conditional_expressions =
+                create_chain_conditional_expressions(self.context.codebase, &self.branch_ends, self.block_context);
+            self.block_context.conditional_expressions.extend(conditional_expressions);
+        }
+
         Ok(())
+    }
+
+    fn leaves_only_at_its_end(&self, case: &SwitchCase, is_last: bool) -> bool {
+        let statements = case.statements();
+        let body = match statements.split_last() {
+            Some((Statement::Break(Break { level: None, .. }), body)) => body,
+            _ if is_last => statements,
+            _ => return false,
+        };
+
+        let actions = self.get_statement_actions(body);
+
+        actions.contains(ControlAction::None)
+            && actions
+                .iter()
+                .all(|action| matches!(action, ControlAction::None | ControlAction::End | ControlAction::Return))
     }
 
     #[allow(clippy::unwrap_used)]
@@ -761,6 +794,7 @@ where
 
         self.artifacts.case_scopes.push(CaseScope::new());
 
+        let entered_by_fallthrough = self.has_fallthrough;
         if self.has_fallthrough {
             self.has_fallthrough = false;
 
@@ -810,6 +844,14 @@ where
         if !matches!(case_exit_type, ControlAction::Return) {
             self.handle_non_returning_case(&case_block_context, original_block_context, case_exit_type);
             self.record_case_writes(switch.span(), switch_case.statements(), &case_block_context);
+        }
+
+        if !matches!(case_exit_type, ControlAction::Return | ControlAction::Continue) {
+            if !entered_by_fallthrough && self.leaves_only_at_its_end(switch_case, is_last) {
+                self.branch_ends.push(BranchEnd::of(&case_block_context));
+            } else {
+                self.has_unlinked_exit = true;
+            }
         }
 
         if !matches!(case_exit_type, ControlAction::Return | ControlAction::Continue)
@@ -1134,6 +1176,10 @@ where
     }
 
     fn get_case_actions(&self, case: &SwitchCase) -> ControlActionSet {
+        self.get_statement_actions(case.statements())
+    }
+
+    fn get_statement_actions(&self, statements: &[Statement]) -> ControlActionSet {
         let mut break_types = self
             .block_context
             .break_types
@@ -1142,12 +1188,7 @@ where
             .collect::<Vec<_>>();
         break_types.push(BreakType::Switch);
 
-        ControlAction::from_switch_case_statements(
-            case.statements().iter().collect(),
-            break_types,
-            Some(self.artifacts),
-            true,
-        )
+        ControlAction::from_switch_case_statements(statements.iter().collect(), break_types, Some(self.artifacts), true)
     }
 
     /// The actions of an analyzed case that only returns or ends, which the actions known before the analysis can

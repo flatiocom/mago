@@ -40,8 +40,7 @@ pub struct IfScope<'ctx> {
     /// None = no branches processed yet. Some(set) = intersection across branches.
     pub definitely_called_methods: Option<HashSet<Word>>,
     pub removed_access_paths: WordSet,
-    pub if_branch_end: Option<BranchEnd>,
-    pub else_branch_end: Option<BranchEnd>,
+    pub branch_ends: Vec<BranchEnd>,
 }
 
 impl IfScope<'_> {
@@ -66,8 +65,7 @@ impl IfScope<'_> {
             definitely_uninitialized_property_ids: None,
             definitely_called_methods: None,
             removed_access_paths: WordSet::default(),
-            if_branch_end: None,
-            else_branch_end: None,
+            branch_ends: Vec::new(),
         }
     }
 }
