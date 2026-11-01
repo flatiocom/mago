@@ -4,6 +4,7 @@ use crate::metadata::CodebaseMetadata;
 use crate::ttype::atomic::TAtomic;
 use crate::ttype::atomic::callable::TCallable;
 use crate::ttype::atomic::callable::TCallableSignature;
+use crate::ttype::atomic::callable::parameter::TCallableParameter;
 use crate::ttype::cast::can_atomic_be_callable;
 use crate::ttype::cast::cast_atomic_to_callable;
 use crate::ttype::comparator::ComparisonResult;
@@ -71,16 +72,16 @@ pub(crate) fn is_contained_by(
     }
 
     for (i, input_parameter) in input_params.iter().enumerate() {
-        let container_parameter;
-        if let Some(inner) = container_params.get(i) {
-            container_parameter = inner;
-        } else if let Some(last_parameter) = container_params.last().filter(|p| p.is_variadic()) {
-            container_parameter = last_parameter;
-        } else {
-            if input_parameter.has_default() {
-                break;
+        let input_is_optional = is_optional(input_parameter);
+        let Some(container_parameter) = container_params.get(i) else {
+            if input_is_optional {
+                continue;
             }
 
+            return false;
+        };
+
+        if !input_is_optional && is_optional(container_parameter) {
             return false;
         }
 
@@ -143,6 +144,10 @@ pub(crate) fn is_contained_by(
         input_return_type.ignore_falsable_issues(),
         atomic_comparison_result,
     )
+}
+
+const fn is_optional(parameter: &TCallableParameter) -> bool {
+    parameter.has_default() || parameter.is_variadic()
 }
 
 /// `callable` and `Closure` written without a signature accept any callable, like PHPStan's common callable,
