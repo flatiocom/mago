@@ -22,7 +22,7 @@ function uncertain_docblock_value_compared_with_null($value, UncertainNullStep $
 
 function uncertain_native_value_compared_with_null(string $value, UncertainNullStep $step): void
 {
-    while ($value !== null) { // @mago-expect analysis:impossible-null-type-comparison
+    while ($value !== null) { // @mago-expect analysis:redundant-comparison
         $step->step();
     }
 }

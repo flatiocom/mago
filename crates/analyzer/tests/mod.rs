@@ -3643,3 +3643,4 @@ test_case!(never_identical_to_empty_array_native, {
     s.treat_docblock_types_as_certain = false;
     s
 });
+test_case!(loop_condition_reports_comparison);

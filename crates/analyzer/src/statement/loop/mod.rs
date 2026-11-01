@@ -81,6 +81,8 @@ use crate::statement::analyze_body_statements;
 use crate::statement::r#loop::assignment_map_visitor::get_assignment_map;
 use crate::statement::r#loop::assignment_map_visitor::get_written_variables;
 use crate::statement::r#loop::cleaner::clean_nodes;
+use crate::utils::expression::get_root_expression_id;
+use crate::utils::misc::unwrap_expression;
 
 pub(crate) mod assignment_map_visitor;
 mod cleaner;
@@ -582,6 +584,8 @@ where
                 artifacts,
                 is_do,
                 !pre_conditions_applied,
+                (assignment_depth == 0 || !is_do)
+                    && reports_comparison_with_constant(pre_condition, &loop_written_variables, true),
             )?;
         }
 
@@ -633,6 +637,7 @@ where
                         artifacts,
                         is_do,
                         !pre_conditions_applied,
+                        !is_do && reports_comparison_with_constant(pre_condition, &loop_written_variables, false),
                     )?;
                 }
 
@@ -681,6 +686,7 @@ where
                         artifacts,
                         is_do,
                         !pre_conditions_applied,
+                        false,
                     )?);
                 }
 
@@ -1012,6 +1018,7 @@ where
                         artifacts,
                         is_do,
                         !pre_conditions_applied,
+                        !is_do && reports_comparison_with_constant(pre_condition, &loop_written_variables, false),
                     );
 
                     if is_do {
@@ -1098,6 +1105,7 @@ where
                             artifacts,
                             is_do,
                             !pre_conditions_applied,
+                            false,
                         )?;
                     }
 
@@ -1595,6 +1603,37 @@ fn can_condition_be_initially_false(pre_condition: &Expression<'_>, artifacts: &
     }
 }
 
+fn reports_comparison_with_constant(
+    condition: &Expression<'_>,
+    written_variables: &WordSet,
+    single_pass: bool,
+) -> bool {
+    let Expression::Binary(binary) = unwrap_expression(condition) else {
+        return false;
+    };
+
+    if !matches!(binary.operator, BinaryOperator::Identical(_) | BinaryOperator::NotIdentical(_)) {
+        return false;
+    }
+
+    let is_constant = |operand: &Expression<'_>| {
+        matches!(
+            unwrap_expression(operand),
+            Expression::Literal(Literal::Null(_) | Literal::True(_) | Literal::False(_))
+        )
+    };
+
+    let compared = if is_constant(binary.rhs) {
+        binary.lhs
+    } else if is_constant(binary.lhs) {
+        binary.rhs
+    } else {
+        return false;
+    };
+
+    !single_pass || get_root_expression_id(compared).is_some_and(|root| !written_variables.contains(&root))
+}
+
 fn apply_pre_condition_to_loop_context<'ctx, 'arena, A>(
     context: &mut Context<'ctx, 'arena, A>,
     pre_condition: &Expression<'arena>,
@@ -1604,6 +1643,7 @@ fn apply_pre_condition_to_loop_context<'ctx, 'arena, A>(
     artifacts: &mut AnalysisArtifacts,
     is_do: bool,
     first_application: bool,
+    reports_comparison: bool,
 ) -> Result<WordSet, AnalysisError>
 where
     A: Arena,
@@ -1612,7 +1652,7 @@ where
     let pre_referenced_variable_ids = std::mem::take(&mut loop_context.conditionally_referenced_variable_ids);
 
     loop_context.flags.set_inside_conditional(true);
-    loop_context.flags.set_inside_loop_expressions(true);
+    loop_context.flags.set_inside_loop_expressions(!reports_comparison);
 
     pre_condition.analyze(context, loop_context, artifacts)?;
 
@@ -1683,7 +1723,7 @@ where
             &mut WordSet::default(),
             &new_referenced_variable_ids,
             &pre_condition_span,
-            first_application,
+            first_application && !reports_comparison,
             false,
         );
     }
