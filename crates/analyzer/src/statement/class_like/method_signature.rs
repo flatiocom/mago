@@ -200,16 +200,14 @@ pub fn validate_method_signature_compatibility(
         }
     }
 
-    if !issues.is_empty() {
-        return issues;
-    }
+    let has_parameter_type_issues = !issues.is_empty();
 
     for (index, parent_param) in parent_method.parameters.iter().enumerate() {
         let Some(child_param) = child_method.parameters.get(index) else {
             continue;
         };
 
-        if parent_param.name != child_param.name {
+        if !has_parameter_type_issues && parent_param.name != child_param.name {
             issues.push(SignatureCompatibilityIssue::ParameterNameMismatch {
                 parameter_index: index,
                 child_name: child_param.name.0,
