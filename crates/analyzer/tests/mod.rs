@@ -3676,3 +3676,4 @@ test_case!(method_signature_native_parameter_contravariance);
 test_case!(method_signature_through_magic_method_tag);
 test_case!(array_walk_callback_beside_mixed_array);
 test_case!(callable_alias_argument_checked_against_signature);
+test_case!(docblock_var_callable_pair);

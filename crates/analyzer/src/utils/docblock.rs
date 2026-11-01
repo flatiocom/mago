@@ -650,9 +650,8 @@ fn literal_atomic_can_be(codebase: &CodebaseMetadata, literal_atomic: &TAtomic, 
                     && literal_can_be(codebase, literal_item_type, iterable.get_value_type())
             });
         }
-        TAtomic::Callable(_) => {
-            return literal_items.len() == 2
-                && literal_items.iter().all(|(key, _)| matches!(key, ArrayKey::Integer(0 | 1)));
+        TAtomic::Callable(callable) => {
+            return !callable.is_closure() && literal_pair_can_be_callable(codebase, &literal_items);
         }
         _ => return atomics_overlap(),
     };
@@ -671,6 +670,29 @@ fn literal_atomic_can_be(codebase: &CodebaseMetadata, literal_atomic: &TAtomic, 
                 !rest_type.is_never() && literal_can_be(codebase, literal_item_type, rest_type)
             })
     })
+}
+
+fn literal_pair_can_be_callable(codebase: &CodebaseMetadata, literal_items: &[(ArrayKey, &TUnion)]) -> bool {
+    let item = |index| literal_items.iter().find(|(key, _)| *key == ArrayKey::Integer(index)).map(|(_, item)| *item);
+    let (2, Some(receiver), Some(method)) = (literal_items.len(), item(0), item(1)) else {
+        return false;
+    };
+
+    let class_name = receiver
+        .get_single_literal_string_value()
+        .map(word)
+        .or_else(|| if receiver.is_single() { receiver.get_single().get_class_string_value() } else { None });
+    let (Some(class_name), Some(method_name)) = (class_name, method.get_single_literal_string_value()) else {
+        return true;
+    };
+
+    match codebase.get_declaring_method(class_name.as_bytes(), method_name) {
+        Some(method) => method.method_metadata.as_ref().is_some_and(|metadata| metadata.is_static),
+        None => {
+            !codebase.is_enum_or_final_class(class_name.as_bytes())
+                || codebase.method_exists(class_name.as_bytes(), b"__callStatic")
+        }
+    }
 }
 
 fn types_overlap(codebase: &CodebaseMetadata, left: &TUnion, right: &TUnion) -> bool {
