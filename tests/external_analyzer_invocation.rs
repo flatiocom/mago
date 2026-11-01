@@ -544,6 +544,37 @@ function filled(): string
 }
 
 #[test]
+fn native_types_pass_keeps_provider_assertions() -> Result<(), Box<dyn std::error::Error>> {
+    if !php_sdk_is_available() {
+        return Ok(());
+    }
+    let source = r"<?php
+
+declare(strict_types=1);
+
+function external_assert_string(mixed $value): void {}
+
+function asserted(mixed $value): string
+{
+    external_assert_string($value);
+
+    return $value ?? '';
+}
+";
+    let observation = analyze_with_fixture_settings(source, true, false, false, |settings| {
+        settings.treat_docblock_types_as_certain = false;
+    })?;
+    let codes = observation.issues.iter().filter_map(|(code, _)| code.as_deref()).collect::<Vec<_>>();
+    assert_eq!(
+        codes,
+        ["redundant-null-coalesce"],
+        "the native pass must apply the provider assertion: {:#?}",
+        observation.issues
+    );
+    Ok(())
+}
+
+#[test]
 fn external_providers_receive_complete_invocation_context() -> Result<(), Box<dyn std::error::Error>> {
     if !php_sdk_is_available() {
         return Ok(());

@@ -2041,14 +2041,18 @@ fn apply_plugin_assertions<'ctx, 'arena, A>(
 where
     A: Arena,
 {
-    let Some(assertions) = context.plugin_registry.get_function_like_assertions(
+    let (plugin_registry, session) = match context.callable_signature_source() {
+        Some((registry, session)) if context.native_types_only => (registry, Some(session)),
+        _ => (context.plugin_registry, context.external_analysis_session),
+    };
+    let Some(assertions) = plugin_registry.get_function_like_assertions(
         context.codebase,
         context.source_file,
         block_context,
         artifacts,
         identifier,
         invocation,
-        context.external_analysis_session,
+        session,
     ) else {
         return Ok(());
     };
