@@ -81,14 +81,10 @@ where
     if let Some(assertion_type) = assertion.get_type() {
         // `mixed is T` -> `T`, always
         if existing_var_type.is_mixed() {
-            if let TAtomic::Array(TArray::Keyed(keyed_array)) = assertion_type
-                && !keyed_array.has_known_items()
-                && existing_var_type
-                    .types
-                    .iter()
-                    .all(|atomic| matches!(atomic, TAtomic::Mixed(mixed) if mixed.is_truthy()))
+            if existing_var_type.types.iter().all(|atomic| matches!(atomic, TAtomic::Mixed(mixed) if mixed.is_truthy()))
+                && let Some(truthy_type) = get_truthy_type(assertion_type)
             {
-                return Some(wrap_atomic(TAtomic::Array(TArray::Keyed(keyed_array.as_non_empty_array(true)))));
+                return Some(truthy_type);
             }
 
             return Some(wrap_atomic(assertion_type.clone()));
@@ -393,6 +389,22 @@ where
             ))
         }
         Assertion::Countable => Some(reconcile_countable(context, assertion, existing_var_type, key, negated, span)),
+        _ => None,
+    }
+}
+
+fn get_truthy_type(assertion_type: &TAtomic) -> Option<TUnion> {
+    match assertion_type {
+        TAtomic::Array(TArray::Keyed(keyed_array)) if !keyed_array.has_known_items() => {
+            Some(wrap_atomic(TAtomic::Array(TArray::Keyed(keyed_array.as_non_empty_array(true)))))
+        }
+        TAtomic::Scalar(TScalar::String(string)) if *string == TString::general() => {
+            Some(wrap_atomic(TAtomic::Scalar(TScalar::String(TString::truthy()))))
+        }
+        TAtomic::Scalar(TScalar::Integer(integer)) if integer.is_unspecified() => Some(TUnion::from_vec(vec![
+            TAtomic::Scalar(TScalar::Integer(TInteger::To(-1))),
+            TAtomic::Scalar(TScalar::Integer(TInteger::From(1))),
+        ])),
         _ => None,
     }
 }
