@@ -3668,3 +3668,4 @@ test_case!(native_types_of_generic_built_in_calls, {
 test_case!(assigned_call_result_keeps_its_narrowing);
 test_case!(array_reduce_over_sealed_arrays);
 test_case!(omitted_default_joins_template_bounds);
+test_case!(array_merge_keeps_dropped_optional_values);

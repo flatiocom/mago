@@ -247,6 +247,19 @@ impl FunctionReturnTypeProvider for ArrayMergeProvider {
             let mut result_array = TKeyedArray::new();
 
             if has_general_argument {
+                for (key, (_, value)) in merged_items.iter().filter(|(_, (optional, _))| *optional) {
+                    merged_key_type = Some(match merged_key_type {
+                        Some(existing) => {
+                            combine_union_types(&existing, &key.to_union(), codebase, CombinerOptions::default())
+                        }
+                        None => key.to_union(),
+                    });
+                    merged_value_type = Some(match merged_value_type {
+                        Some(existing) => combine_union_types(&existing, value, codebase, CombinerOptions::default()),
+                        None => value.clone(),
+                    });
+                }
+
                 merged_items.retain(|_, (optional, _)| !*optional);
             }
 
