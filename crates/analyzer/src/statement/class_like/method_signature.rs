@@ -3,7 +3,6 @@ use mago_codex::metadata::function_like::FunctionLikeMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::callable::TCallable;
-use mago_codex::ttype::atomic::callable::TCallableSignature;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::expander::StaticClassType;
@@ -377,15 +376,14 @@ fn collect_conditional_branches(union: &TUnion, branches: &mut Vec<TUnion>) {
 }
 
 fn declares_parameters_where_parent_callable_has_no_signature(child_type: &TUnion, parent_type: &TUnion) -> bool {
-    let callable_without_signature = TCallableSignature::mixed(false);
-    let parent_accepts_callable_without_signature = parent_type.types.iter().any(|atomic| {
-        matches!(atomic, TAtomic::Callable(TCallable::Signature(signature)) if *signature == callable_without_signature)
-    });
+    let parent_accepts_callable_without_signature = parent_type.types.iter().any(
+        |atomic| matches!(atomic, TAtomic::Callable(TCallable::Signature(signature)) if signature.has_no_signature()),
+    );
 
     parent_accepts_callable_without_signature
         && child_type.types.iter().any(|atomic| {
             matches!(atomic, TAtomic::Callable(TCallable::Signature(signature))
-                if !signature.get_parameters().is_empty() && *signature != TCallableSignature::mixed(signature.is_closure()))
+                if !signature.get_parameters().is_empty() && !signature.has_no_signature())
         })
 }
 

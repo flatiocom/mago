@@ -3671,3 +3671,4 @@ test_case!(omitted_default_joins_template_bounds);
 test_case!(array_merge_keeps_dropped_optional_values);
 test_case!(method_signature_return_checked_beside_parameter_issue);
 test_case!(callable_written_with_mixed_variadic_signature);
+test_case!(method_signature_closure_parent_without_signature);
