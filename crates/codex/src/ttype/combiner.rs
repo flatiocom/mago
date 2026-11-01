@@ -248,7 +248,10 @@ pub fn combine(types: Vec<TAtomic>, codebase: &CodebaseMetadata, options: Combin
         combination.value_types.insert(*ATOM_BOOL, TAtomic::Scalar(TScalar::bool()));
     }
 
-    let generic_scalar = combination.value_types.contains_key(&*ATOM_STRING)
+    let generic_scalar = combination
+        .value_types
+        .get(&*ATOM_STRING)
+        .is_some_and(|string| matches!(string, TAtomic::Scalar(TScalar::String(string)) if string.is_boring()))
         && combination.value_types.contains_key(&*ATOM_FLOAT)
         && combination.value_types.contains_key(&*ATOM_BOOL)
         && combination.integers.iter().any(super::atomic::scalar::int::TInteger::is_unspecified);
@@ -2042,6 +2045,24 @@ mod tests {
 
         assert_eq!(combined.len(), 1);
         assert!(matches!(combined[0], TAtomic::Scalar(TScalar::Generic)));
+    }
+
+    #[test]
+    fn test_combine_refined_string_with_other_scalars_keeps_the_string() {
+        for refined_string in [TScalar::numeric_string(), TScalar::non_empty_string()] {
+            let types = vec![
+                TAtomic::Scalar(refined_string.clone()),
+                TAtomic::Scalar(TScalar::int()),
+                TAtomic::Scalar(TScalar::float()),
+                TAtomic::Scalar(TScalar::bool()),
+            ];
+
+            let combined =
+                combine(types, &CodebaseMetadata::default(), CombinerOptions::default().with_overwrite_empty_array());
+
+            assert_eq!(combined.len(), 4);
+            assert!(combined.contains(&TAtomic::Scalar(refined_string)));
+        }
     }
 
     #[test]
