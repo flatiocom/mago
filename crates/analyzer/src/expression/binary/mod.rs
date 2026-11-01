@@ -36,6 +36,8 @@ mod logical;
 mod null_coalesce;
 mod spaceship;
 
+pub use logical::keep_left_outcome_of_leaving_statement;
+
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for Binary<'arena> {
     fn analyze<'ctx, A>(
         &'ast self,

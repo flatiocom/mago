@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use foldhash::HashSet;
 
+use mago_algebra::AssertionMap;
 use mago_algebra::find_satisfying_assignments;
 use mago_algebra::find_satisfying_assignments_iter;
 use mago_algebra::saturate_clauses;
@@ -22,6 +23,7 @@ use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_syntax::cst::Binary;
 use mago_syntax::cst::BinaryOperator;
+use mago_syntax::cst::Construct;
 use mago_syntax::cst::Expression;
 use mago_text_edit::Safety;
 use mago_text_edit::TextEdit;
@@ -42,6 +44,7 @@ use crate::reconciler;
 use crate::utils::conditional::is_isset_or_empty;
 use crate::utils::conditional::is_reported_as_comparison;
 use crate::utils::expression::expression_has_observable_side_effect;
+use crate::utils::misc::unwrap_expression;
 use crate::utils::symbol_existence::extract_function_constant_existence;
 
 /// Merges variables assigned by a short-circuiting right-hand side back into the
@@ -163,6 +166,86 @@ where
     }
 
     right_context
+}
+
+/// Like PHPStan, code after the statement `A && throw …;` runs only where `A` is false, and after
+/// `A || throw …;` only where it is true; `exit` and a call that never returns leave the same way.
+pub fn keep_left_outcome_of_leaving_statement<'ctx, A>(
+    expression: &Expression<'_>,
+    context: &mut Context<'ctx, '_, A>,
+    block_context: &mut BlockContext<'ctx>,
+    artifacts: &AnalysisArtifacts,
+) where
+    A: Arena,
+{
+    let Expression::Binary(binary) = expression.unparenthesized() else {
+        return;
+    };
+
+    let left_is_true = match binary.operator {
+        BinaryOperator::And(_) | BinaryOperator::LowAnd(_) => false,
+        BinaryOperator::Or(_) | BinaryOperator::LowOr(_) => true,
+        _ => return,
+    };
+
+    let right_leaves = matches!(
+        unwrap_expression(binary.rhs),
+        Expression::Throw(_) | Expression::Construct(Construct::Die(_) | Construct::Exit(_)) | Expression::Call(_)
+    ) && artifacts.get_expression_type(binary.rhs).is_some_and(TUnion::is_never);
+    if !right_leaves {
+        return;
+    }
+
+    let mut left_clauses = get_formula(
+        binary.lhs.span(),
+        binary.lhs.span(),
+        binary.lhs,
+        context.get_assertion_context_from_block(block_context),
+        artifacts,
+        &context.settings.algebra_thresholds(),
+        context.settings.formula_size_threshold,
+    )
+    .unwrap_or_default();
+
+    if !left_is_true {
+        left_clauses = negate_or_synthesize(
+            &left_clauses,
+            binary.lhs,
+            context.get_assertion_context_from_block(block_context),
+            artifacts,
+            &context.settings.algebra_thresholds(),
+            context.settings.formula_size_threshold,
+        );
+    }
+
+    if left_clauses.is_empty() {
+        return;
+    }
+
+    block_context.clauses = saturate_shared_clauses(
+        block_context.clauses.iter().cloned().chain(left_clauses.into_iter().map(Rc::new)),
+        &context.settings.algebra_thresholds(),
+    );
+
+    let (assertions, _) =
+        find_satisfying_assignments_iter(block_context.clauses.iter().map(Rc::as_ref), None, &mut WordSet::default());
+    if assertions.is_empty() {
+        return;
+    }
+
+    let mut changed_var_ids = WordSet::default();
+    reconciler::reconcile_keyed_types(
+        context,
+        &assertions,
+        AssertionMap::default(),
+        block_context,
+        &mut changed_var_ids,
+        &WordSet::default(),
+        &binary.lhs.span(),
+        false,
+        false,
+    );
+    BlockContext::retain_unreconciled_clauses(&mut block_context.clauses, &changed_var_ids);
 }
 
 fn forget_right_overwrites<'ctx, A>(

@@ -23,6 +23,7 @@ use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
+use crate::expression::binary::keep_left_outcome_of_leaving_statement;
 use crate::plugin::HookAction;
 use crate::plugin::context::HookContext;
 use crate::statement::unused_instantiation::instantiation_has_no_effect;
@@ -195,7 +196,12 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Statement<'arena> {
 
                 Ok(())
             }
-            Statement::Expression(expression) => expression.expression.analyze(context, block_context, artifacts),
+            Statement::Expression(expression) => {
+                expression.expression.analyze(context, block_context, artifacts)?;
+                keep_left_outcome_of_leaving_statement(expression.expression, context, block_context, artifacts);
+
+                Ok(())
+            }
             Statement::Try(r#try) => r#try.analyze(context, block_context, artifacts),
             Statement::Foreach(foreach) => foreach.analyze(context, block_context, artifacts),
             Statement::For(r#for) => r#for.analyze(context, block_context, artifacts),
