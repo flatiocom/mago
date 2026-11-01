@@ -3666,3 +3666,4 @@ test_case!(native_types_of_generic_built_in_calls, {
     s
 });
 test_case!(assigned_call_result_keeps_its_narrowing);
+test_case!(array_reduce_over_sealed_arrays);
