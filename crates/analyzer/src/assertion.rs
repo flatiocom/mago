@@ -1,6 +1,7 @@
 use mago_allocator::Arena;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use mago_algebra::assertion_set::AssertionSet;
 use mago_algebra::assertion_set::negate_assertion_set;
@@ -10,6 +11,7 @@ use mago_codex::ttype::add_optional_union_type;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::array::key::ArrayKey;
+use mago_codex::ttype::atomic::array::keyed::TKeyedArray;
 use mago_codex::ttype::atomic::object::TObject;
 use mago_codex::ttype::atomic::object::named::TNamedObject;
 use mago_codex::ttype::atomic::scalar::TScalar;
@@ -27,6 +29,7 @@ use mago_codex::ttype::get_bool;
 use mago_codex::ttype::get_false;
 use mago_codex::ttype::get_float;
 use mago_codex::ttype::get_iterable_value_parameter;
+use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_numeric_string;
 use mago_codex::ttype::get_true;
 use mago_codex::ttype::shared::EMPTY_KEYED_ARRAY_ATOMIC;
@@ -507,9 +510,16 @@ where
 
             if let Some(array_id) = assertion_context.get_expression_id(array_argument)
                 && artifacts.get_expression_type(array_argument).is_some_and(TUnion::is_mixed)
-                && let Some(literal_keys) = get_expression_literal_array_keys(artifacts, key_argument)
             {
-                if_types.insert(array_id, vec![literal_keys.into_iter().map(Assertion::HasArrayKey).collect()]);
+                let array_assertions = match get_expression_literal_array_keys(artifacts, key_argument) {
+                    Some(literal_keys) => literal_keys.into_iter().map(Assertion::HasArrayKey).collect(),
+                    None => vec![Assertion::IsType(TAtomic::Array(TArray::Keyed(
+                        TKeyedArray::new_with_parameters(Arc::new(get_arraykey()), Arc::new(get_mixed()))
+                            .as_non_empty_array(true),
+                    )))],
+                };
+
+                if_types.insert(array_id, vec![array_assertions]);
             }
 
             if let Some(key_id) = assertion_context.get_expression_id(key_argument)
