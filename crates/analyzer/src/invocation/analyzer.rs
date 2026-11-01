@@ -2619,7 +2619,7 @@ fn bind_templates_of_mixed_arrays_beside_callback(
 ) {
     let types_callback_by_arrays = target.get_function_like_identifier().is_some_and(|id| {
         matches!(id, FunctionLikeIdentifier::Function(name)
-            if name.as_bytes().eq_ignore_ascii_case(b"array_filter") || name.as_bytes().eq_ignore_ascii_case(b"array_map"))
+            if [b"array_filter".as_slice(), b"array_map", b"array_walk"].iter().any(|function| name.as_bytes().eq_ignore_ascii_case(function)))
     });
 
     if !types_callback_by_arrays {
@@ -2633,7 +2633,7 @@ fn bind_templates_of_mixed_arrays_beside_callback(
         let Some(parameter_type) = parameter.get_type() else {
             continue;
         };
-        if !parameter_type.is_array()
+        if !parameter_type.types.iter().any(TAtomic::is_array)
             || !analyzed_argument_types
                 .get(*argument_offset)
                 .and_then(Option::as_ref)
