@@ -2728,44 +2728,36 @@ function file_put_contents(string $filename, mixed $data, int $flags = 0, $conte
 function error_get_last(): ?array {}
 
 /**
- * @template I
  * @template R
  *
- * @param callable(I...): R|callable-string|string $callback
- * @param I ...$args
+ * @param callable(...): R|callable-string|string $callback
  *
  * @return R
  */
 function call_user_func(callable|string $callback, mixed ...$args): mixed {}
 
 /**
- * @template I
  * @template R
  *
- * @param callable(I...): R|callable-string|string $callback
- * @param array<I> $args
+ * @param callable(...): R|callable-string|string $callback
  *
  * @return R
  */
 function call_user_func_array(callable|string $callback, array $args): mixed {}
 
 /**
- * @template I
  * @template R
  *
- * @param callable(I...): R|callable-string|string $callback
- * @param I ...$args
+ * @param callable(...): R|callable-string|string $callback
  *
  * @return R
  */
 function forward_static_call(callable|string $callback, mixed ...$args): mixed {}
 
 /**
- * @template I
  * @template R
  *
- * @param callable(I...): R|callable-string|string $callback
- * @param array<I> $args
+ * @param callable(...): R|callable-string|string $callback
  *
  * @return R
  */
@@ -2800,20 +2792,12 @@ function memory_get_peak_usage(bool $real_usage = false): int {}
 function memory_reset_peak_usage(): void {}
 
 /**
- * @template I
- *
- * @param (callable(I...)) $callback
- * @param I ...$args
- *
  * @return bool|null
  */
 function register_shutdown_function(callable $callback, mixed ...$args): void {}
 
 /**
- * @template I
- *
- * @param (callable(I...)) $callback
- * @param I ...$args
+ * @param callable(): void $callback
  */
 function register_tick_function(callable $callback, mixed ...$args): bool {}
 
