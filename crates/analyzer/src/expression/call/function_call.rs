@@ -52,7 +52,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for FunctionCall<'arena> {
             )
         {
             artifacts.condition_function_calls.push((self.span().start.offset, call_id));
-            block_context.locals.insert(get_narrowed_function_call_id(call_id), Rc::new(get_true()));
+            let narrowed_before =
+                block_context.locals.insert(get_narrowed_function_call_id(call_id), Rc::new(get_true())).is_some();
+            artifacts.condition_calls_narrowed_before.insert(self.span().start.offset, narrowed_before);
         }
 
         if context.plugin_registry.has_function_call_hooks() {

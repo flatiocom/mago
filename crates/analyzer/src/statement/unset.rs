@@ -27,9 +27,11 @@ use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
+use crate::context::scope::narrowed_function_call_reads;
 use crate::error::AnalysisError;
 use crate::invocation::post_process::forget_expressions_below_object;
 use crate::utils::expression::get_block_expression_id;
+use crate::utils::expression::get_root_expression_id;
 use mago_word::concat_word;
 
 impl<'ast, 'arena> Analyzable<'ast, 'arena> for Unset<'arena> {
@@ -65,6 +67,12 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Unset<'arena> {
             check_property_unset(context, artifacts, self.unset.span, value);
             record_property_offset_unset(context, block_context, artifacts, value);
             forget_narrowings_below_unset_object_offset(context, block_context, artifacts, value);
+
+            if let Expression::ArrayAccess(array_access) = value
+                && let Some(root_id) = get_root_expression_id(array_access.array)
+            {
+                block_context.locals.retain(|variable_id, _| !narrowed_function_call_reads(*variable_id, root_id));
+            }
 
             'array_access: {
                 let Expression::ArrayAccess(array_access) = value else {

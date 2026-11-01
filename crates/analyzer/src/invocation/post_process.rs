@@ -1560,6 +1560,7 @@ where
         .locals
         .get(&get_narrowed_function_call_id(call_id))
         .is_none_or(|narrowed_call| narrowed_call.possibly_undefined())
+        || artifacts.condition_calls_narrowed_before.get(&function_call.span().start.offset) == Some(&false)
     {
         return false;
     }

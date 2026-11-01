@@ -3647,3 +3647,8 @@ test_case!(loop_condition_reports_comparison);
 test_case!(nullsafe_chain_narrowed_by_comparison);
 test_case!(array_key_exists_variable_key_on_mixed);
 test_case!(elseif_and_switch_merges_link_variables);
+test_case!(narrowed_call_after_write, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});
