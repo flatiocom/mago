@@ -3660,3 +3660,8 @@ test_case!(narrowed_call_argument_keys, {
 test_case!(pow_operands_like_php);
 test_case!(md5_and_sha1_return_types);
 test_case!(stream_and_column_meta_shapes);
+test_case!(native_types_of_generic_built_in_calls, {
+    let mut s = crate::framework::default_test_settings();
+    s.treat_docblock_types_as_certain = false;
+    s
+});

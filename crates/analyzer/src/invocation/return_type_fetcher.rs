@@ -4,6 +4,7 @@ use mago_codex::metadata::function_like::FunctionLikeMetadata;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::get_implicit_mixed;
 use mago_codex::ttype::get_never;
+use mago_codex::ttype::template::TemplateBound;
 use mago_codex::ttype::template::TemplateResult;
 use mago_codex::ttype::union::TUnion;
 use mago_word::WordMap;
@@ -129,7 +130,17 @@ where
     };
 
     let mut resulting_type = if let Some(return_type) = target_return_type {
-        resolve_invocation_type(context, invocation, template_result, parameters, return_type)
+        if context.native_types_only && is_generic_return_type(&return_type) {
+            resolve_invocation_type(
+                context,
+                invocation,
+                &get_template_constraints(invocation),
+                &WordMap::default(),
+                return_type,
+            )
+        } else {
+            resolve_invocation_type(context, invocation, template_result, parameters, return_type)
+        }
     } else {
         get_implicit_mixed()
     };
@@ -160,8 +171,22 @@ fn has_signature_map_return_type(
     function_like_metadata.flags.is_built_in()
         && matches!(invocation.target.get_function_like_identifier(), Some(FunctionLikeIdentifier::Function(name))
             if !name.as_bytes().eq_ignore_ascii_case(b"explode"))
-        && function_like_metadata.return_type_metadata.as_ref().is_some_and(|return_type| {
-            !return_type.type_union.has_template_types()
-                && !return_type.type_union.types.iter().any(TAtomic::is_conditional)
-        })
+        && function_like_metadata.return_type_metadata.is_some()
+}
+
+fn is_generic_return_type(return_type: &TUnion) -> bool {
+    return_type.has_template_types() || return_type.types.iter().any(TAtomic::is_conditional)
+}
+
+fn get_template_constraints(invocation: &Invocation<'_, '_, '_>) -> TemplateResult {
+    let mut template_result = TemplateResult::default();
+    for (template_name, template) in invocation.target.get_template_types().into_iter().flatten() {
+        template_result
+            .lower_bounds
+            .entry(*template_name)
+            .or_default()
+            .insert(template.defining_entity, vec![TemplateBound::new(template.constraint.clone(), 1, None)]);
+    }
+
+    template_result
 }
