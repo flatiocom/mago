@@ -3703,3 +3703,4 @@ test_case!(static_property_after_rejected_write_has_native_type, {
 });
 test_case!(unpacked_array_of_unknown_size_satisfies_argument_count);
 test_case!(readonly_property_type_not_kept_when_a_clone_reassigns_it);
+test_case!(unpacked_iterable_checks_first_parameter);

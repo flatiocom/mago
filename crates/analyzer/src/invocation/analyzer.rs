@@ -32,6 +32,7 @@ use mago_codex::ttype::comparator::union_comparator;
 use mago_codex::ttype::expander;
 use mago_codex::ttype::expander::StaticClassType;
 use mago_codex::ttype::expander::TypeExpansionOptions;
+use mago_codex::ttype::get_iterable_value_parameter;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::intersect_union_types;
 use mago_codex::ttype::template::TemplateResult;
@@ -2250,6 +2251,37 @@ fn validate_unpacked_argument_elements<'ctx, 'arena, A>(
 
     for argument_atomic in argument_value_type.types.as_ref() {
         let TAtomic::Array(array) = argument_atomic else {
+            if let Some(value_type) = get_iterable_value_parameter(argument_atomic, context.codebase)
+                && let Some(parameter_ref) = invocation_target.get_parameter(starting_parameter_position)
+            {
+                let base_parameter_type = get_parameter_type(
+                    context,
+                    Some(parameter_ref),
+                    base_class_metadata,
+                    calling_class_like_metadata,
+                    calling_instance_type,
+                    method_class_type,
+                );
+
+                let final_parameter_type = resolve_parameter_type_for_invocation(
+                    context,
+                    invocation,
+                    template_result,
+                    parameter_types,
+                    base_class_metadata,
+                    base_parameter_type,
+                );
+
+                verify_argument_type(
+                    context,
+                    &value_type,
+                    &final_parameter_type,
+                    starting_parameter_position,
+                    argument_expression,
+                    invocation_target,
+                );
+            }
+
             continue;
         };
 
