@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::Arc;
 
 use foldhash::HashMap;
@@ -177,6 +178,29 @@ pub fn replace_with_polarity(
         codebase,
         combiner::CombinerOptions::default(),
     ))
+}
+
+#[must_use]
+pub fn replace_template_parameters_with_constraints<'union>(
+    union: &'union TUnion,
+    codebase: &CodebaseMetadata,
+) -> Cow<'union, TUnion> {
+    let mut constraints = TemplateResult::default();
+    for template_type in union.get_template_types() {
+        if let TAtomic::GenericParameter(parameter) = template_type {
+            constraints.add_lower_bound(
+                parameter.parameter_name,
+                parameter.defining_entity,
+                (*parameter.constraint).clone(),
+            );
+        }
+    }
+
+    if constraints.lower_bounds.is_empty() {
+        return Cow::Borrowed(union);
+    }
+
+    Cow::Owned(replace(union, &constraints, codebase))
 }
 
 fn replace_template_parameter(

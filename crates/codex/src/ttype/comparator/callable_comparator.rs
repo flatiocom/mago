@@ -10,6 +10,7 @@ use crate::ttype::cast::cast_atomic_to_callable;
 use crate::ttype::comparator::ComparisonResult;
 use crate::ttype::comparator::union_comparator;
 use crate::ttype::expander::get_signature_of_function_like_identifier;
+use crate::ttype::template::inferred_type_replacer::replace_template_parameters_with_constraints;
 
 pub(crate) fn is_contained_by(
     codebase: &CodebaseMetadata,
@@ -93,12 +94,13 @@ pub(crate) fn is_contained_by(
             continue;
         };
 
+        let input_parameter_type = replace_template_parameters_with_constraints(input_parameter_type, codebase);
         let mut parameter_comparison_result = ComparisonResult::new();
 
         if !union_comparator::is_contained_by_with_erased_template_arguments(
             codebase,
             container_parameter_type,
-            input_parameter_type,
+            &input_parameter_type,
             &mut parameter_comparison_result,
         ) {
             return false;
