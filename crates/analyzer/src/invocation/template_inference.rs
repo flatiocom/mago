@@ -184,6 +184,7 @@ fn infer_templates_from_input_and_container_types<A>(
         .any(|t| matches!(t, TAtomic::Scalar(TScalar::ClassLikeString(TClassLikeString::Generic { .. }))));
 
     let has_bare_generic_parameter = generic_container_parts.iter().any(|t| matches!(t, TAtomic::GenericParameter(_)));
+    let has_generic_callable = generic_container_parts.iter().any(|t| matches!(t, TAtomic::Callable(_)));
     let residual_input_types = input_type
         .types
         .iter()
@@ -192,6 +193,13 @@ fn infer_templates_from_input_and_container_types<A>(
                 && !concrete_container_parts.iter().any(|container_atomic| {
                     if has_generic_class_string
                         && matches!(argument_atomic, TAtomic::Scalar(TScalar::ClassLikeString(_)))
+                        && matches!(container_atomic, TAtomic::Scalar(TScalar::String(_)))
+                    {
+                        return false;
+                    }
+
+                    if has_generic_callable
+                        && argument_atomic.get_literal_string_value().is_some()
                         && matches!(container_atomic, TAtomic::Scalar(TScalar::String(_)))
                     {
                         return false;
