@@ -3685,3 +3685,4 @@ test_case!(comparison_of_array_with_possibly_non_array);
 test_case!(callable_template_parameter_accepts_its_constraint);
 test_case!(callable_variadic_parameter_checked_over_accepting_rest);
 test_case!(call_user_func_checks_arguments_against_callback);
+test_case!(redundant_check_on_trait_property_initialized_by_constructor);

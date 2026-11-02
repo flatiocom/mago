@@ -151,6 +151,7 @@ where
         let lhs_type = Rc::clone(lhs_type);
         if !is_static_var && !reads_undeclared_property(context, block_context, artifacts, binary.lhs) {
             record_initialized_property_check(
+                context,
                 block_context,
                 artifacts,
                 binary.lhs,

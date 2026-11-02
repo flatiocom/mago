@@ -187,6 +187,7 @@ fn report_redundant_isset<A>(
     let Some(subject) = describe_always_set(context, block_context, artifacts, value) else {
         let value_type = value_type.clone();
         record_initialized_property_check(
+            context,
             block_context,
             artifacts,
             value,

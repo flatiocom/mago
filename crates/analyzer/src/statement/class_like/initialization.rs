@@ -1049,13 +1049,16 @@ pub(crate) enum InitializedPropertyCheckKind {
 
 /// Records a `??` or `isset()` on a non-nullable native property of `$this`, as PHPStan's `IssetCheck` reports it
 /// when the property is initialized: promoted or always assigned by the class's own constructor.
-pub(crate) fn record_initialized_property_check(
+pub(crate) fn record_initialized_property_check<A>(
+    context: &Context<'_, '_, A>,
     block_context: &BlockContext<'_>,
     artifacts: &mut AnalysisArtifacts,
     expression: &Expression<'_>,
     value_type: &TUnion,
     kind: InitializedPropertyCheckKind,
-) {
+) where
+    A: Arena,
+{
     if value_type.has_nullish() || !value_type.possibly_undefined() || value_type.possibly_undefined_from_try() {
         return;
     }
@@ -1085,7 +1088,7 @@ pub(crate) fn record_initialized_property_check(
     }
 
     let property_name = concat_word!(b"$", identifier.value);
-    let Some(property) = declared_native_non_null_property(class_like_metadata, property_name) else {
+    let Some(property) = declared_native_non_null_property(context, class_like_metadata, property_name) else {
         return;
     };
 
@@ -1103,11 +1106,24 @@ pub(crate) fn record_initialized_property_check(
     });
 }
 
-fn declared_native_non_null_property(
-    class_like_metadata: &ClassLikeMetadata,
+fn declared_native_non_null_property<'meta, A>(
+    context: &Context<'_, '_, A>,
+    class_like_metadata: &'meta ClassLikeMetadata,
     property_name: Word,
-) -> Option<&PropertyMetadata> {
-    if class_like_metadata.declaring_property_ids.get(&property_name) != Some(&class_like_metadata.name) {
+) -> Option<&'meta PropertyMetadata>
+where
+    A: Arena,
+{
+    let declaring_class = *class_like_metadata.declaring_property_ids.get(&property_name)?;
+    let declared_by_class_or_own_trait = declaring_class == class_like_metadata.name
+        || (context
+            .codebase
+            .get_class_like(declaring_class.as_bytes())
+            .is_some_and(|declaring| declaring.kind.is_trait())
+            && !inherits_member(context, class_like_metadata, declaring_class, |parent| {
+                parent.declaring_property_ids.get(&property_name).copied()
+            }));
+    if !declared_by_class_or_own_trait {
         return None;
     }
 
