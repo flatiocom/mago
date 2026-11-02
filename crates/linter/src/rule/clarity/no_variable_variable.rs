@@ -6,6 +6,7 @@ use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_reporting::Level;
 use mago_span::HasSpan;
+use mago_syntax::cst::Expression;
 use mago_syntax::cst::Node;
 use mago_syntax::cst::NodeKind;
 use mago_syntax::cst::Variable;
@@ -95,8 +96,14 @@ impl LintRule for NoVariableVariableRule {
             return;
         };
 
-        let Variable::Nested(nested_variable) = variable else {
-            return;
+        let span = match variable {
+            Variable::Nested(nested_variable) => nested_variable.span(),
+            Variable::Indirect(indirect_variable)
+                if !matches!(indirect_variable.expression, Expression::Identifier(_)) =>
+            {
+                indirect_variable.span()
+            }
+            _ => return,
         };
 
         ctx.collector.report(
@@ -106,7 +113,7 @@ impl LintRule for NoVariableVariableRule {
             )
             .with_code(self.meta.code)
             .with_annotation(
-                Annotation::primary(nested_variable.span())
+                Annotation::primary(span)
                     .with_message("This is a variable variable"),
             )
             .with_note(
@@ -114,5 +121,38 @@ impl LintRule for NoVariableVariableRule {
             )
             .with_help("Refactor the code to avoid using variable variables."),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use indoc::indoc;
+
+    use super::NoVariableVariableRule;
+    use crate::test_lint_failure;
+    use crate::test_lint_success;
+
+    test_lint_failure! {
+        name = braced_variable_variables_are_reported,
+        rule = NoVariableVariableRule,
+        count = 4,
+        code = indoc! {r#"
+            <?php
+
+            echo ${$name};
+            echo ${'foo'};
+            echo Ctx::${$name};
+            echo "${$name}";
+        "#}
+    }
+
+    test_lint_success! {
+        name = interpolated_braced_name_is_not_reported,
+        rule = NoVariableVariableRule,
+        code = indoc! {r#"
+            <?php
+
+            echo "${name}";
+        "#}
     }
 }
