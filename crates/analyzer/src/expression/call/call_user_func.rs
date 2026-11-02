@@ -2,14 +2,19 @@ use mago_allocator::Arena;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
 use mago_codex::identifier::method::MethodIdentifier;
 use mago_codex::metadata::function_like::FunctionLikeMetadata;
+use mago_codex::ttype::add_union_type;
 use mago_codex::ttype::atomic::TAtomic;
+use mago_codex::ttype::atomic::array::TArray;
 use mago_codex::ttype::atomic::array::key::ArrayKey;
 use mago_codex::ttype::atomic::callable::TCallable;
 use mago_codex::ttype::atomic::callable::TCallableSignature;
 use mago_codex::ttype::atomic::callable::parameter::TCallableParameter;
 use mago_codex::ttype::cast::cast_atomic_to_callable;
+use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::expander::get_signature_of_function_like_identifier;
+use mago_codex::ttype::get_iterable_value_parameter;
 use mago_codex::ttype::template::inferred_type_replacer::replace_template_parameters_with_constraints;
+use mago_codex::ttype::union::TUnion;
 use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
@@ -37,6 +42,14 @@ struct ForwardedCall<'arena> {
 struct ForwardedArgument<'arena> {
     expression: &'arena Expression<'arena>,
     name: Option<Word>,
+    unpacked: bool,
+}
+
+struct PassedValue<'arena> {
+    expression: &'arena Expression<'arena>,
+    name: Option<Word>,
+    value_type: Option<TUnion>,
+    stands_for_any_count: bool,
 }
 
 pub(super) fn check_call_user_func_arguments<'arena, A>(
@@ -63,11 +76,11 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
         return;
     }
 
-    let values = &call.arguments;
+    let values = get_passed_values(context, artifacts, &call.arguments);
     let has_named_values = values.iter().any(|value| value.name.is_some());
 
-    if !has_named_values {
-        report_argument_count(context, &signature, function_call, &call);
+    if !has_named_values && !values.iter().any(|value| value.stands_for_any_count) {
+        report_argument_count(context, &signature, function_call, &call, &values);
     }
 
     let target = InvocationTarget::Callable {
@@ -112,7 +125,8 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
         let Some(parameter_type) = parameters[parameter_offset].get_type_signature() else {
             continue;
         };
-        let Some(value_type) = artifacts.get_expression_type(value.expression) else {
+        let Some(value_type) = value.value_type.as_ref().or_else(|| artifacts.get_expression_type(value.expression))
+        else {
             continue;
         };
 
@@ -131,10 +145,10 @@ fn report_argument_count<A>(
     signature: &TCallableSignature,
     function_call: &FunctionCall<'_>,
     call: &ForwardedCall<'_>,
+    values: &[PassedValue<'_>],
 ) where
     A: Arena,
 {
-    let values = &call.arguments;
     let parameters = signature.get_parameters();
     let required_count =
         parameters.iter().filter(|parameter| !parameter.has_default() && !parameter.is_variadic()).count();
@@ -290,6 +304,110 @@ where
     }
 }
 
+fn get_passed_values<'arena, A>(
+    context: &Context<'_, '_, A>,
+    artifacts: &AnalysisArtifacts,
+    arguments: &[ForwardedArgument<'arena>],
+) -> Vec<PassedValue<'arena>>
+where
+    A: Arena,
+{
+    let mut values = Vec::with_capacity(arguments.len());
+
+    for argument in arguments {
+        if !argument.unpacked {
+            values.push(PassedValue {
+                expression: argument.expression,
+                name: argument.name,
+                value_type: None,
+                stands_for_any_count: false,
+            });
+
+            continue;
+        }
+
+        if let Some(items) = get_array_items(argument.expression) {
+            values.extend(get_passed_values(context, artifacts, &items));
+
+            continue;
+        }
+
+        let Some(unpacked_type) = artifacts.get_expression_type(argument.expression) else {
+            values.push(PassedValue {
+                expression: argument.expression,
+                name: None,
+                value_type: None,
+                stands_for_any_count: true,
+            });
+
+            continue;
+        };
+
+        if let Some(items) = get_sealed_array_items(unpacked_type) {
+            values.extend(items.into_iter().map(|(name, value_type)| PassedValue {
+                expression: argument.expression,
+                name,
+                value_type: Some(value_type),
+                stands_for_any_count: false,
+            }));
+
+            continue;
+        }
+
+        values.push(PassedValue {
+            expression: argument.expression,
+            name: None,
+            value_type: get_unpacked_value_type(context, unpacked_type),
+            stands_for_any_count: true,
+        });
+    }
+
+    values
+}
+
+fn get_sealed_array_items(unpacked_type: &TUnion) -> Option<Vec<(Option<Word>, TUnion)>> {
+    let [TAtomic::Array(array)] = unpacked_type.types.as_ref() else {
+        return None;
+    };
+
+    match array {
+        TArray::List(list) if list.element_type.is_never() => Some(
+            list.known_elements
+                .iter()
+                .flat_map(|elements| elements.values())
+                .filter(|(optional, _)| !optional)
+                .map(|(_, element_type)| (None, element_type.clone()))
+                .collect(),
+        ),
+        TArray::Keyed(keyed) if keyed.parameters.is_none() => keyed
+            .known_items
+            .iter()
+            .flat_map(|items| items.iter())
+            .filter_map(|(key, (optional, item_type))| match key {
+                ArrayKey::String(name) => Some(Some((Some(*name), item_type.clone()))),
+                ArrayKey::Integer(_) if *optional => None,
+                ArrayKey::Integer(_) => Some(Some((None, item_type.clone()))),
+                ArrayKey::ClassLikeConstant { .. } => Some(None),
+            })
+            .collect(),
+        _ => None,
+    }
+}
+
+fn get_unpacked_value_type<A>(context: &Context<'_, '_, A>, unpacked_type: &TUnion) -> Option<TUnion>
+where
+    A: Arena,
+{
+    unpacked_type
+        .types
+        .iter()
+        .map(|atomic| get_iterable_value_parameter(atomic, context.codebase))
+        .reduce(|accumulated, value_type| {
+            Some(add_union_type(accumulated?, &value_type?, context.codebase, CombinerOptions::default()))
+        })
+        .flatten()
+}
+
 fn get_forwarded_call<'arena, A>(
     context: &Context<'_, '_, A>,
     function_call: &FunctionCall<'arena>,
@@ -314,10 +432,7 @@ where
         return Some(ForwardedCall {
             function_name: "call_user_func",
             callback,
-            arguments: passed_arguments
-                .into_iter()
-                .map(|(_, argument)| forward_argument(argument))
-                .collect::<Option<_>>()?,
+            arguments: passed_arguments.into_iter().map(|(_, argument)| forward_argument(argument)).collect(),
         });
     }
 
@@ -337,15 +452,14 @@ where
     None
 }
 
-fn forward_argument<'arena>(argument: &Argument<'arena>) -> Option<ForwardedArgument<'arena>> {
+fn forward_argument<'arena>(argument: &Argument<'arena>) -> ForwardedArgument<'arena> {
     match argument {
-        Argument::Positional(positional) if positional.ellipsis.is_none() => {
-            Some(ForwardedArgument { expression: positional.value, name: None })
+        Argument::Positional(positional) => {
+            ForwardedArgument { expression: positional.value, name: None, unpacked: positional.ellipsis.is_some() }
         }
         Argument::Named(named) => {
-            Some(ForwardedArgument { expression: named.value, name: Some(word(named.name.value)) })
+            ForwardedArgument { expression: named.value, name: Some(word(named.name.value)), unpacked: false }
         }
-        Argument::Positional(_) => None,
     }
 }
 
@@ -359,21 +473,28 @@ fn get_array_items<'arena>(expression: &'arena Expression<'arena>) -> Option<Vec
     elements
         .iter()
         .map(|element| match element {
-            ArrayElement::Value(element) => Some(ForwardedArgument { expression: element.value, name: None }),
+            ArrayElement::Value(element) => {
+                Some(ForwardedArgument { expression: element.value, name: None, unpacked: false })
+            }
+            ArrayElement::Variadic(element) => {
+                Some(ForwardedArgument { expression: element.value, name: None, unpacked: true })
+            }
             ArrayElement::KeyValue(element) => match element.key {
                 Expression::Literal(Literal::Integer(_)) => {
-                    Some(ForwardedArgument { expression: element.value, name: None })
+                    Some(ForwardedArgument { expression: element.value, name: None, unpacked: false })
                 }
                 Expression::Literal(Literal::String(key)) => match ArrayKey::from_string(word(key.value?)) {
-                    ArrayKey::Integer(_) => Some(ForwardedArgument { expression: element.value, name: None }),
+                    ArrayKey::Integer(_) => {
+                        Some(ForwardedArgument { expression: element.value, name: None, unpacked: false })
+                    }
                     ArrayKey::String(name) if !name.is_empty() => {
-                        Some(ForwardedArgument { expression: element.value, name: Some(name) })
+                        Some(ForwardedArgument { expression: element.value, name: Some(name), unpacked: false })
                     }
                     _ => None,
                 },
                 _ => None,
             },
-            ArrayElement::Variadic(_) | ArrayElement::Missing(_) => None,
+            ArrayElement::Missing(_) => None,
         })
         .collect()
 }

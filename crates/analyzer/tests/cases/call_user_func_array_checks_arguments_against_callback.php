@@ -30,5 +30,6 @@ function run(Joiner $joiner, array $texts): void
     call_user_func_array(static fn (int $number): int => $number, $texts);
     // @mago-expect analysis:invalid-argument
     call_user_func_array(static fn (int $number): int => $number, ['number' => 'a']);
+    // @mago-expect analysis:invalid-argument
     call_user_func_array(static fn (int $number): int => $number, [...$texts]);
 }
