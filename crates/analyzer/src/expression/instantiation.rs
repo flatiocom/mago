@@ -5,6 +5,7 @@ use indexmap::IndexMap;
 use mago_allocator::Arena;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
 use mago_codex::identifier::method::MethodIdentifier;
+use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::metadata::class_like::ClassLikeMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::add_optional_union_type;
@@ -276,9 +277,8 @@ where
 
         is_impossible = true;
     } else if classname.is_static()
-        && let Some(class_like) = block_context.scope.get_class_like()
-        && class_like.flags.is_abstract()
         && block_context.is_enclosing_method_static()
+        && let Some(class_like) = static_abstract_class(context.codebase, block_context)
     {
         let abstract_class = class_like.original_name;
 
@@ -473,13 +473,28 @@ where
     let skip_constructor_warning =
         classname.is_from_class_string() && (metadata.kind.is_interface() || metadata.kind.is_trait());
 
+    let mut constructor_class_name = metadata.original_name;
+    if classname.is_static() && metadata.kind.is_trait() {
+        let hosts = trait_hosts(context.codebase, metadata);
+        if !hosts.is_empty() {
+            let unsafe_host = hosts
+                .into_iter()
+                .find_map(|host| inconsistent_constructor(context.codebase, host).map(|span| (host, span)));
+            has_inconsistent_constructor = unsafe_host.is_some();
+            if let Some((host, host_constructor_span)) = unsafe_host {
+                constructor_class_name = host.original_name;
+                constructor_span = host_constructor_span;
+            }
+        }
+    }
+
     if has_inconsistent_constructor
         && !skip_constructor_warning
         && (classname.is_static() || classname.is_from_class_string() || classname.is_object_instance())
     {
         let mut issue = if classname.is_static() {
             Issue::warning(format!(
-                "Unsafe `new static()`: constructor of `{classname_str}` is not final and its signature might change in child classes, potentially leading to runtime errors.",
+                "Unsafe `new static()`: constructor of `{constructor_class_name}` is not final and its signature might change in child classes, potentially leading to runtime errors.",
             ))
             .with_annotation(Annotation::primary(class_expression_span).with_message("`new static()` used here"))
         } else if classname.is_from_class_string() {
@@ -639,6 +654,57 @@ where
     }
 
     Ok(())
+}
+
+/// The classes that use `trait_metadata` themselves rather than through a parent class: PHPStan analyzes a trait's
+/// methods once in each of them.
+fn trait_hosts<'ctx>(
+    codebase: &'ctx CodebaseMetadata,
+    trait_metadata: &ClassLikeMetadata,
+) -> Vec<&'ctx ClassLikeMetadata> {
+    let Some(users) = codebase.all_class_like_descendants.get(&trait_metadata.name) else {
+        return vec![];
+    };
+
+    let mut hosts = users
+        .iter()
+        .filter_map(|user| codebase.get_class_like_by_name(*user))
+        .filter(|user| !user.kind.is_trait())
+        .filter(|user| user.direct_parent_class.is_none_or(|parent| !users.contains(&parent.to_ascii_lowercase())))
+        .collect::<Vec<_>>();
+    hosts.sort_unstable_by_key(|host| host.name);
+
+    hosts
+}
+
+/// The span of `class_like`'s constructor, when a child class may redeclare it with another signature.
+fn inconsistent_constructor(codebase: &CodebaseMetadata, class_like: &ClassLikeMetadata) -> Option<Option<Span>> {
+    if class_like.flags.is_final() || class_like.name_span.is_none() || class_like.flags.has_consistent_constructor() {
+        return None;
+    }
+
+    let constructor_id =
+        codebase.get_declaring_method_identifier(&MethodIdentifier::new(class_like.original_name, word("__construct")));
+    let Some(constructor) = codebase.get_method_by_id(&constructor_id) else {
+        return Some(None);
+    };
+
+    (!constructor.method_metadata.as_ref().is_some_and(|meta| meta.is_final))
+        .then_some(Some(constructor.name_span.unwrap_or(constructor.span)))
+}
+
+/// The abstract class `static` may be in a static method of the scope: the scope's class, or in a trait the
+/// first abstract class that uses it.
+fn static_abstract_class<'ctx>(
+    codebase: &'ctx CodebaseMetadata,
+    block_context: &BlockContext<'ctx>,
+) -> Option<&'ctx ClassLikeMetadata> {
+    let class_like = block_context.scope.get_class_like()?;
+    if class_like.kind.is_trait() {
+        return trait_hosts(codebase, class_like).into_iter().find(|host| host.flags.is_abstract());
+    }
+
+    class_like.flags.is_abstract().then_some(class_like)
 }
 
 #[cfg(test)]

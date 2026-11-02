@@ -3693,3 +3693,4 @@ test_case!(dead_catch_keeps_try_initializations, {
     s.check_property_initialization_in_declaring_class = true;
     s
 });
+test_case!(new_static_in_trait_judged_per_using_class);
