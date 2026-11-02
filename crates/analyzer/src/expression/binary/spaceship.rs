@@ -20,6 +20,7 @@ use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
+use crate::expression::binary::comparison::has_non_array_part;
 use crate::expression::binary::comparison::report_object_compared_with_number;
 use crate::expression::binary::comparison::report_operands_rejected_by_comparison_handler;
 use crate::expression::binary::utils::is_always_greater_than;
@@ -104,6 +105,24 @@ where
             .with_annotation(Annotation::secondary(binary.rhs.span()).with_message(format!("This may be an array (type `{}`)", rhs_type.get_id())))
             .with_note("PHP compares arrays as greater than other types (except other arrays and null), so the spaceship result depends on which variant of the union the array side resolves to at runtime.")
             .with_help("Narrow the array side to a non-array type before comparing, or handle the array case separately."),
+        );
+    } else if lhs_is_only_array && has_non_array_part(rhs_type) {
+        context.collector.report_with_code(
+            IssueCode::PossiblyInvalidOperand,
+            Issue::warning("Right operand may be a non-array type when compared with an `array` using `<=>`.")
+            .with_annotation(Annotation::primary(binary.rhs.span()).with_message(format!("This may be a non-array type (type `{}`)", rhs_type.get_id())))
+            .with_annotation(Annotation::secondary(binary.lhs.span()).with_message("This is an array"))
+            .with_note("PHP compares arrays as greater than other types (except other arrays and null), so the spaceship result depends on which variant of the union the non-array side resolves to at runtime.")
+            .with_help("Narrow the other side to an array before comparing, or handle the non-array case separately."),
+        );
+    } else if rhs_is_only_array && has_non_array_part(lhs_type) {
+        context.collector.report_with_code(
+            IssueCode::PossiblyInvalidOperand,
+            Issue::warning("Left operand may be a non-array type when compared with an `array` using `<=>`.")
+            .with_annotation(Annotation::primary(binary.lhs.span()).with_message(format!("This may be a non-array type (type `{}`)", lhs_type.get_id())))
+            .with_annotation(Annotation::secondary(binary.rhs.span()).with_message("This is an array"))
+            .with_note("PHP compares arrays as greater than other types (except other arrays and null), so the spaceship result depends on which variant of the union the non-array side resolves to at runtime.")
+            .with_help("Narrow the other side to an array before comparing, or handle the non-array case separately."),
         );
     } else if !report_operands_rejected_by_comparison_handler(context, binary, lhs_type, rhs_type) {
         report_object_compared_with_number(context, binary, lhs_type, rhs_type);

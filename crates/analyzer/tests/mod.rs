@@ -3681,3 +3681,4 @@ test_case!(call_user_func_takes_any_callable);
 test_case!(callable_required_parameter_where_accepting_is_optional);
 test_case!(unary_plus_checks_its_operand);
 test_case!(unary_sign_on_array_key_scalar_and_class_string);
+test_case!(comparison_of_array_with_possibly_non_array);

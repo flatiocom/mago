@@ -232,6 +232,32 @@ where
             );
 
             reported_general_invalid_operand = true;
+        } else if is_relational && lhs_is_only_array && has_non_array_part(rhs_type) {
+            context.collector.report_with_code(
+                IssueCode::PossiblyInvalidOperand,
+                Issue::warning(format!(
+                    "Right operand may be a non-array type when compared with an `array` using `{op_str}`.",
+                ))
+                .with_annotation(Annotation::primary(binary.rhs.span()).with_message(format!("This may be a non-array type (type `{}`)", rhs_type.get_id())))
+                .with_annotation(Annotation::secondary(binary.lhs.span()).with_message("This is an array"))
+                .with_note("PHP's comparison rules for arrays against other types can be non-obvious (an array is usually considered 'greater' than non-null scalars), so this comparison's result depends on which variant of the union the non-array side resolves to at runtime.")
+                .with_help("Narrow the other side to an array before comparing, or handle the non-array case separately."),
+            );
+
+            reported_general_invalid_operand = true;
+        } else if is_relational && rhs_is_only_array && has_non_array_part(lhs_type) {
+            context.collector.report_with_code(
+                IssueCode::PossiblyInvalidOperand,
+                Issue::warning(format!(
+                    "Left operand may be a non-array type when compared with an `array` using `{op_str}`.",
+                ))
+                .with_annotation(Annotation::primary(binary.lhs.span()).with_message(format!("This may be a non-array type (type `{}`)", lhs_type.get_id())))
+                .with_annotation(Annotation::secondary(binary.rhs.span()).with_message("This is an array"))
+                .with_note("PHP's comparison rules for arrays against other types can be non-obvious (an array is usually considered 'greater' than non-null scalars), so this comparison's result depends on which variant of the union the non-array side resolves to at runtime.")
+                .with_help("Narrow the other side to an array before comparing, or handle the non-array case separately."),
+            );
+
+            reported_general_invalid_operand = true;
         }
     }
 
@@ -477,6 +503,10 @@ where
 }
 
 /// Attempts to extract a boolean literal from an expression, looking through parentheses.
+pub(super) fn has_non_array_part(union: &TUnion) -> bool {
+    union.types.iter().any(|atomic| matches!(atomic, TAtomic::Scalar(_) | TAtomic::Object(_) | TAtomic::Resource(_)))
+}
+
 fn get_boolean_literal(expr: &Expression<'_>) -> Option<bool> {
     match expr {
         Expression::Literal(Literal::True(_)) => Some(true),
