@@ -28,6 +28,7 @@ function run(Joiner $joiner, array $texts): void
     // @mago-expect analysis:invalid-argument
     call_user_func_array('strtoupper', array([]));
     call_user_func_array(static fn (int $number): int => $number, $texts);
+    // @mago-expect analysis:invalid-argument
     call_user_func_array(static fn (int $number): int => $number, ['number' => 'a']);
     call_user_func_array(static fn (int $number): int => $number, [...$texts]);
 }
