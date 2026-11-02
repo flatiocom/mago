@@ -31,6 +31,8 @@ use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::invocation::InvocationTarget;
+use crate::invocation::arguments::UnpackedStringKeys;
+use crate::invocation::arguments::get_unpacked_string_keys;
 use crate::invocation::arguments::verify_argument_type;
 
 struct ForwardedCall<'arena> {
@@ -50,6 +52,7 @@ struct PassedValue<'arena> {
     name: Option<Word>,
     value_type: Option<TUnion>,
     stands_for_any_count: bool,
+    string_keys: Option<UnpackedStringKeys>,
 }
 
 #[derive(Clone, Copy)]
@@ -111,7 +114,13 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
                 continue;
             }
             None => match parameters.get(offset).or_else(|| parameters.last().filter(|last| last.is_variadic())) {
-                Some(_) => offset.min(parameters.len() - 1),
+                Some(_) => {
+                    if forbids_named_arguments && let Some(string_keys) = value.string_keys {
+                        report_unpacked_string_keys(context, &call, value.expression, string_keys);
+                    }
+
+                    offset.min(parameters.len() - 1)
+                }
                 None => break,
             },
             Some(name) => {
@@ -320,6 +329,30 @@ fn report_duplicate_parameter<A>(
     );
 }
 
+fn report_unpacked_string_keys<A>(
+    context: &mut Context<'_, '_, A>,
+    call: &ForwardedCall<'_>,
+    value: &Expression<'_>,
+    string_keys: UnpackedStringKeys,
+) where
+    A: Arena,
+{
+    let function_name = call.function_name;
+
+    context.collector.report_with_code(
+        IssueCode::NamedArgumentNotAllowed,
+        Issue::error(format!(
+            "An array with {} is unpacked into the arguments `{function_name}()` passes on to a callback that does not allow named arguments.",
+            string_keys.describe()
+        ))
+        .with_annotation(Annotation::primary(value.span()).with_message("PHP passes string keys on as named arguments"))
+        .with_annotation(
+            Annotation::secondary(call.callback.span()).with_message("This callback only accepts positional arguments"),
+        )
+        .with_help("Unpack a list, or pass the values positionally."),
+    );
+}
+
 fn report_missing_parameters<A>(
     context: &mut Context<'_, '_, A>,
     parameters: &[TCallableParameter],
@@ -385,6 +418,7 @@ where
                 name: argument.name,
                 value_type: None,
                 stands_for_any_count: false,
+                string_keys: None,
             });
 
             continue;
@@ -402,6 +436,7 @@ where
                 name: None,
                 value_type: None,
                 stands_for_any_count: true,
+                string_keys: None,
             });
 
             continue;
@@ -413,6 +448,7 @@ where
                 name,
                 value_type: Some(value_type),
                 stands_for_any_count: false,
+                string_keys: None,
             }));
 
             continue;
@@ -423,6 +459,7 @@ where
             name: None,
             value_type: get_unpacked_value_type(context, unpacked_type),
             stands_for_any_count: true,
+            string_keys: get_unpacked_string_keys(context.codebase, unpacked_type),
         });
     }
 

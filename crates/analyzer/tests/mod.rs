@@ -3695,6 +3695,7 @@ test_case!(call_user_func_unpacks_arguments_for_callback);
 test_case!(call_user_func_rejects_positional_after_named_argument);
 test_case!(call_user_func_rejects_parameter_passed_twice);
 test_case!(named_argument_collected_by_variadic_keeps_binding_later_arguments);
+test_case!(unpacked_string_keys_into_no_named_arguments_target);
 test_case!(redundant_check_on_trait_property_initialized_by_constructor);
 test_case!(dead_catch_keeps_try_initializations, {
     let mut s = crate::framework::default_test_settings();

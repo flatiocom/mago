@@ -7,15 +7,18 @@ use foldhash::HashMap;
 use mago_allocator::Arena;
 use mago_bytes::BytesDisplay;
 use mago_codex::identifier::function_like::FunctionLikeIdentifier;
+use mago_codex::metadata::CodebaseMetadata;
 use mago_codex::ttype::TType;
 use mago_codex::ttype::add_union_type;
 use mago_codex::ttype::atomic::TAtomic;
 use mago_codex::ttype::atomic::callable::TCallable;
 use mago_codex::ttype::atomic::derived::TDerived;
+use mago_codex::ttype::atomic::scalar::TScalar;
 use mago_codex::ttype::combiner::CombinerOptions;
 use mago_codex::ttype::comparator::ComparisonResult;
 use mago_codex::ttype::comparator::union_comparator::can_expression_types_be_identical;
 use mago_codex::ttype::comparator::union_comparator::is_contained_by;
+use mago_codex::ttype::get_iterable_parameters;
 use mago_codex::ttype::get_iterable_value_parameter;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_never;
@@ -466,6 +469,60 @@ pub fn verify_argument_type<'arena, A>(
 }
 
 /// Gets the element type when unpacking an argument with the spread operator.
+/// Whether the keys of an unpacked argument are strings, which PHP passes on as named arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnpackedStringKeys {
+    Always,
+    Possibly,
+}
+
+impl UnpackedStringKeys {
+    #[must_use]
+    pub const fn describe(self) -> &'static str {
+        match self {
+            Self::Always => "string keys",
+            Self::Possibly => "possibly string keys",
+        }
+    }
+}
+
+#[must_use]
+pub fn get_unpacked_string_keys(codebase: &CodebaseMetadata, unpacked_type: &TUnion) -> Option<UnpackedStringKeys> {
+    let mut has_string_key = false;
+    let mut has_other_key = false;
+
+    for atomic in unpacked_type.types.iter() {
+        if atomic.is_mixed() {
+            note_key_kinds(std::slice::from_ref(atomic), &mut has_string_key, &mut has_other_key);
+        } else if let Some((key_type, _)) = get_iterable_parameters(atomic, codebase) {
+            note_key_kinds(&key_type.types, &mut has_string_key, &mut has_other_key);
+        }
+    }
+
+    match (has_string_key, has_other_key) {
+        (true, false) => Some(UnpackedStringKeys::Always),
+        (true, true) => Some(UnpackedStringKeys::Possibly),
+        (false, _) => None,
+    }
+}
+
+fn note_key_kinds(key_types: &[TAtomic], has_string_key: &mut bool, has_other_key: &mut bool) {
+    for key_type in key_types {
+        match key_type {
+            TAtomic::Never => {}
+            TAtomic::Scalar(scalar) if scalar.is_any_string() => *has_string_key = true,
+            TAtomic::Mixed(_) | TAtomic::Scalar(TScalar::ArrayKey | TScalar::Generic | TScalar::Numeric) => {
+                *has_string_key = true;
+                *has_other_key = true;
+            }
+            TAtomic::GenericParameter(parameter) => {
+                note_key_kinds(&parameter.constraint.types, has_string_key, has_other_key)
+            }
+            _ => *has_other_key = true,
+        }
+    }
+}
+
 fn has_unresolvable_index_access(parameter_type: &TUnion) -> bool {
     parameter_type.types.iter().any(|atomic| {
         matches!(atomic, TAtomic::Derived(TDerived::IndexAccess(access))

@@ -67,6 +67,7 @@ use crate::invocation::InvocationArgumentsSource;
 use crate::invocation::InvocationTarget;
 use crate::invocation::MethodInvocationKind;
 use crate::invocation::MethodTargetContext;
+use crate::invocation::arguments::get_unpacked_string_keys;
 use crate::invocation::arguments::is_argument_mutated_by_reference;
 use crate::invocation::arguments::is_argument_referenceable;
 use crate::invocation::arguments::is_array_multisort;
@@ -147,6 +148,40 @@ where
                         "The {callable_kind_str} {full_callable_name} only accepts positional arguments"
                     )))
                     .with_help("Convert this named argument to a positional argument."),
+            );
+        }
+
+        let last_parameter_is_variadic =
+            metadata.parameters.last().is_some_and(|parameter| parameter.flags.is_variadic());
+        for (offset, argument) in argument_list.arguments.iter().enumerate() {
+            let Argument::Positional(positional) = argument else {
+                continue;
+            };
+            if positional.ellipsis.is_none() || (offset >= metadata.parameters.len() && !last_parameter_is_variadic) {
+                continue;
+            }
+            let Some(string_keys) = artifacts
+                .get_expression_type(positional.value)
+                .and_then(|unpacked_type| get_unpacked_string_keys(context.codebase, unpacked_type))
+            else {
+                continue;
+            };
+            let full_callable_name =
+                full_callable_name.get_or_init(|| display_callable_name(context, identifier, metadata.original_name));
+
+            context.collector.report_with_code(
+                IssueCode::NamedArgumentNotAllowed,
+                Issue::error(format!(
+                    "An array with {} is unpacked into {full_callable_name}, which does not allow named arguments.",
+                    string_keys.describe()
+                ))
+                .with_annotation(
+                    Annotation::primary(argument.span()).with_message("PHP passes string keys on as named arguments"),
+                )
+                .with_annotation(Annotation::secondary(invoication.target.span()).with_message(format!(
+                    "The {callable_kind_str} {full_callable_name} only accepts positional arguments"
+                )))
+                .with_help("Unpack a list, or pass the values positionally."),
             );
         }
     }
