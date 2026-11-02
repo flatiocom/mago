@@ -148,6 +148,7 @@ final class AnalyzerCodeModuleGenerator
         'duplicate-named-argument',
         'named-argument-overrides-positional',
         'named-argument-after-positional',
+        'positional-argument-after-named',
         'template-constraint-violation',
         'array-to-string-conversion',
         'implicit-resource-to-string-cast',

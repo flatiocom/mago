@@ -97,7 +97,13 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
 
     for (offset, value) in values.iter().enumerate() {
         let parameter_offset = match value.name {
-            None if named_value_passed => continue,
+            None if named_value_passed => {
+                if !value.stands_for_any_count {
+                    report_positional_after_named(context, &call, value.expression);
+                }
+
+                continue;
+            }
             None => match parameters.get(offset).or_else(|| parameters.last().filter(|last| last.is_variadic())) {
                 Some(_) => offset.min(parameters.len() - 1),
                 None => break,
@@ -253,6 +259,24 @@ fn report_named_argument_not_allowed<A>(
             Annotation::secondary(call.callback.span()).with_message("This callback only accepts positional arguments"),
         )
         .with_help("Pass the value positionally."),
+    );
+}
+
+fn report_positional_after_named<A>(context: &mut Context<'_, '_, A>, call: &ForwardedCall<'_>, value: &Expression<'_>)
+where
+    A: Arena,
+{
+    let function_name = call.function_name;
+
+    context.collector.report_with_code(
+        IssueCode::PositionalArgumentAfterNamed,
+        Issue::error(format!(
+            "Positional argument after a named one in the arguments `{function_name}()` passes on to its callback."
+        ))
+        .with_annotation(Annotation::primary(value.span()).with_message("Passed by position after a named argument"))
+        .with_annotation(Annotation::secondary(call.callback.span()).with_message("For this callback"))
+        .with_note("PHP throws an `Error`: a positional argument cannot follow a named one.")
+        .with_help("Move the value before the named arguments, or pass it by name."),
     );
 }
 
