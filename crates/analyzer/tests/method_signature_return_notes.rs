@@ -87,6 +87,44 @@ final class TentativeMissingChild implements Countable
 }
 ";
 
+const ATTRIBUTE_LINE_SOURCE: &str = "<?php
+
+declare(strict_types=1);
+
+class UserParent
+{
+    public function value(): int { return 1; }
+
+    public function take(int $a): void {}
+
+    public function open(): void {}
+}
+
+final class UserChild extends UserParent
+{
+    #[\\Override]
+    #[\\Deprecated]
+    public function value(): string { return ''; }
+
+    /** @param string $a */
+    #[\\Override]
+    public function take(string $a): void {}
+
+    #[\\Override] public function open(): int { return 1; }
+}
+
+interface Shape
+{
+    public function area(): int;
+}
+
+final class Square implements Shape
+{
+    #[\\Override]
+    public function area(): string { return ''; }
+}
+";
+
 fn analyze(source: &'static str) -> (Arc<File>, Vec<Issue>) {
     let file = Arc::new(File::new(
         Cow::Borrowed(b"src/return-notes.php"),
@@ -122,6 +160,20 @@ fn return_type_notes() -> Vec<(String, String)> {
             let child = issue.message.split('`').nth(3).expect("the message names the child method");
 
             (child.to_string(), issue.notes.join(" "))
+        })
+        .collect()
+}
+
+fn signature_finding_lines(source: &'static str) -> Vec<(String, u32)> {
+    let (file, issues) = analyze(source);
+
+    issues
+        .iter()
+        .filter(|issue| issue.code.as_deref().is_some_and(|code| code.starts_with("incompatible-")))
+        .map(|issue| {
+            let primary = issue.annotations.iter().find(|annotation| annotation.is_primary()).expect("a primary span");
+
+            (issue.code.clone().expect("a code"), file.line_number(primary.span.start.offset) + 1)
         })
         .collect()
 }
@@ -169,6 +221,19 @@ fn return_type_will_change_spares_only_a_tentative_built_in_return() {
                 "`RealMissingChild::generate()` must declare a return type compatible with `string` declared by `Random\\Engine::generate()`".to_string(),
                 "PHP requires an overriding method to declare a return type when the overridden method declares one.".to_string()
             ),
+        ]
+    );
+}
+
+#[test]
+fn signature_findings_start_at_the_first_attribute_line() {
+    assert_eq!(
+        signature_finding_lines(ATTRIBUTE_LINE_SOURCE),
+        [
+            ("incompatible-return-type".to_string(), 16),
+            ("incompatible-parameter-type".to_string(), 21),
+            ("incompatible-return-type".to_string(), 24),
+            ("incompatible-return-type".to_string(), 34),
         ]
     );
 }

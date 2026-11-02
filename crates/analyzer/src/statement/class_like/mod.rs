@@ -2289,7 +2289,7 @@ fn check_abstract_method_signatures<'ctx, A>(
             let error_span = if appearing_class.kind.is_trait() {
                 class_like_metadata.name_span.unwrap_or(class_like_metadata.span)
             } else {
-                appearing_method.name_span.unwrap_or(appearing_method.span)
+                signature_span(appearing_method)
             };
 
             for incompatibility in issues {
@@ -2877,7 +2877,7 @@ fn check_interface_method_signatures<'ctx, A>(
 
         for incompatibility in issues {
             // Use the method span as primary location (where the issue actually is)
-            let method_span = class_method.name_span.unwrap_or(class_method.span);
+            let method_span = signature_span(class_method);
 
             // Get the actual declaring class for error reporting
             let declaring_class =
@@ -2894,6 +2894,10 @@ fn check_interface_method_signatures<'ctx, A>(
             );
         }
     }
+}
+
+fn signature_span(method: &FunctionLikeMetadata) -> Span {
+    method.name_span.map_or(method.span, |name_span| method.span.to_end(name_span.end))
 }
 
 fn report_signature_compatibility_issue<'ctx, A>(
