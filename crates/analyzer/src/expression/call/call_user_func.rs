@@ -52,6 +52,12 @@ struct PassedValue<'arena> {
     stands_for_any_count: bool,
 }
 
+#[derive(Clone, Copy)]
+enum PassedAs {
+    Position,
+    Name,
+}
+
 pub(super) fn check_call_user_func_arguments<'arena, A>(
     context: &mut Context<'_, 'arena, A>,
     artifacts: &AnalysisArtifacts,
@@ -92,7 +98,7 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
     let parameters = signature.get_parameters();
     let forbids_named_arguments =
         get_callback_metadata(context, &signature).is_some_and(|metadata| metadata.flags.forbids_named_arguments());
-    let mut passed_parameters = vec![false; parameters.len()];
+    let mut passed_parameters: Vec<Option<PassedAs>> = vec![None; parameters.len()];
     let mut named_value_passed = false;
 
     for (offset, value) in values.iter().enumerate() {
@@ -116,6 +122,12 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
                             report_named_argument_not_allowed(context, &call, value.expression, name);
                         }
 
+                        if let Some(passed_as) = passed_parameters[parameter_offset]
+                            && !parameters[parameter_offset].is_variadic()
+                        {
+                            report_duplicate_parameter(context, &call, value.expression, name, passed_as);
+                        }
+
                         parameter_offset
                     }
                     None => {
@@ -126,7 +138,8 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
             }
         };
 
-        passed_parameters[parameter_offset] = true;
+        passed_parameters[parameter_offset] =
+            Some(if value.name.is_some() { PassedAs::Name } else { PassedAs::Position });
 
         let Some(parameter_type) = parameters[parameter_offset].get_type_signature() else {
             continue;
@@ -280,10 +293,37 @@ where
     );
 }
 
+fn report_duplicate_parameter<A>(
+    context: &mut Context<'_, '_, A>,
+    call: &ForwardedCall<'_>,
+    value: &Expression<'_>,
+    name: Word,
+    passed_as: PassedAs,
+) where
+    A: Arena,
+{
+    let function_name = call.function_name;
+    let (code, previously) = match passed_as {
+        PassedAs::Position => (IssueCode::NamedArgumentOverridesPositional, "by position"),
+        PassedAs::Name => (IssueCode::DuplicateNamedArgument, "by name"),
+    };
+
+    context.collector.report_with_code(
+        code,
+        Issue::error(format!(
+            "Named argument `${name}` passed on by `{function_name}()` targets a parameter already passed {previously}."
+        ))
+        .with_annotation(Annotation::primary(value.span()).with_message(format!("Passed again as `${name}`")))
+        .with_annotation(Annotation::secondary(call.callback.span()).with_message("For this callback"))
+        .with_note("PHP throws an `Error`: a named parameter cannot overwrite a previous argument.")
+        .with_help("Pass the parameter once."),
+    );
+}
+
 fn report_missing_parameters<A>(
     context: &mut Context<'_, '_, A>,
     parameters: &[TCallableParameter],
-    passed_parameters: &[bool],
+    passed_parameters: &[Option<PassedAs>],
     function_call: &FunctionCall<'_>,
     call: &ForwardedCall<'_>,
 ) where
@@ -294,7 +334,7 @@ fn report_missing_parameters<A>(
     for (parameter, _) in parameters
         .iter()
         .zip(passed_parameters)
-        .filter(|(parameter, passed)| !**passed && !parameter.has_default() && !parameter.is_variadic())
+        .filter(|(parameter, passed)| passed.is_none() && !parameter.has_default() && !parameter.is_variadic())
     {
         let parameter_name = parameter.get_name().map_or_else(|| "?".to_string(), |name| name.0.to_string());
 
