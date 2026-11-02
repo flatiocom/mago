@@ -154,27 +154,39 @@ fn get_forwarded_call<'arena, A>(
 where
     A: Arena,
 {
-    let arguments = function_call.argument_list.arguments.as_slice();
-    if !arguments.iter().all(is_plain_positional) {
-        return None;
+    let mut callback = None;
+    let mut passed_arguments = Vec::new();
+
+    for (offset, argument) in function_call.argument_list.arguments.iter().enumerate() {
+        if callback.is_none() && (is_named(argument, b"callback") || (offset == 0 && is_plain_positional(argument))) {
+            callback = Some(argument.value());
+        } else {
+            passed_arguments.push((offset, argument));
+        }
     }
 
-    let (callback, passed_arguments) = arguments.split_first()?;
+    let callback = callback?;
 
     if is_function(context, function_call, "call_user_func") {
         return Some(ForwardedCall {
             function_name: "call_user_func",
-            callback: callback.value(),
-            arguments: passed_arguments.iter().map(Argument::value).collect(),
+            callback,
+            arguments: passed_arguments
+                .into_iter()
+                .map(|(_, argument)| is_plain_positional(argument).then(|| argument.value()))
+                .collect::<Option<_>>()?,
         });
     }
 
-    if let [arguments_array] = passed_arguments
-        && is_function(context, function_call, "call_user_func_array")
-    {
+    let arguments_array = passed_arguments
+        .into_iter()
+        .find(|(offset, argument)| is_named(argument, b"args") || (*offset == 1 && is_plain_positional(argument)))?
+        .1;
+
+    if is_function(context, function_call, "call_user_func_array") {
         return Some(ForwardedCall {
             function_name: "call_user_func_array",
-            callback: callback.value(),
+            callback,
             arguments: get_positional_array_values(arguments_array.value())?,
         });
     }
@@ -223,6 +235,10 @@ where
 
     (identifier.is_local() && ascii_lowercase_word(identifier.value()).as_bytes() == name.as_bytes())
         || ascii_lowercase_word(context.resolved_names.get(identifier)).as_bytes() == name.as_bytes()
+}
+
+fn is_named(argument: &Argument<'_>, name: &[u8]) -> bool {
+    matches!(argument, Argument::Named(named) if named.name.value == name)
 }
 
 const fn is_plain_positional(argument: &Argument<'_>) -> bool {
