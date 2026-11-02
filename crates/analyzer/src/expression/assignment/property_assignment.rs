@@ -366,7 +366,7 @@ where
 
 /// The type PHPStan's scope gives a property after a write its declared type rejects: the written
 /// value when the native type accepts it, else the part of it the native type allows.
-fn natively_assigned_value_type<A>(
+pub(crate) fn natively_assigned_value_type<A>(
     context: &Context<'_, '_, A>,
     resolved_property: &ResolvedProperty,
     assigned_value_type: &TUnion,

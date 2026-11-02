@@ -22,6 +22,7 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::expression::assignment::array_assignment::RootOffsetWrite;
+use crate::expression::assignment::property_assignment::natively_assigned_value_type;
 use crate::resolver::static_property::resolve_static_properties;
 use crate::utils::get_type_diff;
 
@@ -49,6 +50,8 @@ where
     let mut resolved_property_type = None;
     let mut matched_all_properties = true;
     let mut widened_assigned_type: Option<TUnion> = None;
+    let mut natively_assigned_type: Option<TUnion> = None;
+    let mut every_property_has_native_assignment = true;
     if property_resolution.properties.is_empty() {
         artifacts.assigned_property_types.record_unresolved_write(block_context.scope.get_class_like_name());
     }
@@ -145,6 +148,19 @@ where
             });
         }
 
+        let natively_assigned = if type_match_found {
+            Some(checked_value_type.clone())
+        } else {
+            natively_assigned_value_type(context, &resolved_property, &checked_value_type)
+        };
+        match natively_assigned {
+            Some(assigned) => {
+                natively_assigned_type =
+                    Some(add_optional_union_type(assigned, natively_assigned_type.as_ref(), context.codebase));
+            }
+            None => every_property_has_native_assignment = false,
+        }
+
         if let Some(var_id) = property_access_id {
             block_context.locals.insert(var_id, Rc::new(assigned_value_type.clone()));
         }
@@ -160,6 +176,8 @@ where
 
     let mut resulting_type = if matched_all_properties && context.settings.memoize_properties {
         Some(widened_assigned_type.unwrap_or_else(|| assigned_value_type.clone()))
+    } else if context.settings.memoize_properties && every_property_has_native_assignment {
+        natively_assigned_type.or(resolved_property_type)
     } else {
         resolved_property_type
     };
