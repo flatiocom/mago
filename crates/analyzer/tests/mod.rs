@@ -3701,3 +3701,4 @@ test_case!(static_property_after_rejected_write_has_native_type, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(unpacked_array_of_unknown_size_satisfies_argument_count);

@@ -1329,12 +1329,19 @@ where
         }
     }
 
+    let unpacks_unknown_count = invocation.arguments_source.iter_arguments().any(|argument| {
+        argument.is_unpacked()
+            && argument.value().and_then(|value| artifacts.get_expression_type(value)).is_none_or(|unpacked_type| {
+                unpacked_type.types.iter().any(|atomic| !matches!(atomic, TAtomic::Array(array) if array.is_sealed()))
+            })
+    });
+
     let should_check_argument_count = match invocation.arguments_source {
         InvocationArgumentsSource::PartialArgumentList(_) => {
             (non_closure_arguments.len() + closure_arguments.len()) < number_of_required_parameters
         }
         _ if has_unpacked_arguments || has_named_argument_anomaly => {
-            number_of_provided_parameters < number_of_required_parameters
+            !unpacks_unknown_count && number_of_provided_parameters < number_of_required_parameters
         }
         _ => number_of_satisfied_required_parameters < number_of_required_parameters,
     };

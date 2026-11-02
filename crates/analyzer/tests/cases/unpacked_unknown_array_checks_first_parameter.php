@@ -13,20 +13,17 @@ function bounds(float $bottom, float $left, float $top, float $right): float
 function unpacked_list(array $list): float
 {
     // @mago-expect analysis:mixed-argument
-    // @mago-expect analysis:too-few-arguments
     return bounds(...$list);
 }
 
 function unpacked_array(array $values): float
 {
     // @mago-expect analysis:mixed-argument
-    // @mago-expect analysis:too-few-arguments
     return bounds(...$values);
 }
 
 /** @param list<float> $floats */
 function unpacked_floats(array $floats): float
 {
-    // @mago-expect analysis:too-few-arguments
     return bounds(...$floats);
 }
