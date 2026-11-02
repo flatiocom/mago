@@ -189,6 +189,7 @@ where
     }
 
     let mut assignment_operation_type = None;
+    let mut compound_target_read_type = None;
     if let Some(source_expression) = source_expression {
         let was_inside_general_use = block_context.flags.inside_general_use();
         block_context.flags.set_inside_general_use(true);
@@ -240,6 +241,10 @@ where
                 };
 
                 artifacts.finish_expression_type_checkpoint(CheckpointAction::Merge);
+
+                if !matches!(target_expression, Expression::Variable(_)) {
+                    compound_target_read_type = artifacts.get_rc_expression_type(target_expression).cloned();
+                }
             }
         }
 
@@ -362,6 +367,10 @@ where
                     ),
             );
         }
+    }
+
+    if let Some(compound_target_read_type) = compound_target_read_type {
+        artifacts.set_rc_expression_type(target_expression, compound_target_read_type);
     }
 
     if successful
