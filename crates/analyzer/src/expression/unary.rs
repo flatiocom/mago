@@ -164,15 +164,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPrefix<'arena> {
                 }
             }
             UnaryPrefixOperator::Plus(_) => {
-                if let Some(operand_type) = operand_type {
-                    report_overloaded_operator_on_operand(
-                        context,
-                        self.span(),
-                        self.operator.as_bytes(),
-                        &operand_type,
-                        OverloadedOperator::Arithmetic,
-                    );
+                analyze_arithmetic_sign_operand(context, self, operand_type.as_deref(), ArithmeticSign::Plus);
 
+                if let Some(operand_type) = operand_type {
                     if operand_type.is_numeric() && !operand_type.is_int_or_float() {
                         artifacts.set_expression_type(self, get_int_or_float());
                     } else {
@@ -197,169 +191,8 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPrefix<'arena> {
                 artifacts.set_expression_type(self, resulting_type);
             }
             UnaryPrefixOperator::Negation(_) => {
-                let mut resulting_types = vec![];
-                let mut invalid_operand_messages: Vec<(String, Span)> = vec![];
-                let operand_span = self.operand.span();
-
-                for operand_part in operand_type.as_ref().map(|o| o.types.as_ref()).unwrap_or_default() {
-                    match operand_part {
-                        TAtomic::Null | TAtomic::Void => {
-                            // -null results in int(0).
-                            resulting_types.push(TAtomic::Scalar(TScalar::literal_int(0)));
-                        }
-                        TAtomic::Scalar(scalar) => match scalar {
-                            TScalar::Bool(boolean) => match boolean.value {
-                                None => {
-                                    resulting_types.push(TAtomic::Scalar(TScalar::literal_int(0)));
-                                    resulting_types.push(TAtomic::Scalar(TScalar::literal_int(-1)));
-                                }
-                                Some(true) => {
-                                    resulting_types.push(TAtomic::Scalar(TScalar::literal_int(-1)));
-                                }
-                                Some(false) => {
-                                    resulting_types.push(TAtomic::Scalar(TScalar::literal_int(0)));
-                                }
-                            },
-                            TScalar::Integer(integer) => {
-                                resulting_types.push(TAtomic::Scalar(TScalar::Integer(integer.negated())));
-                            }
-                            TScalar::Float(float) => match float {
-                                TFloat::Literal(value) => {
-                                    resulting_types.push(TAtomic::Scalar(TScalar::literal_float(-value.0)));
-                                }
-                                _ => {
-                                    resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                                }
-                            },
-                            TScalar::String(string) => {
-                                if string.is_numeric {
-                                    // numeric-string → valid, produces int|float
-                                    resulting_types.push(TAtomic::Scalar(TScalar::int()));
-                                    resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                                } else if let Some(TStringLiteral::Value(value)) = &string.literal {
-                                    // literal string with known value → check if numeric
-                                    if str_is_numeric_bytes(value.as_bytes()) {
-                                        resulting_types.push(TAtomic::Scalar(TScalar::int()));
-                                        resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                                    } else {
-                                        // non-numeric literal string → FATAL in PHP
-                                        invalid_operand_messages.push((
-                                            format!("Cannot negate non-numeric string literal `\"{value}\"`"),
-                                            operand_span,
-                                        ));
-                                    }
-                                } else {
-                                    // general string (could be numeric at runtime) → possibly invalid
-                                    invalid_operand_messages.push((
-                                        "Cannot reliably negate `string`; it may not be numeric".to_string(),
-                                        operand_span,
-                                    ));
-                                    resulting_types.push(TAtomic::Scalar(TScalar::int()));
-                                    resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                                }
-                            }
-                            _ => {
-                                // Other scalars (ClassLikeString, etc.) - treat as possibly valid
-                                resulting_types.push(TAtomic::Scalar(TScalar::int()));
-                                resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                            }
-                        },
-                        TAtomic::GenericParameter(parameter) => {
-                            if parameter.constraint.is_int_or_float() {
-                                resulting_types.push(TAtomic::GenericParameter(parameter.clone()));
-                            } else if parameter.constraint.is_numeric() {
-                                // numeric constraint includes numeric-string
-                                resulting_types.push(TAtomic::Scalar(TScalar::int()));
-                                resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                            } else {
-                                invalid_operand_messages.push((
-                                    format!(
-                                        "Cannot negate template parameter `{}` with constraint `{}`",
-                                        parameter.parameter_name,
-                                        parameter.constraint.get_id()
-                                    ),
-                                    operand_span,
-                                ));
-                            }
-                        }
-                        TAtomic::Array(_) => {
-                            invalid_operand_messages.push(("Cannot negate `array`".to_string(), operand_span));
-                        }
-                        TAtomic::Object(_) => {
-                            if let Some(class) = get_class_overloading(operand_part, OverloadedOperator::Negation) {
-                                resulting_types.push(class.get_instance_atomic());
-                            } else {
-                                let type_id = operand_part.get_id();
-                                invalid_operand_messages
-                                    .push((format!("Cannot negate object of type `{type_id}`"), operand_span));
-                            }
-                        }
-                        TAtomic::Resource(_) => {
-                            invalid_operand_messages.push(("Cannot negate `resource`".to_string(), operand_span));
-                        }
-                        TAtomic::Mixed(_) => {
-                            context.collector.report_with_code(
-                                IssueCode::MixedOperand,
-                                Issue::error("Cannot reliably negate a `mixed` operand.")
-                                    .with_annotation(
-                                        Annotation::primary(operand_span)
-                                            .with_message("Operand is `mixed`."),
-                                    )
-                                    .with_note(
-                                        "Negating `mixed` is unsafe as the actual runtime type is unknown.",
-                                    )
-                                    .with_help(
-                                        "Ensure the operand has a known type (e.g., `int`, `float`) using type hints, assertions, or checks.",
-                                    ),
-                            );
-                            resulting_types.push(TAtomic::Scalar(TScalar::int()));
-                            resulting_types.push(TAtomic::Scalar(TScalar::float()));
-                        }
-                        _ => {
-                            // Other types - don't add to resulting_types, don't report
-                        }
-                    }
-                }
-
-                if !invalid_operand_messages.is_empty() {
-                    let is_definitely_invalid = resulting_types.is_empty();
-                    let issue_code = if is_definitely_invalid {
-                        IssueCode::InvalidOperand
-                    } else {
-                        IssueCode::PossiblyInvalidOperand
-                    };
-
-                    let mut issue = if is_definitely_invalid {
-                        Issue::error("Invalid operand for negation.")
-                    } else {
-                        Issue::warning("Possibly invalid operand for negation.")
-                    };
-
-                    let mut is_first = true;
-                    for (msg, span) in invalid_operand_messages {
-                        issue = issue.with_annotation(if is_first {
-                            Annotation::primary(span).with_message(msg)
-                        } else {
-                            Annotation::secondary(span).with_message(msg)
-                        });
-
-                        is_first = false;
-                    }
-
-                    issue = issue
-                        .with_note("Negation requires a numeric operand (int, float, bool, null, or numeric-string).")
-                        .with_help("Ensure the operand is a numeric type.");
-
-                    context.collector.report_with_code(issue_code, issue);
-                } else if let Some(operand_type) = &operand_type {
-                    report_overloaded_operator_on_operand(
-                        context,
-                        self.span(),
-                        self.operator.as_bytes(),
-                        operand_type,
-                        OverloadedOperator::Negation,
-                    );
-                }
+                let resulting_types =
+                    analyze_arithmetic_sign_operand(context, self, operand_type.as_deref(), ArithmeticSign::Minus);
 
                 if resulting_types.is_empty() {
                     artifacts.set_expression_type(self, get_never());
@@ -531,6 +364,237 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for UnaryPostfix<'arena> {
 
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+enum ArithmeticSign {
+    Plus,
+    Minus,
+}
+
+impl ArithmeticSign {
+    const fn apply_to_one(self) -> i64 {
+        match self {
+            ArithmeticSign::Plus => 1,
+            ArithmeticSign::Minus => -1,
+        }
+    }
+
+    const fn verb(self) -> &'static str {
+        match self {
+            ArithmeticSign::Plus => "apply unary plus to",
+            ArithmeticSign::Minus => "negate",
+        }
+    }
+
+    const fn gerund(self) -> &'static str {
+        match self {
+            ArithmeticSign::Plus => "Applying unary plus to",
+            ArithmeticSign::Minus => "Negating",
+        }
+    }
+
+    const fn title(self) -> &'static str {
+        match self {
+            ArithmeticSign::Plus => "Unary plus",
+            ArithmeticSign::Minus => "Negation",
+        }
+    }
+
+    const fn operation(self) -> &'static str {
+        match self {
+            ArithmeticSign::Plus => "unary plus",
+            ArithmeticSign::Minus => "negation",
+        }
+    }
+
+    const fn overloaded_operator(self) -> OverloadedOperator {
+        match self {
+            ArithmeticSign::Plus => OverloadedOperator::Arithmetic,
+            ArithmeticSign::Minus => OverloadedOperator::Negation,
+        }
+    }
+}
+
+fn analyze_arithmetic_sign_operand<A>(
+    context: &mut Context<'_, '_, A>,
+    unary: &UnaryPrefix<'_>,
+    operand_type: Option<&TUnion>,
+    sign: ArithmeticSign,
+) -> Vec<TAtomic>
+where
+    A: Arena,
+{
+    let verb = sign.verb();
+    let mut resulting_types = vec![];
+    let mut invalid_operand_messages: Vec<(String, Span)> = vec![];
+    let operand_span = unary.operand.span();
+
+    for operand_part in operand_type.map(|o| o.types.as_ref()).unwrap_or_default() {
+        match operand_part {
+            TAtomic::Null | TAtomic::Void => {
+                // -null results in int(0).
+                resulting_types.push(TAtomic::Scalar(TScalar::literal_int(0)));
+            }
+            TAtomic::Scalar(scalar) => match scalar {
+                TScalar::Bool(boolean) => match boolean.value {
+                    None => {
+                        resulting_types.push(TAtomic::Scalar(TScalar::literal_int(0)));
+                        resulting_types.push(TAtomic::Scalar(TScalar::literal_int(sign.apply_to_one())));
+                    }
+                    Some(true) => {
+                        resulting_types.push(TAtomic::Scalar(TScalar::literal_int(sign.apply_to_one())));
+                    }
+                    Some(false) => {
+                        resulting_types.push(TAtomic::Scalar(TScalar::literal_int(0)));
+                    }
+                },
+                TScalar::Integer(integer) => {
+                    let integer = match sign {
+                        ArithmeticSign::Plus => *integer,
+                        ArithmeticSign::Minus => integer.negated(),
+                    };
+                    resulting_types.push(TAtomic::Scalar(TScalar::Integer(integer)));
+                }
+                TScalar::Float(float) => match float {
+                    TFloat::Literal(value) => {
+                        let value = match sign {
+                            ArithmeticSign::Plus => value.0,
+                            ArithmeticSign::Minus => -value.0,
+                        };
+                        resulting_types.push(TAtomic::Scalar(TScalar::literal_float(value)));
+                    }
+                    _ => {
+                        resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                    }
+                },
+                TScalar::String(string) => {
+                    if string.is_numeric {
+                        // numeric-string → valid, produces int|float
+                        resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                        resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                    } else if let Some(TStringLiteral::Value(value)) = &string.literal {
+                        // literal string with known value → check if numeric
+                        if str_is_numeric_bytes(value.as_bytes()) {
+                            resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                            resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                        } else {
+                            // non-numeric literal string → FATAL in PHP
+                            invalid_operand_messages.push((
+                                format!("Cannot {verb} non-numeric string literal `\"{value}\"`"),
+                                operand_span,
+                            ));
+                        }
+                    } else {
+                        // general string (could be numeric at runtime) → possibly invalid
+                        invalid_operand_messages
+                            .push((format!("Cannot reliably {verb} `string`; it may not be numeric"), operand_span));
+                        resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                        resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                    }
+                }
+                _ => {
+                    // Other scalars (ClassLikeString, etc.) - treat as possibly valid
+                    resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                    resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                }
+            },
+            TAtomic::GenericParameter(parameter) => {
+                if parameter.constraint.is_int_or_float() {
+                    resulting_types.push(TAtomic::GenericParameter(parameter.clone()));
+                } else if parameter.constraint.is_numeric() {
+                    // numeric constraint includes numeric-string
+                    resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                    resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                } else {
+                    invalid_operand_messages.push((
+                        format!(
+                            "Cannot {verb} template parameter `{}` with constraint `{}`",
+                            parameter.parameter_name,
+                            parameter.constraint.get_id()
+                        ),
+                        operand_span,
+                    ));
+                }
+            }
+            TAtomic::Array(_) => {
+                invalid_operand_messages.push((format!("Cannot {verb} `array`"), operand_span));
+            }
+            TAtomic::Object(_) => {
+                if let Some(class) = get_class_overloading(operand_part, sign.overloaded_operator()) {
+                    resulting_types.push(class.get_instance_atomic());
+                } else {
+                    let type_id = operand_part.get_id();
+                    invalid_operand_messages.push((format!("Cannot {verb} object of type `{type_id}`"), operand_span));
+                }
+            }
+            TAtomic::Resource(_) => {
+                invalid_operand_messages.push((format!("Cannot {verb} `resource`"), operand_span));
+            }
+            TAtomic::Mixed(_) => {
+                context.collector.report_with_code(
+                    IssueCode::MixedOperand,
+                    Issue::error(format!("Cannot reliably {verb} a `mixed` operand."))
+                        .with_annotation(Annotation::primary(operand_span).with_message("Operand is `mixed`."))
+                        .with_note(format!(
+                            "{} `mixed` is unsafe as the actual runtime type is unknown.",
+                            sign.gerund()
+                        ))
+                        .with_help(
+                            "Ensure the operand has a known type (e.g., `int`, `float`) using type hints, assertions, or checks.",
+                        ),
+                );
+                resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                resulting_types.push(TAtomic::Scalar(TScalar::float()));
+            }
+            _ => {
+                // Other types - don't add to resulting_types, don't report
+            }
+        }
+    }
+
+    if !invalid_operand_messages.is_empty() {
+        let operation = sign.operation();
+        let is_definitely_invalid = resulting_types.is_empty();
+        let issue_code =
+            if is_definitely_invalid { IssueCode::InvalidOperand } else { IssueCode::PossiblyInvalidOperand };
+
+        let mut issue = if is_definitely_invalid {
+            Issue::error(format!("Invalid operand for {operation}."))
+        } else {
+            Issue::warning(format!("Possibly invalid operand for {operation}."))
+        };
+
+        let mut is_first = true;
+        for (msg, span) in invalid_operand_messages {
+            issue = issue.with_annotation(if is_first {
+                Annotation::primary(span).with_message(msg)
+            } else {
+                Annotation::secondary(span).with_message(msg)
+            });
+
+            is_first = false;
+        }
+
+        issue = issue
+            .with_note(format!(
+                "{} requires a numeric operand (int, float, bool, null, or numeric-string).",
+                sign.title()
+            ))
+            .with_help("Ensure the operand is a numeric type.");
+
+        context.collector.report_with_code(issue_code, issue);
+    } else if let Some(operand_type) = operand_type {
+        report_overloaded_operator_on_operand(
+            context,
+            unary.span(),
+            unary.operator.as_bytes(),
+            operand_type,
+            sign.overloaded_operator(),
+        );
+    }
+
+    resulting_types
 }
 
 fn adjust_numeric_string(value: Option<&[u8]>, adjustment: i64) -> Vec<TAtomic> {
