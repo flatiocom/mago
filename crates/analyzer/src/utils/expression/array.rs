@@ -220,6 +220,7 @@ where
     let mut has_union_key_mismatch = false; // Track if we're in a union where key exists in some but not all variants
     let mut reported_undefined_key = false;
     let mut has_null_or_false_container = false;
+    let mut has_object_without_array_access = false;
     let mut string_value_rejecting_write = None;
     context.collector.start_recording();
     while let Some(atomic_var_type) = array_atomic_types.pop() {
@@ -425,6 +426,7 @@ where
                     atomic_var_type,
                     index_type,
                     &mut has_valid_expected_index,
+                    &mut has_object_without_array_access,
                     &mut expected_index_types,
                     assign_value_type,
                 );
@@ -485,6 +487,13 @@ where
     }
 
     if has_null_or_false_container && expected_index_types.is_empty() {
+        has_valid_expected_index = true;
+    }
+
+    if has_object_without_array_access
+        && (!array_like_type.has_array()
+            || index_type.types.iter().all(|atomic| atomic.is_int() || atomic.is_any_string() || atomic.is_array_key()))
+    {
         has_valid_expected_index = true;
     }
 
@@ -1597,6 +1606,7 @@ pub(crate) fn handle_array_access_on_named_object<A>(
     named_object: &TAtomic,
     index_type: &TUnion,
     has_valid_expected_index: &mut bool,
+    has_object_without_array_access: &mut bool,
     expected_index_types: &mut Vec<TUnion>,
     assign_value_type: Option<&TUnion>,
 ) -> TUnion
@@ -1714,7 +1724,7 @@ where
             .with_help("Ensure the object implements `ArrayAccess` before attempting to access it as an array."),
         );
 
-        *has_valid_expected_index = true;
+        *has_object_without_array_access = true;
 
         return get_implicit_mixed();
     };
