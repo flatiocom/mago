@@ -161,12 +161,16 @@ pub fn validate_method_signature_compatibility(
             continue;
         };
 
-        if let Some(child_native) = &child_param.type_declaration_metadata {
+        let parent_native_type = match &parent_param.type_declaration_metadata {
+            Some(native) => Some(native.type_union.clone()),
+            None if parent_method.flags.is_built_in() => None,
+            None => Some(get_mixed()),
+        };
+
+        if let (Some(child_native), Some(mut parent_native_type)) =
+            (&child_param.type_declaration_metadata, parent_native_type)
+        {
             let mut child_native_type = child_native.type_union.clone();
-            let mut parent_native_type = parent_param
-                .type_declaration_metadata
-                .as_ref()
-                .map_or_else(get_mixed, |native| native.type_union.clone());
             expand_union(codebase, &mut child_native_type, &expansion_options);
             expand_union(codebase, &mut parent_native_type, &expansion_options);
 
