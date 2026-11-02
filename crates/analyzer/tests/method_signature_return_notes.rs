@@ -16,6 +16,7 @@ use mago_database::file::FileType;
 use mago_names::resolver::NameResolver;
 use mago_php_version::PHPVersion;
 use mago_prelude::Prelude;
+use mago_reporting::Issue;
 use mago_syntax::parser::parse_file;
 use mago_word::WordSet;
 
@@ -56,12 +57,42 @@ final class WillChangeChild implements IteratorAggregate
 }
 ";
 
-fn return_type_notes() -> Vec<(String, String)> {
+const BUILT_IN_SOURCE: &str = "<?php
+
+declare(strict_types=1);
+
+final class RealWillChangeChild implements Random\\Engine
+{
+    #[\\ReturnTypeWillChange]
+    public function generate(): int
+    {
+        return 1;
+    }
+}
+
+final class RealMissingChild implements Random\\Engine
+{
+    public function generate()
+    {
+        return '';
+    }
+}
+
+final class TentativeMissingChild implements Countable
+{
+    public function count()
+    {
+        return 1;
+    }
+}
+";
+
+fn analyze(source: &'static str) -> (Arc<File>, Vec<Issue>) {
     let file = Arc::new(File::new(
         Cow::Borrowed(b"src/return-notes.php"),
         FileType::Host,
         None,
-        Cow::Borrowed(SOURCE.as_bytes()),
+        Cow::Borrowed(source.as_bytes()),
     ));
     let arena = LocalArena::new();
     let program = parse_file(&arena, &file);
@@ -79,8 +110,12 @@ fn return_type_notes() -> Vec<(String, String)> {
     let mut result = AnalysisResult::new(symbol_references);
     analyzer.analyze(program, &mut result).expect("analysis failed");
 
-    result
-        .issues
+    (file, result.issues.into_iter().collect())
+}
+
+fn return_type_notes() -> Vec<(String, String)> {
+    analyze(SOURCE)
+        .1
         .iter()
         .filter(|issue| issue.code.as_deref() == Some("incompatible-return-type"))
         .map(|issue| {
@@ -88,6 +123,15 @@ fn return_type_notes() -> Vec<(String, String)> {
 
             (child.to_string(), issue.notes.join(" "))
         })
+        .collect()
+}
+
+fn return_type_messages(source: &'static str) -> Vec<(String, String)> {
+    analyze(source)
+        .1
+        .iter()
+        .filter(|issue| issue.code.as_deref() == Some("incompatible-return-type"))
+        .map(|issue| (issue.message.to_string(), issue.notes.join(" ")))
         .collect()
 }
 
@@ -107,6 +151,23 @@ fn return_type_note_tells_a_load_failure_from_a_tentative_type() {
             (
                 "WillChangeChild::getiterator()".to_string(),
                 "Return types must be covariant: child must return equal or narrower types than parent.".to_string()
+            ),
+        ]
+    );
+}
+
+#[test]
+fn return_type_will_change_spares_only_a_tentative_built_in_return() {
+    assert_eq!(
+        return_type_messages(BUILT_IN_SOURCE),
+        [
+            (
+                "Return type `int` of `RealWillChangeChild::generate()` is incompatible with parent return type `string` of `Random\\Engine::generate()`".to_string(),
+                "PHP refuses to load a class whose native types do not match the parent method's.".to_string()
+            ),
+            (
+                "`RealMissingChild::generate()` must declare a return type compatible with `string` declared by `Random\\Engine::generate()`".to_string(),
+                "PHP requires an overriding method to declare a return type when the overridden method declares one.".to_string()
             ),
         ]
     );

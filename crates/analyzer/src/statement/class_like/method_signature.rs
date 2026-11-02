@@ -44,8 +44,8 @@ pub enum SignatureCompatibilityIssue {
 /// - Visibility can only widen (public >= protected >= private)
 /// - Parameters are contravariant (child must accept >= parent accepts)
 /// - Return type is covariant (child must return <= parent returns)
-/// - Return type declaration must be present when a non-builtin parent declares one
-///   (builtin declarations may be tentative, where omission only deprecates)
+/// - Return type declaration must be present when a parent declares one, except a builtin
+///   tentative declaration, where omission only deprecates
 /// - Parameter count (child must accept at least parent's required parameters)
 /// - Parameter names should match (warning only - breaks named arguments)
 ///
@@ -264,7 +264,7 @@ pub fn validate_method_signature_compatibility(
 
     if let Some(parent_return) = &parent_method.return_type_declaration_metadata
         && child_method.return_type_declaration_metadata.is_none()
-        && !parent_method.flags.is_built_in()
+        && !has_tentative_return_type(parent_method)
     {
         let mut expanded_parent_return_type = parent_return.type_union.clone();
 
@@ -420,16 +420,21 @@ fn native_return_type_check(
     parent_method: &FunctionLikeMetadata,
     child_method: &FunctionLikeMetadata,
 ) -> ReturnTypeCheck {
-    if !parent_method.flags.is_built_in() {
+    if !has_tentative_return_type(parent_method) {
         return ReturnTypeCheck::Native;
     }
 
-    let return_type_will_change = child_method
-        .attributes
-        .iter()
-        .any(|attribute| attribute.name.as_bytes().eq_ignore_ascii_case(b"ReturnTypeWillChange"));
+    let return_type_will_change = has_attribute(child_method, b"ReturnTypeWillChange");
 
     if return_type_will_change { ReturnTypeCheck::Docblock } else { ReturnTypeCheck::Tentative }
+}
+
+fn has_tentative_return_type(method: &FunctionLikeMetadata) -> bool {
+    method.flags.is_built_in() && has_attribute(method, b"TentativeType")
+}
+
+fn has_attribute(method: &FunctionLikeMetadata, name: &[u8]) -> bool {
+    method.attributes.iter().any(|attribute| attribute.name.as_bytes().eq_ignore_ascii_case(name))
 }
 
 fn collect_conditional_branches(union: &TUnion, branches: &mut Vec<TUnion>) {
