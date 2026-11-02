@@ -2912,6 +2912,7 @@ fn report_signature_compatibility_issue<'ctx, A>(
     let child_class_span = child_class.name_span.unwrap_or(child_class.span);
     let parent_class_span = parent_class.name_span.unwrap_or(parent_class.span);
 
+    use method_signature::ReturnTypeCheck;
     use method_signature::SignatureCompatibilityIssue;
 
     match incompatibility {
@@ -3026,7 +3027,7 @@ fn report_signature_compatibility_issue<'ctx, A>(
                 .with_help("Change the parameter type to be compatible with the parent method."),
             );
         }
-        SignatureCompatibilityIssue::IncompatibleReturnType { child_type, parent_type, native } => {
+        SignatureCompatibilityIssue::IncompatibleReturnType { child_type, parent_type, check } => {
             context.collector.report_with_code(
                 IssueCode::IncompatibleReturnType,
                 Issue::error(format!(
@@ -3042,10 +3043,12 @@ fn report_signature_compatibility_issue<'ctx, A>(
                 .with_annotation(
                     Annotation::secondary(child_class_span).with_message(format!("In class `{child_name}`")),
                 )
-                .with_note(if native {
-                    method_signature::NATIVE_SIGNATURE_NOTE
-                } else {
-                    "Return types must be covariant: child must return equal or narrower types than parent."
+                .with_note(match check {
+                    ReturnTypeCheck::Docblock => {
+                        "Return types must be covariant: child must return equal or narrower types than parent."
+                    }
+                    ReturnTypeCheck::Native => method_signature::NATIVE_SIGNATURE_NOTE,
+                    ReturnTypeCheck::Tentative => method_signature::TENTATIVE_RETURN_NOTE,
                 })
                 .with_help("Change the return type to be compatible with the parent method."),
             );

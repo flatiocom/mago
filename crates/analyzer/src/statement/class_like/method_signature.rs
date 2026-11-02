@@ -16,6 +16,15 @@ use mago_word::Word;
 pub const NATIVE_SIGNATURE_NOTE: &str =
     "PHP refuses to load a class whose native types do not match the parent method's.";
 
+pub const TENTATIVE_RETURN_NOTE: &str = "PHP deprecates a return type that does not match the built-in parent method's, unless the method has the ReturnTypeWillChange attribute.";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReturnTypeCheck {
+    Docblock,
+    Native,
+    Tentative,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignatureCompatibilityIssue {
     FinalMethodOverride,
@@ -23,7 +32,7 @@ pub enum SignatureCompatibilityIssue {
     VisibilityNarrowed { child_visibility: Visibility, parent_visibility: Visibility },
     ParameterCountMismatch { child_required_count: usize, parent_required_count: usize },
     IncompatibleParameterType { parameter_index: usize, child_type: Word, parent_type: Word, native: bool },
-    IncompatibleReturnType { child_type: Word, parent_type: Word, native: bool },
+    IncompatibleReturnType { child_type: Word, parent_type: Word, check: ReturnTypeCheck },
     MissingReturnTypeDeclaration { parent_type: Word },
     ParameterNameMismatch { parameter_index: usize, child_name: Word, parent_name: Word },
 }
@@ -311,7 +320,7 @@ pub fn validate_method_signature_compatibility(
             issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
                 child_type: expanded_child_return_type.get_id(),
                 parent_type: expanded_parent_return_type.get_id(),
-                native: true,
+                check: native_return_type_check(parent_method, child_method),
             });
             return issues;
         }
@@ -352,7 +361,7 @@ pub fn validate_method_signature_compatibility(
                 issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
                     child_type: expanded_child_return_type.get_id(),
                     parent_type: expanded_parent_return_type.get_id(),
-                    native: false,
+                    check: ReturnTypeCheck::Docblock,
                 });
                 return issues;
             }
@@ -397,7 +406,7 @@ pub fn validate_method_signature_compatibility(
                 issues.push(SignatureCompatibilityIssue::IncompatibleReturnType {
                     child_type: expanded_child_return_type.get_id(),
                     parent_type: parent_return.type_union.get_id(),
-                    native: false,
+                    check: ReturnTypeCheck::Docblock,
                 });
                 return issues;
             }
@@ -405,6 +414,22 @@ pub fn validate_method_signature_compatibility(
     }
 
     issues
+}
+
+fn native_return_type_check(
+    parent_method: &FunctionLikeMetadata,
+    child_method: &FunctionLikeMetadata,
+) -> ReturnTypeCheck {
+    if !parent_method.flags.is_built_in() {
+        return ReturnTypeCheck::Native;
+    }
+
+    let return_type_will_change = child_method
+        .attributes
+        .iter()
+        .any(|attribute| attribute.name.as_bytes().eq_ignore_ascii_case(b"ReturnTypeWillChange"));
+
+    if return_type_will_change { ReturnTypeCheck::Docblock } else { ReturnTypeCheck::Tentative }
 }
 
 fn collect_conditional_branches(union: &TUnion, branches: &mut Vec<TUnion>) {
