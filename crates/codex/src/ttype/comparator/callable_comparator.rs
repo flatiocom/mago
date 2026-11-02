@@ -72,7 +72,12 @@ pub(crate) fn is_contained_by(
         return true;
     }
 
-    for (i, input_parameter) in input_params.iter().enumerate() {
+    let variadic_repeats =
+        if input_has_variadic { container_params.len().saturating_sub(input_params.len()) } else { 0 };
+    let input_params_over_container =
+        input_params.iter().chain(input_params.last().into_iter().cycle().take(variadic_repeats));
+
+    for (i, input_parameter) in input_params_over_container.enumerate() {
         let input_is_optional = is_optional(input_parameter);
         let Some(container_parameter) = container_params.get(i) else {
             if input_is_optional {
