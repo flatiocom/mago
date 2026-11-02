@@ -51,7 +51,23 @@ function read_row_or_entity(TableRow|Entity $object, string $name): mixed
 
 function read_nullsafe(?Entity $entity, string $name): mixed
 {
+    /** @mago-expect analysis:string-member-selector */
     return $entity?->{$name};
+}
+
+function read_nullsafe_row(?TableRow $row, string $name): mixed
+{
+    return $row?->{$name};
+}
+
+function read_nullsafe_std(?stdClass $object, string $name): mixed
+{
+    return $object?->{$name};
+}
+
+function read_nullsafe_child(?SimpleXMLElement $parent, string $name): mixed
+{
+    return $parent?->{$name};
 }
 
 function read_entity(Entity $entity, string $name): mixed

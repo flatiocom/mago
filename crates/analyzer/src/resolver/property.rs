@@ -139,14 +139,14 @@ pub(crate) fn report_undeclared_property<A>(
     }
 }
 
-fn is_universal_object_crate<A>(context: &Context<'_, '_, A>, object_type: &TUnion) -> bool
+fn is_universal_object_crate<A>(context: &Context<'_, '_, A>, object_type: &TUnion, is_null_safe: bool) -> bool
 where
     A: Arena,
 {
     let classes = object_type
         .types
         .iter()
-        .filter(|atomic| !(atomic.is_null() && object_type.has_error_path_null()))
+        .filter(|atomic| !(atomic.is_null() && (is_null_safe || object_type.has_error_path_null())))
         .map(|atomic| match atomic {
             TAtomic::Object(TObject::Named(named_object)) => Some(named_object.get_name()),
             _ => None,
@@ -191,7 +191,7 @@ where
     A: Arena,
 {
     let reports_string_selector =
-        !is_null_safe && !object_type.is_some_and(|object_type| is_universal_object_crate(context, object_type));
+        !object_type.is_some_and(|object_type| is_universal_object_crate(context, object_type, is_null_safe));
     let selectors =
         resolve_member_selector(context, block_context, artifacts, property_selector, true, reports_string_selector)?;
     if reports_string_selector && selectors.contains(&ResolvedSelector::Mixed) {
