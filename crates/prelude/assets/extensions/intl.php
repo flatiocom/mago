@@ -35,11 +35,13 @@ class Collator
     /**
      * @pure
      */
+    #[TentativeType]
     public static function create(string $locale): ?Collator {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function compare(string $string1, string $string2): int|false {}
 
     /**
@@ -49,6 +51,7 @@ class Collator
      *
      * @param-out ($array is non-empty-array|non-empty-list ? non-empty-list<T> : list<T>) $array
      */
+    #[TentativeType]
     public function sort(array &$array, int $flags = 0): bool {}
 
     /**
@@ -58,6 +61,7 @@ class Collator
      *
      * @param-out ($array is non-empty-array|non-empty-list ? non-empty-list<T> : list<T>) $array
      */
+    #[TentativeType]
     public function sortWithSortKeys(array &$array): bool {}
 
     /**
@@ -68,40 +72,49 @@ class Collator
      *
      * @param-out ($array is non-empty-array|non-empty-list ? non-empty-array<K, V> : array<K, V>) $array
      */
+    #[TentativeType]
     public function asort(array &$array, int $flags = 0): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getAttribute(int $attribute): int|false {}
 
+    #[TentativeType]
     public function setAttribute(int $attribute, int $value): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getStrength(): int {}
 
+    #[TentativeType]
     public function setStrength(int $strength): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLocale(int $type): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getSortKey(string $string): string|false {}
 }
 
@@ -196,47 +209,59 @@ class NumberFormatter
      */
     public function __construct(string $locale, int $style, ?string $pattern = null) {}
 
+    #[TentativeType]
     public static function create(string $locale, int $style, ?string $pattern = null): ?NumberFormatter {}
 
+    #[TentativeType]
     public function format(int|float $num, int $type = 0): string|false {}
 
     /**
      * @param-out int $offset
      */
+    #[TentativeType]
     public function parse(string $string, int $type = NumberFormatter::TYPE_DOUBLE, &$offset = null): int|float|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function formatCurrency(float $amount, string $currency): string|false {}
 
     /**
      * @param-out string $currency
      * @param-out int $offset
      */
+    #[TentativeType]
     public function parseCurrency(string $string, &$currency, &$offset = null): float|false {}
 
+    #[TentativeType]
     public function setAttribute(int $attribute, int|float $value): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getAttribute(int $attribute): int|float|false {}
 
+    #[TentativeType]
     public function setTextAttribute(int $attribute, string $value): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getTextAttribute(int $attribute): string|false {}
 
+    #[TentativeType]
     public function setSymbol(int $symbol, string $value): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getSymbol(int $symbol): string|false {}
 
+    #[TentativeType]
     public function setPattern(string $pattern): bool {}
 
     /**
@@ -244,21 +269,25 @@ class NumberFormatter
      *
      * @pure
      */
+    #[TentativeType]
     public function getPattern(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLocale(int $type = 0): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string {}
 }
 
@@ -276,10 +305,13 @@ class Normalizer
     public const FORM_KC = 32;
     public const NFKC = 32;
 
+    #[TentativeType]
     public static function normalize(string $string, int $form = Normalizer::FORM_C): string|false {}
 
+    #[TentativeType]
     public static function isNormalized(string $string, int $form = Normalizer::FORM_C): bool {}
 
+    #[TentativeType]
     public static function getRawDecomposition(string $string, int $form = 16): ?string {}
 }
 
@@ -296,36 +328,52 @@ class Locale
     public const GRANDFATHERED_LANG_TAG = 'grandfathered';
     public const PRIVATE_TAG = 'private';
 
+    #[TentativeType]
     public static function getDefault(): string {}
 
+    #[TentativeType]
     public static function setDefault(string $locale): bool {}
 
+    #[TentativeType]
     public static function getPrimaryLanguage(string $locale): ?string {}
 
+    #[TentativeType]
     public static function getScript(string $locale): ?string {}
 
+    #[TentativeType]
     public static function getRegion(string $locale): ?string {}
 
+    #[TentativeType]
     public static function getKeywords(string $locale): array|false|null {}
 
+    #[TentativeType]
     public static function getDisplayScript(string $locale, ?string $displayLocale = null): string|false {}
 
+    #[TentativeType]
     public static function getDisplayRegion(string $locale, ?string $displayLocale = null): string|false {}
 
+    #[TentativeType]
     public static function getDisplayName(string $locale, ?string $displayLocale = null): string|false {}
 
+    #[TentativeType]
     public static function getDisplayLanguage(string $locale, ?string $displayLocale = null): string|false {}
 
+    #[TentativeType]
     public static function getDisplayVariant(string $locale, ?string $displayLocale = null): string|false {}
 
+    #[TentativeType]
     public static function composeLocale(array $subtags): string|false {}
 
+    #[TentativeType]
     public static function parseLocale(string $locale): ?array {}
 
+    #[TentativeType]
     public static function getAllVariants(string $locale): ?array {}
 
+    #[TentativeType]
     public static function filterMatches(string $languageTag, string $locale, bool $canonicalize = false): ?bool {}
 
+    #[TentativeType]
     public static function lookup(
         array $languageTag,
         string $locale,
@@ -333,8 +381,10 @@ class Locale
         ?string $defaultLocale = null,
     ): ?string {}
 
+    #[TentativeType]
     public static function canonicalize(string $locale): ?string {}
 
+    #[TentativeType]
     public static function acceptFromHttp(string $header): string|false {}
 
     public static function isRightToLeft(string $locale): bool {}
@@ -353,42 +403,52 @@ class MessageFormatter
      */
     public function __construct(string $locale, string $pattern) {}
 
+    #[TentativeType]
     public static function create(string $locale, string $pattern): ?MessageFormatter {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function format(array $values): string|false {}
 
+    #[TentativeType]
     public static function formatMessage(string $locale, string $pattern, array $values): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function parse(string $string): array|false {}
 
+    #[TentativeType]
     public static function parseMessage(string $locale, string $pattern, string $message): array|false {}
 
+    #[TentativeType]
     public function setPattern(string $pattern): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getPattern(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLocale(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string {}
 }
 
@@ -419,6 +479,7 @@ class IntlDateFormatter
         ?string $pattern = null,
     ) {}
 
+    #[TentativeType]
     public static function create(
         ?string $locale,
         int $dateType = 0,
@@ -431,33 +492,40 @@ class IntlDateFormatter
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDateType(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getTimeType(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getCalendar(): int|false {}
 
+    #[TentativeType]
     public function setCalendar(IntlCalendar|int|null $calendar): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getTimeZoneId(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getCalendarObject(): IntlCalendar|false|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getTimeZone(): IntlTimeZone|false {}
 
     /**
@@ -465,23 +533,28 @@ class IntlDateFormatter
      */
     public function setTimeZone($timezone) {}
 
+    #[TentativeType]
     public function setPattern(string $pattern): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getPattern(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLocale(int $type = 0): string|false {}
 
+    #[TentativeType]
     public function setLenient(bool $lenient): void {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isLenient(): bool {}
 
     /**
@@ -506,32 +579,38 @@ class IntlDateFormatter
      *   tm_year?: int,
      * }|float|int|string $datetime
      */
+    #[TentativeType]
     public function format(IntlCalendar|DateTimeInterface|array|string|int|float $datetime): string|false {}
 
     /**
      * @param IntlCalendar|DateTimeInterface $datetime
      * @param null|int|string|array<string|int> $format
      */
+    #[TentativeType]
     public static function formatObject($datetime, $format = null, ?string $locale = null): string|false {}
 
     /**
      * @param-out int $offset
      */
+    #[TentativeType]
     public function parse(string $string, &$offset = null): int|float|false {}
 
     /**
      * @param-out int $offset
      */
+    #[TentativeType]
     public function localtime(string $string, &$offset = null): array|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string {}
 
     public function parseToCalendar(string $string, &$offset = null): int|float|false {}
@@ -544,6 +623,7 @@ class ResourceBundle implements IteratorAggregate, Countable
      */
     public function __construct(?string $locale, ?string $bundle, bool $fallback = true) {}
 
+    #[TentativeType]
     public static function create(?string $locale, ?string $bundle, bool $fallback = true): ?ResourceBundle {}
 
     /**
@@ -558,18 +638,22 @@ class ResourceBundle implements IteratorAggregate, Countable
      *
      * @pure
      */
+    #[TentativeType]
     public function count(): int {}
 
+    #[TentativeType]
     public static function getLocales(string $bundle): array|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string {}
 
     /**
@@ -587,33 +671,40 @@ class Transliterator
 
     final private function __construct() {}
 
+    #[TentativeType]
     public static function create(string $id, int $direction = 0): ?Transliterator {}
 
+    #[TentativeType]
     public static function createFromRules(string $rules, int $direction = 0): ?Transliterator {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function createInverse(): ?Transliterator {}
 
     /**
      * @return list<string>|false
      */
+    #[TentativeType]
     public static function listIDs(): array|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function transliterate(string $string, int $start = 0, int $end = -1): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string|false {}
 }
 
@@ -647,17 +738,22 @@ class Spoofchecker
     /**
      * @param-out int $errorCode
      */
+    #[TentativeType]
     public function isSuspicious(string $string, &$errorCode = null): bool {}
 
     /**
      * @param-out int $errorCode
      */
+    #[TentativeType]
     public function areConfusable(string $string1, string $string2, &$errorCode = null): bool {}
 
+    #[TentativeType]
     public function setAllowedLocales(string $locales): void {}
 
+    #[TentativeType]
     public function setChecks(int $checks): void {}
 
+    #[TentativeType]
     public function setRestrictionLevel(int $level): void {}
 
     public function setAllowedChars(string $pattern, int $patternOptions = 0): void {}
@@ -692,6 +788,7 @@ class IntlGregorianCalendar extends IntlCalendar
     /**
      * @param float $timestamp
      */
+    #[TentativeType]
     public function setGregorianChange(float $timestamp): bool {}
 
     /**
@@ -699,6 +796,7 @@ class IntlGregorianCalendar extends IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getGregorianChange(): float {}
 
     /**
@@ -707,6 +805,7 @@ class IntlGregorianCalendar extends IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function isLeapYear(int $year): bool {}
 
     #[Mago\AvailableSince(80300)]
@@ -765,34 +864,42 @@ class IntlCalendar
     public const WALLTIME_LAST = 0;
     public const WALLTIME_NEXT_VALID = 2;
 
+    #[TentativeType]
     public function add(int $field, int $value): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function after(IntlCalendar $other): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function before(IntlCalendar $other): bool {}
 
+    #[TentativeType]
     public function clear(?int $field = null): bool {}
 
     private function __construct() {}
 
+    #[TentativeType]
     public static function createInstance($timezone = null, ?string $locale = null): ?IntlCalendar {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function equals(IntlCalendar $other): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function fieldDifference(float $timestamp, int $field): int|false {}
 
+    #[TentativeType]
     public static function fromDateTime(DateTime|string $datetime, ?string $locale = null): ?IntlCalendar {}
 
     /**
@@ -800,6 +907,7 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function get(int $field): int|false {}
 
     /**
@@ -807,6 +915,7 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getActualMaximum(int $field): int|false {}
 
     /**
@@ -814,11 +923,13 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getActualMinimum(int $field): int|false {}
 
     /**
      * @return string[]
      */
+    #[TentativeType]
     public static function getAvailableLocales(): array {}
 
     /**
@@ -830,6 +941,7 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getDayOfWeekType(int $dayOfWeek): int|false {}
 
     /**
@@ -837,16 +949,19 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getFirstDayOfWeek(): int|false {}
 
     /**
@@ -854,8 +969,10 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getGreatestMinimum(int $field): int|false {}
 
+    #[TentativeType]
     public static function getKeywordValuesForLocale(
         string $keyword,
         string $locale,
@@ -867,11 +984,13 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getLeastMaximum(int $field): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLocale(int $type): string|false {}
 
     /**
@@ -879,11 +998,13 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getMaximum(int $field): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getMinimalDaysInFirstWeek(): int|false {}
 
     /**
@@ -891,18 +1012,22 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getMinimum(int $field): int|false {}
 
+    #[TentativeType]
     public static function getNow(): float {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getRepeatedWallTimeOption(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getSkippedWallTimeOption(): int {}
 
     /**
@@ -910,6 +1035,7 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getTime(): float|false {}
 
     /**
@@ -917,11 +1043,13 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getTimeZone(): IntlTimeZone|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getType(): string {}
 
     /**
@@ -933,30 +1061,37 @@ class IntlCalendar
      *
      * @pure
      */
+    #[TentativeType]
     public function getWeekendTransition(int $dayOfWeek): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function inDaylightTime(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isEquivalentTo(IntlCalendar $other): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isLenient(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isWeekend(?float $timestamp = null): bool {}
 
+    #[TentativeType]
     public function roll(int $field, $value): bool {}
 
+    #[TentativeType]
     public function isSet(int $field): bool {}
 
     /**
@@ -979,23 +1114,31 @@ class IntlCalendar
      */
     public function set($field, $value) {}
 
+    #[TentativeType]
     public function setFirstDayOfWeek(int $dayOfWeek): bool {}
 
+    #[TentativeType]
     public function setLenient(bool $lenient): bool {}
 
+    #[TentativeType]
     public function setRepeatedWallTimeOption(int $option): bool {}
 
+    #[TentativeType]
     public function setSkippedWallTimeOption(int $option): bool {}
 
+    #[TentativeType]
     public function setTime(float $timestamp): bool {}
 
+    #[TentativeType]
     public function setTimeZone($timezone): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function toDateTime(): DateTime|false {}
 
+    #[TentativeType]
     public function setMinimalDaysInFirstWeek(int $days): bool {}
 
     public function setDate(int $year, int $month, int $dayOfMonth): void {}
@@ -1013,14 +1156,19 @@ class IntlCalendar
 
 class IntlIterator implements Iterator
 {
+    #[TentativeType]
     public function current(): mixed {}
 
+    #[TentativeType]
     public function key(): mixed {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 }
 
@@ -1042,90 +1190,114 @@ class IntlTimeZone
 
     private function __construct() {}
 
+    #[TentativeType]
     public static function countEquivalentIDs(string $timezoneId): int|false {}
 
+    #[TentativeType]
     public static function createDefault(): IntlTimeZone {}
 
+    #[TentativeType]
     public static function createEnumeration(mixed $countryOrRawOffset = null): IntlIterator|false {}
 
+    #[TentativeType]
     public static function createTimeZone(string $timezoneId): ?IntlTimeZone {}
 
+    #[TentativeType]
     public static function createTimeZoneIDEnumeration(
         int $type,
         ?string $region = null,
         ?int $rawOffset = null,
     ): IntlIterator|false {}
 
+    #[TentativeType]
     public static function fromDateTimeZone(DateTimeZone $timezone): ?IntlTimeZone {}
 
     /**
      * @param-out bool $isSystemId
      */
+    #[TentativeType]
     public static function getCanonicalID(string $timezoneId, &$isSystemId = null): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDisplayName(bool $dst = false, int $style = 2, ?string $locale = null): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDSTSavings(): int {}
 
+    #[TentativeType]
     public static function getEquivalentID(string $timezoneId, int $offset): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string|false {}
 
+    #[TentativeType]
     public static function getGMT(): IntlTimeZone {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getID(): string|false {}
 
     /**
      * @param-out int $rawOffset
      * @param-out int $dstOffset
      */
+    #[TentativeType]
     public function getOffset(float $timestamp, bool $local, &$rawOffset, &$dstOffset): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getRawOffset(): int {}
 
+    #[TentativeType]
     public static function getRegion(string $timezoneId): string|false {}
 
+    #[TentativeType]
     public static function getTZDataVersion(): string|false {}
 
+    #[TentativeType]
     public static function getUnknown(): IntlTimeZone {}
 
+    #[TentativeType]
     public static function getWindowsID(string $timezoneId): string|false {}
 
+    #[TentativeType]
     public static function getIDForWindowsID(string $timezoneId, ?string $region = null): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasSameRules(IntlTimeZone $other): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function toDateTimeZone(): DateTimeZone|false {}
 
     /**
      * @return bool
      */
+    #[TentativeType]
     public function useDaylightTime(): bool {}
 
     public static function getIanaID(string $timezoneId): string|false {}
@@ -2457,40 +2629,52 @@ class IntlBreakIterator implements IteratorAggregate
 
     private function __construct() {}
 
+    #[TentativeType]
     public static function createCharacterInstance(?string $locale = null): ?IntlBreakIterator {}
 
+    #[TentativeType]
     public static function createCodePointInstance(): IntlCodePointBreakIterator {}
 
+    #[TentativeType]
     public static function createLineInstance(?string $locale = null): ?IntlBreakIterator {}
 
+    #[TentativeType]
     public static function createSentenceInstance(?string $locale = null): ?IntlBreakIterator {}
 
+    #[TentativeType]
     public static function createTitleInstance(?string $locale = null): ?IntlBreakIterator {}
 
+    #[TentativeType]
     public static function createWordInstance(?string $locale = null): ?IntlBreakIterator {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function current(): int {}
 
+    #[TentativeType]
     public function first(): int {}
 
+    #[TentativeType]
     public function following(int $offset): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLocale(int $type): string|false {}
 
     /**
@@ -2498,26 +2682,34 @@ class IntlBreakIterator implements IteratorAggregate
      *
      * @pure
      */
+    #[TentativeType]
     public function getPartsIterator($type = IntlPartsIterator::KEY_SEQUENTIAL): IntlPartsIterator {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getText(): ?string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isBoundary(int $offset): bool {}
 
+    #[TentativeType]
     public function last(): int {}
 
+    #[TentativeType]
     public function next(?int $offset = null): int {}
 
+    #[TentativeType]
     public function preceding(int $offset): int {}
 
+    #[TentativeType]
     public function previous(): int {}
 
+    #[TentativeType]
     public function setText(string $text): ?bool {}
 
     /**
@@ -2579,21 +2771,25 @@ class IntlRuleBasedBreakIterator extends IntlBreakIterator implements Traversabl
     /**
      * @pure
      */
+    #[TentativeType]
     public function getBinaryRules(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getRules(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getRuleStatus(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getRuleStatusVec(): array|false {}
 }
 
@@ -2606,8 +2802,10 @@ class IntlPartsIterator extends IntlIterator implements Iterator
     /**
      * @pure
      */
+    #[TentativeType]
     public function getBreakIterator(): IntlBreakIterator {}
 
+    #[TentativeType]
     public function getRuleStatus(): int {}
 }
 
@@ -2616,6 +2814,7 @@ class IntlCodePointBreakIterator extends IntlBreakIterator implements Traversabl
     /**
      * @pure
      */
+    #[TentativeType]
     public function getLastCodePoint(): int {}
 }
 
@@ -2671,73 +2870,91 @@ class UConverter
     /**
      * @pure
      */
+    #[TentativeType]
     public function convert(string $str, bool $reverse = false): string|false {}
 
     /**
      * @param-out int $error
      */
+    #[TentativeType]
     public function fromUCallback(int $reason, array $source, int $codePoint, &$error): array|string|int|null {}
 
+    #[TentativeType]
     public static function getAliases(string $name): array|false|null {}
 
+    #[TentativeType]
     public static function getAvailable(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDestinationEncoding(): string|false|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDestinationType(): int|false|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorCode(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getErrorMessage(): ?string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getSourceEncoding(): string|false|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getSourceType(): int|false|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public static function getStandards(): ?array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getSubstChars(): string|false|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public static function reasonText(int $reason): string {}
 
+    #[TentativeType]
     public function setDestinationEncoding(string $encoding): bool {}
 
+    #[TentativeType]
     public function setSourceEncoding(string $encoding): bool {}
 
+    #[TentativeType]
     public function setSubstChars(string $chars): bool {}
 
     /**
      * @param-out int $error
      */
+    #[TentativeType]
     public function toUCallback(int $reason, string $source, string $codeUnits, &$error): array|string|int|null {}
 
+    #[TentativeType]
     public static function transcode(
         string $str,
         string $toEncoding,
@@ -3418,26 +3635,37 @@ class IntlChar
     /**
      * @pure
      */
+    #[TentativeType]
     public static function hasBinaryProperty(int|string $codepoint, int $property): ?bool {}
 
+    #[TentativeType]
     public static function charAge(int|string $codepoint): ?array {}
 
+    #[TentativeType]
     public static function charDigitValue(int|string $codepoint): ?int {}
 
+    #[TentativeType]
     public static function charDirection(int|string $codepoint): ?int {}
 
+    #[TentativeType]
     public static function charFromName(string $name, int $type = IntlChar::UNICODE_CHAR_NAME): ?int {}
 
+    #[TentativeType]
     public static function charMirror(int|string $codepoint): string|int|null {}
 
+    #[TentativeType]
     public static function charName(int|string $codepoint, int $type = IntlChar::UNICODE_CHAR_NAME): ?string {}
 
+    #[TentativeType]
     public static function charType(int|string $codepoint): ?int {}
 
+    #[TentativeType]
     public static function chr(int|string $codepoint): ?string {}
 
+    #[TentativeType]
     public static function digit(int|string $codepoint, int $base = 10): int|false|null {}
 
+    #[TentativeType]
     public static function enumCharNames(
         int|string $start,
         int|string $end,
@@ -3445,37 +3673,52 @@ class IntlChar
         int $type = IntlChar::UNICODE_CHAR_NAME,
     ): ?bool {}
 
+    #[TentativeType]
     public static function enumCharTypes(callable $callback): void {}
 
+    #[TentativeType]
     public static function foldCase(
         int|string $codepoint,
         int $options = IntlChar::FOLD_CASE_DEFAULT,
     ): string|int|null {}
 
+    #[TentativeType]
     public static function forDigit(int $digit, int $base = 10): int {}
 
+    #[TentativeType]
     public static function getBidiPairedBracket(int|string $codepoint): string|int|null {}
 
+    #[TentativeType]
     public static function getBlockCode(int|string $codepoint): ?int {}
 
+    #[TentativeType]
     public static function getCombiningClass(int|string $codepoint): ?int {}
 
+    #[TentativeType]
     public static function getFC_NFKC_Closure(int|string $codepoint): string|false|null {}
 
+    #[TentativeType]
     public static function getIntPropertyMaxValue(int $property): int {}
 
+    #[TentativeType]
     public static function getIntPropertyMinValue(int $property): int {}
 
+    #[TentativeType]
     public static function getIntPropertyValue(int|string $codepoint, int $property): ?int {}
 
+    #[TentativeType]
     public static function getNumericValue(int|string $codepoint): ?float {}
 
+    #[TentativeType]
     public static function getPropertyEnum(string $alias): int {}
 
+    #[TentativeType]
     public static function getPropertyName(int $property, int $type = IntlChar::LONG_PROPERTY_NAME): string|false {}
 
+    #[TentativeType]
     public static function getPropertyValueEnum(int $property, string $name): int {}
 
+    #[TentativeType]
     public static function getPropertyValueName(
         int $property,
         int $value,
@@ -3485,70 +3728,103 @@ class IntlChar
     /**
      * @return array{0: int<0, max>, 1: int<0, max>, 2: int<0, max>, 3: int<0, max>}
      */
+    #[TentativeType]
     public static function getUnicodeVersion(): array {}
 
+    #[TentativeType]
     public static function isalnum(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isalpha(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isbase(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isblank(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function iscntrl(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isdefined(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isdigit(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isgraph(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isIDIgnorable(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isIDPart(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isIDStart(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isISOControl(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isJavaIDPart(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isJavaIDStart(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isJavaSpaceChar(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function islower(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isMirrored(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isprint(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function ispunct(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isspace(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function istitle(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isUAlphabetic(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isULowercase(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isupper(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isUUppercase(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isUWhiteSpace(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isWhitespace(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function isxdigit(int|string $codepoint): ?bool {}
 
+    #[TentativeType]
     public static function ord(int|string $character): ?int {}
 
+    #[TentativeType]
     public static function tolower(int|string $codepoint): string|int|null {}
 
+    #[TentativeType]
     public static function totitle(int|string $codepoint): string|int|null {}
 
+    #[TentativeType]
     public static function toupper(int|string $codepoint): string|int|null {}
 }
 

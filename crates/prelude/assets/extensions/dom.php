@@ -389,6 +389,7 @@ namespace {
         /** @return DOMNode|false */
         public function appendChild(DOMNode $node) {}
 
+        #[TentativeType]
         public function C14N(
             bool $exclusive = false,
             bool $withComments = false,
@@ -396,6 +397,7 @@ namespace {
             ?array $nsPrefixes = null,
         ): string|false {}
 
+        #[TentativeType]
         public function C14NFile(
             string $uri,
             bool $exclusive = false,
@@ -407,29 +409,39 @@ namespace {
         /** @return DOMNode|false */
         public function cloneNode(bool $deep = false) {}
 
+        #[TentativeType]
         public function getLineNo(): int {}
 
+        #[TentativeType]
         public function getNodePath(): ?string {}
 
+        #[TentativeType]
         public function hasAttributes(): bool {}
 
+        #[TentativeType]
         public function hasChildNodes(): bool {}
 
         /** @return DOMNode|false */
         public function insertBefore(DOMNode $node, ?DOMNode $child = null) {}
 
+        #[TentativeType]
         public function isDefaultNamespace(string $namespace): bool {}
 
+        #[TentativeType]
         public function isSameNode(DOMNode $otherNode): bool {}
 
         public function isEqualNode(?DOMNode $otherNode): bool {}
 
+        #[TentativeType]
         public function isSupported(string $feature, string $version): bool {}
 
+        #[TentativeType]
         public function lookupNamespaceURI(?string $prefix): ?string {}
 
+        #[TentativeType]
         public function lookupPrefix(string $namespace): ?string {}
 
+        #[TentativeType]
         public function normalize(): void {}
 
         /** @return DOMNode|false */
@@ -508,13 +520,16 @@ namespace {
 
     class DOMImplementation
     {
+        #[TentativeType]
         public function getFeature(string $feature, string $version): never {}
 
+        #[TentativeType]
         public function hasFeature(string $feature, string $version): bool {}
 
         /** @return DOMDocumentType|false */
         public function createDocumentType(string $qualifiedName, string $publicId = '', string $systemId = '') {}
 
+        #[TentativeType]
         public function createDocument(
             ?string $namespace = null,
             string $qualifiedName = '',
@@ -541,6 +556,7 @@ namespace {
 
         public function __construct() {}
 
+        #[TentativeType]
         public function appendXML(string $data): bool {}
 
         /**
@@ -572,6 +588,7 @@ namespace {
          */
         public int $length;
 
+        #[TentativeType]
         public function count(): int {}
 
         /**
@@ -633,15 +650,19 @@ namespace {
          */
         public ?DOMElement $nextElementSibling;
 
+        #[TentativeType]
         public function appendData(string $data): true {}
 
         /** @return string|false */
         public function substringData(int $offset, int $count) {}
 
+        #[TentativeType]
         public function insertData(int $offset, string $data): bool {}
 
+        #[TentativeType]
         public function deleteData(int $offset, int $count): bool {}
 
+        #[TentativeType]
         public function replaceData(int $offset, int $count, string $data): bool {}
 
         /**
@@ -688,6 +709,7 @@ namespace {
 
         public function __construct(string $name, string $value = '') {}
 
+        #[TentativeType]
         public function isId(): bool {}
     }
 
@@ -734,10 +756,12 @@ namespace {
 
         public function __construct(string $qualifiedName, ?string $value = null, string $namespace = '') {}
 
+        #[TentativeType]
         public function getAttribute(string $qualifiedName): string {}
 
         public function getAttributeNames(): array {}
 
+        #[TentativeType]
         public function getAttributeNS(?string $namespace, string $localName): string {}
 
         /** @return DOMAttr|DOMNameSpaceNode|false */
@@ -749,19 +773,25 @@ namespace {
         /**
          * @return DOMNodeList<DOMElement>
          */
+        #[TentativeType]
         public function getElementsByTagName(string $qualifiedName): DOMNodeList {}
 
         /**
          * @return DOMNodeList<DOMElement>
          */
+        #[TentativeType]
         public function getElementsByTagNameNS(?string $namespace, string $localName): DOMNodeList {}
 
+        #[TentativeType]
         public function hasAttribute(string $qualifiedName): bool {}
 
+        #[TentativeType]
         public function hasAttributeNS(?string $namespace, string $localName): bool {}
 
+        #[TentativeType]
         public function removeAttribute(string $qualifiedName): bool {}
 
+        #[TentativeType]
         public function removeAttributeNS(?string $namespace, string $localName): void {}
 
         /** @return DOMAttr|false */
@@ -770,6 +800,7 @@ namespace {
         /** @return DOMAttr|bool */
         public function setAttribute(string $qualifiedName, string $value) {}
 
+        #[TentativeType]
         public function setAttributeNS(?string $namespace, string $qualifiedName, string $value): void {}
 
         /** @return DOMAttr|null|false */
@@ -778,10 +809,13 @@ namespace {
         /** @return DOMAttr|null|false */
         public function setAttributeNodeNS(DOMAttr $attr) {}
 
+        #[TentativeType]
         public function setIdAttribute(string $qualifiedName, bool $isId): void {}
 
+        #[TentativeType]
         public function setIdAttributeNS(string $namespace, string $qualifiedName, bool $isId): void {}
 
+        #[TentativeType]
         public function setIdAttributeNode(DOMAttr $attr, bool $isId): void {}
 
         public function toggleAttribute(string $qualifiedName, ?bool $force = null): bool {}
@@ -897,8 +931,10 @@ namespace {
         /** @return DOMCdataSection|false */
         public function createCDATASection(string $data) {}
 
+        #[TentativeType]
         public function createComment(string $data): DOMComment {}
 
+        #[TentativeType]
         public function createDocumentFragment(): DOMDocumentFragment {}
 
         /** @return DOMElement|false */
@@ -913,55 +949,76 @@ namespace {
         /** @return DOMProcessingInstruction|false */
         public function createProcessingInstruction(string $target, string $data = '') {}
 
+        #[TentativeType]
         public function createTextNode(string $data): DOMText {}
 
+        #[TentativeType]
         public function getElementById(string $elementId): ?DOMElement {}
 
         /**
          * @return DOMNodeList<DOMElement>
          */
+        #[TentativeType]
         public function getElementsByTagName(string $qualifiedName): DOMNodeList {}
 
         /**
          * @return DOMNodeList<DOMElement>
          */
+        #[TentativeType]
         public function getElementsByTagNameNS(?string $namespace, string $localName): DOMNodeList {}
 
         /** @return DOMNode|false */
         public function importNode(DOMNode $node, bool $deep = false) {}
 
+        #[TentativeType]
         public function load(string $filename, int $options = 0): bool {}
 
+        #[TentativeType]
         public function loadXML(string $source, int $options = 0): bool {}
 
+        #[TentativeType]
         public function normalizeDocument(): void {}
 
+        #[TentativeType]
         public function registerNodeClass(string $baseClass, ?string $extendedClass): true {}
 
+        #[TentativeType]
         public function save(string $filename, int $options = 0): int|false {}
 
+        #[TentativeType]
         public function loadHTML(string $source, int $options = 0): bool {}
 
+        #[TentativeType]
         public function loadHTMLFile(string $filename, int $options = 0): bool {}
 
+        #[TentativeType]
         public function saveHTML(?DOMNode $node = null): string|false {}
 
+        #[TentativeType]
         public function saveHTMLFile(string $filename): int|false {}
 
+        #[TentativeType]
         public function saveXML(?DOMNode $node = null, int $options = 0): string|false {}
 
+        #[TentativeType]
         public function schemaValidate(string $filename, int $flags = 0): bool {}
 
+        #[TentativeType]
         public function schemaValidateSource(string $source, int $flags = 0): bool {}
 
+        #[TentativeType]
         public function relaxNGValidate(string $filename): bool {}
 
+        #[TentativeType]
         public function relaxNGValidateSource(string $source): bool {}
 
+        #[TentativeType]
         public function validate(): bool {}
 
+        #[TentativeType]
         public function xinclude(int $options = 0): int|false {}
 
+        #[TentativeType]
         public function adoptNode(DOMNode $node): DOMNode|false {}
 
         /**
@@ -995,8 +1052,10 @@ namespace {
 
         public function __construct(string $data = '') {}
 
+        #[TentativeType]
         public function isWhitespaceInElementContent(): bool {}
 
+        #[TentativeType]
         public function isElementContentWhitespace(): bool {}
 
         /** @return DOMText|false */
@@ -1015,14 +1074,18 @@ namespace {
         public int $length;
 
         /** @return null|TNode */
+        #[TentativeType]
         public function getNamedItem(string $qualifiedName): ?DOMNode {}
 
         /** @return null|TNode */
+        #[TentativeType]
         public function getNamedItemNS(?string $namespace, string $localName): ?DOMNode {}
 
         /** @return null|TNode */
+        #[TentativeType]
         public function item(int $index): ?DOMNode {}
 
+        #[TentativeType]
         public function count(): int {}
 
         /**
@@ -1108,6 +1171,7 @@ namespace {
 
         public function __construct(DOMDocument $document, bool $registerNodeNS = true) {}
 
+        #[TentativeType]
         public function evaluate(
             string $expression,
             ?DOMNode $contextNode = null,
@@ -1117,10 +1181,13 @@ namespace {
         /**
          * @return DOMNodeList<DOMNode|DOMNameSpaceNode>|false
          */
+        #[TentativeType]
         public function query(string $expression, ?DOMNode $contextNode = null, bool $registerNodeNS = true): mixed {}
 
+        #[TentativeType]
         public function registerNamespace(string $prefix, string $namespace): bool {}
 
+        #[TentativeType]
         public function registerPhpFunctions(string|array|null $restrict = null): void {}
 
         public function registerPhpFunctionNS(string $namespaceURI, string $name, callable $callable): void {}

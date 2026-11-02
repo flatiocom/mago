@@ -26,35 +26,46 @@ class SimpleXMLElement implements Traversable, ArrayAccess, Countable, Iterator,
      */
     private function __get($name) {}
 
+    #[TentativeType]
     public function asXML(?string $filename = null): string|bool {}
 
+    #[TentativeType]
     public function saveXML(?string $filename = null): string|bool {}
 
     /**
      * @return list<SimpleXMLElement>|false|null
      */
+    #[TentativeType]
     public function xpath(string $expression): array|false|null {}
 
+    #[TentativeType]
     public function registerXPathNamespace(string $prefix, string $namespace): bool {}
 
+    #[TentativeType]
     public function attributes(?string $namespaceOrPrefix = null, bool $isPrefix = false): ?static {}
 
+    #[TentativeType]
     public function children(?string $namespaceOrPrefix = null, bool $isPrefix = false): ?static {}
 
     /**
      * @return array<string, string>
      */
+    #[TentativeType]
     public function getNamespaces(bool $recursive = false): array {}
 
     /**
      * @return array<string, string>|false
      */
+    #[TentativeType]
     public function getDocNamespaces(bool $recursive = false, bool $fromRoot = true): array|false {}
 
+    #[TentativeType]
     public function getName(): string {}
 
+    #[TentativeType]
     public function addChild(string $qualifiedName, ?string $value = null, ?string $namespace = null): ?static {}
 
+    #[TentativeType]
     public function addAttribute(string $qualifiedName, string $value, ?string $namespace = null): void {}
 
     public function __toString(): string {}
@@ -62,6 +73,7 @@ class SimpleXMLElement implements Traversable, ArrayAccess, Countable, Iterator,
     /**
      * @return int<0, max>
      */
+    #[TentativeType]
     public function count(): int {}
 
     /**
@@ -92,18 +104,25 @@ class SimpleXMLElement implements Traversable, ArrayAccess, Countable, Iterator,
      */
     public function offsetUnset($offset) {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
+    #[TentativeType]
     public function current(): static {}
 
+    #[TentativeType]
     public function key(): string {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function hasChildren(): bool {}
 
+    #[TentativeType]
     public function getChildren(): ?SimpleXMLElement {}
 }
 

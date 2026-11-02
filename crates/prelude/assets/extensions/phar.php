@@ -33,53 +33,72 @@ class Phar extends RecursiveDirectoryIterator implements RecursiveIterator, Seek
 
     public function __destruct() {}
 
+    #[TentativeType]
     public function addEmptyDir(string $directory): void {}
 
+    #[TentativeType]
     public function addFile(string $filename, ?string $localName = null): void {}
 
+    #[TentativeType]
     public function addFromString(string $localName, string $contents): void {}
 
+    #[TentativeType]
     public function buildFromDirectory(string $directory, string $pattern = ''): array {}
 
+    #[TentativeType]
     public function buildFromIterator(Traversable $iterator, ?string $baseDirectory = null): array {}
 
+    #[TentativeType]
     public function compressFiles(int $compression): void {}
 
+    #[TentativeType]
     public function decompressFiles(): bool {}
 
+    #[TentativeType]
     public function compress(int $compression, ?string $extension = null): ?Phar {}
 
+    #[TentativeType]
     public function decompress(?string $extension = null): ?Phar {}
 
+    #[TentativeType]
     public function convertToExecutable(
         ?int $format = null,
         ?int $compression = null,
         ?string $extension = null,
     ): ?Phar {}
 
+    #[TentativeType]
     public function convertToData(
         ?int $format = null,
         ?int $compression = null,
         ?string $extension = null,
     ): ?PharData {}
 
+    #[TentativeType]
     public function copy(string $to, string $from): bool {}
 
     /**
      * @return int<0, max>
      */
+    #[TentativeType]
     public function count(int $mode = COUNT_NORMAL): int {}
 
+    #[TentativeType]
     public function delete(string $localName): bool {}
 
+    #[TentativeType]
     public function delMetadata(): bool {}
 
+    #[TentativeType]
     public function extractTo(string $directory, array|string|null $files = null, bool $overwrite = false): bool {}
 
+    #[TentativeType]
     public function getAlias(): ?string {}
 
+    #[TentativeType]
     public function getMetadata(array $unserializeOptions = []): mixed {}
 
+    #[TentativeType]
     public function getModified(): bool {}
 
     /**
@@ -88,58 +107,77 @@ class Phar extends RecursiveDirectoryIterator implements RecursiveIterator, Seek
      *   hash_type: string
      * }
      */
+    #[TentativeType]
     public function getSignature(): array|false {}
 
+    #[TentativeType]
     public function getStub(): string {}
 
+    #[TentativeType]
     public function getVersion(): string {}
 
+    #[TentativeType]
     public function hasMetadata(): bool {}
 
+    #[TentativeType]
     public function isBuffering(): bool {}
 
+    #[TentativeType]
     public function isCompressed(): int|false {}
 
+    #[TentativeType]
     public function isFileFormat(int $format): bool {}
 
+    #[TentativeType]
     public function isWritable(): bool {}
 
     /**
      * @param string $localName
      */
+    #[TentativeType]
     public function offsetExists($localName): bool {}
 
     /**
      * @param string $localName
      */
+    #[TentativeType]
     public function offsetGet($localName): SplFileInfo {}
 
     /**
      * @param string $localName
      * @param string $value
      */
+    #[TentativeType]
     public function offsetSet($localName, $value): void {}
 
     /**
      * @param string $localName
      */
+    #[TentativeType]
     public function offsetUnset($localName): void {}
 
+    #[TentativeType]
     public function setAlias(string $alias): bool {}
 
+    #[TentativeType]
     public function setDefaultStub(?string $index = null, ?string $webIndex = null): bool {}
 
+    #[TentativeType]
     public function setMetadata(mixed $metadata): void {}
 
+    #[TentativeType]
     public function setSignatureAlgorithm(int $algo, ?string $privateKey = null): void {}
 
     /**
      * @param string $stub
      */
+    #[TentativeType]
     public function setStub($stub, int $length = UNKNOWN): bool {}
 
+    #[TentativeType]
     public function startBuffering(): void {}
 
+    #[TentativeType]
     public function stopBuffering(): void {}
 
     final public static function apiVersion(): string {}
@@ -240,22 +278,26 @@ class PharData extends Phar
     /**
      * @param string $localName
      */
+    #[TentativeType]
     public function offsetExists($localName): bool {}
 
     /**
      * @param string $localName
      */
+    #[TentativeType]
     public function offsetGet($localName): SplFileInfo {}
 
     /**
      * @param string $localName
      * @param string $value
      */
+    #[TentativeType]
     public function offsetSet($localName, $value): void {}
 
     /**
      * @param string $localName
      */
+    #[TentativeType]
     public function offsetUnset($localName): void {}
 
     /**
@@ -297,29 +339,42 @@ class PharFileInfo extends SplFileInfo
 
     public function __destruct() {}
 
+    #[TentativeType]
     public function chmod(int $perms): void {}
 
+    #[TentativeType]
     public function compress(int $compression): bool {}
 
+    #[TentativeType]
     public function decompress(): bool {}
 
+    #[TentativeType]
     public function delMetadata(): bool {}
 
+    #[TentativeType]
     public function getCompressedSize(): int {}
 
+    #[TentativeType]
     public function getCRC32(): int {}
 
+    #[TentativeType]
     public function getContent(): string {}
 
+    #[TentativeType]
     public function getMetadata(array $unserializeOptions = []): mixed {}
 
+    #[TentativeType]
     public function getPharFlags(): int {}
 
+    #[TentativeType]
     public function hasMetadata(): bool {}
 
+    #[TentativeType]
     public function isCompressed(?int $compression = null): bool {}
 
+    #[TentativeType]
     public function isCRCChecked(): bool {}
 
+    #[TentativeType]
     public function setMetadata(mixed $metadata): void {}
 }

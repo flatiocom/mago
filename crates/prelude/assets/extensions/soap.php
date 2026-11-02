@@ -14,8 +14,10 @@ namespace {
         /**
          * @deprecated
          */
+        #[TentativeType]
         public function __call(string $name, array $args): mixed {}
 
+        #[TentativeType]
         public function __soapCall(
             string $name,
             array $args,
@@ -24,20 +26,28 @@ namespace {
             &$outputHeaders = null,
         ): mixed {}
 
+        #[TentativeType]
         public function __getLastRequest(): ?string {}
 
+        #[TentativeType]
         public function __getLastResponse(): ?string {}
 
+        #[TentativeType]
         public function __getLastRequestHeaders(): ?string {}
 
+        #[TentativeType]
         public function __getLastResponseHeaders(): ?string {}
 
+        #[TentativeType]
         public function __getFunctions(): ?array {}
 
+        #[TentativeType]
         public function __getTypes(): ?array {}
 
+        #[TentativeType]
         public function __getCookies(): array {}
 
+        #[TentativeType]
         public function __doRequest(
             string $request,
             string $location,
@@ -46,10 +56,13 @@ namespace {
             bool $oneWay = false,
         ): ?string {}
 
+        #[TentativeType]
         public function __setCookie(string $name, ?string $value): void {}
 
+        #[TentativeType]
         public function __setLocation(?string $location = null): ?string {}
 
+        #[TentativeType]
         public function __setSoapHeaders($headers = null): bool {}
     }
 
@@ -81,18 +94,25 @@ namespace {
     {
         public function __construct(?string $wsdl, array $options = []) {}
 
+        #[TentativeType]
         public function setPersistence(int $mode): void {}
 
+        #[TentativeType]
         public function setClass(string $class, mixed ...$args): void {}
 
+        #[TentativeType]
         public function setObject(object $object): void {}
 
+        #[TentativeType]
         public function addFunction($functions): void {}
 
+        #[TentativeType]
         public function getFunctions(): array {}
 
+        #[TentativeType]
         public function handle(?string $request = null): void {}
 
+        #[TentativeType]
         public function fault(
             string $code,
             string $string,
@@ -101,6 +121,7 @@ namespace {
             string $name = '',
         ): void {}
 
+        #[TentativeType]
         public function addSoapHeader(SoapHeader $header): void {}
 
         public function __getLastResponse(): ?string {}

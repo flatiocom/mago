@@ -19,14 +19,19 @@ class CURLFile
 
     public function __construct(string $filename, ?string $mime_type = null, ?string $posted_filename = null) {}
 
+    #[TentativeType]
     public function getFilename(): string {}
 
+    #[TentativeType]
     public function getMimeType(): string {}
 
+    #[TentativeType]
     public function getPostFilename(): string {}
 
+    #[TentativeType]
     public function setMimeType(string $mime_type): void {}
 
+    #[TentativeType]
     public function setPostFilename(string $posted_filename): void {}
 
     public function __wakeup() {}

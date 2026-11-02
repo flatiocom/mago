@@ -53,34 +53,49 @@ class XMLReader
 
     public string $xmlLang;
 
+    #[TentativeType]
     public function close(): true {}
 
+    #[TentativeType]
     public function getAttribute(string $name): ?string {}
 
+    #[TentativeType]
     public function getAttributeNo(int $index): ?string {}
 
+    #[TentativeType]
     public function getAttributeNs(string $name, string $namespace): ?string {}
 
+    #[TentativeType]
     public function getParserProperty(int $property): bool {}
 
+    #[TentativeType]
     public function isValid(): bool {}
 
+    #[TentativeType]
     public function lookupNamespace(string $prefix): ?string {}
 
+    #[TentativeType]
     public function moveToAttribute(string $name): bool {}
 
+    #[TentativeType]
     public function moveToAttributeNo(int $index): bool {}
 
+    #[TentativeType]
     public function moveToAttributeNs(string $name, string $namespace): bool {}
 
+    #[TentativeType]
     public function moveToElement(): bool {}
 
+    #[TentativeType]
     public function moveToFirstAttribute(): bool {}
 
+    #[TentativeType]
     public function moveToNextAttribute(): bool {}
 
+    #[TentativeType]
     public function read(): bool {}
 
+    #[TentativeType]
     public function next(?string $name = null): bool {}
 
     /** @return bool|XMLReader */
@@ -98,18 +113,25 @@ class XMLReader
         ?string $documentUri = null,
     ): static {}
 
+    #[TentativeType]
     public function readInnerXml(): string {}
 
+    #[TentativeType]
     public function readOuterXml(): string {}
 
+    #[TentativeType]
     public function readString(): string {}
 
+    #[TentativeType]
     public function setSchema(?string $filename): bool {}
 
+    #[TentativeType]
     public function setParserProperty(int $property, bool $value): bool {}
 
+    #[TentativeType]
     public function setRelaxNGSchema(?string $filename): bool {}
 
+    #[TentativeType]
     public function setRelaxNGSchemaSource(?string $source): bool {}
 
     /** @return bool|XMLReader */
@@ -118,5 +140,6 @@ class XMLReader
     #[Mago\AvailableSince(80400)]
     public static function fromString(string $source, ?string $encoding = null, int $flags = 0): static {}
 
+    #[TentativeType]
     public function expand(?DOMNode $baseNode = null): DOMNode|false {}
 }

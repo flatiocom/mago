@@ -972,10 +972,13 @@ class php_user_filter
      * @param resource $out
      * @param int &$consumed
      */
+    #[TentativeType]
     public function filter($in, $out, &$consumed, bool $closing): int {}
 
+    #[TentativeType]
     public function onCreate(): bool {}
 
+    #[TentativeType]
     public function onClose(): void {}
 }
 

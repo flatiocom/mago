@@ -2,6 +2,7 @@
 
 interface JsonSerializable
 {
+    #[TentativeType]
     public function jsonSerialize(): mixed;
 }
 

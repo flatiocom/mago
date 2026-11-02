@@ -4,6 +4,7 @@ class finfo
 {
     public function __construct(int $flags = 0, ?string $magic_database = null) {}
 
+    #[TentativeType]
     public function set_flags(int $flags): bool {}
 
     /**
@@ -11,6 +12,7 @@ class finfo
      *
      * @pure
      */
+    #[TentativeType]
     public function file(string $filename, int $flags = FILEINFO_NONE, mixed $context = null): string|false {}
 
     /**
@@ -18,6 +20,7 @@ class finfo
      *
      * @pure
      */
+    #[TentativeType]
     public function buffer(string $string, int $flags = FILEINFO_NONE, mixed $context = null): string|false {}
 }
 

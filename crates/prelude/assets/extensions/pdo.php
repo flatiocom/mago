@@ -412,21 +412,25 @@ namespace {
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function prepare(string $query, array $options = []): PDOStatement|false {}
 
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function beginTransaction(): bool {}
 
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function commit(): bool {}
 
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function rollBack(): bool {}
 
         #[TentativeType]
@@ -441,6 +445,7 @@ namespace {
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function exec(string $statement): int|false {}
 
         /**
@@ -740,13 +745,16 @@ namespace {
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function nextRowset(): bool {}
 
         /**
          * @throws PDOException
          */
+        #[TentativeType]
         public function closeCursor(): bool {}
 
+        #[TentativeType]
         public function debugDumpParams(): ?bool {}
 
         final public function __wakeup() {}

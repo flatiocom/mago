@@ -628,6 +628,7 @@ namespace {
          */
         public function getMetadata($all_topics, $only_topic, $timeout_ms) {}
 
+        #[TentativeType]
         public function getControllerId(int $timeout_ms): int {}
 
         /** @return int */
@@ -719,12 +720,14 @@ namespace {
          * @param RdKafka\TopicPartition[] $topic_partitions
          * @return list<RdKafka\TopicPartition>
          */
+        #[TentativeType]
         public function pausePartitions(array $topic_partitions): array {}
 
         /**
          * @param RdKafka\TopicPartition[] $topic_partitions
          * @return list<RdKafka\TopicPartition>
          */
+        #[TentativeType]
         public function resumePartitions(array $topic_partitions): array {}
 
         /**
@@ -734,6 +737,7 @@ namespace {
          * @throws \InvalidArgumentException
          * @throws RdKafka\Exception
          */
+        #[TentativeType]
         public function oauthbearerSetToken(
             string $token_value,
             int|float|string $lifetime_ms,
@@ -741,6 +745,7 @@ namespace {
             array $extensions = [],
         ): void {}
 
+        #[TentativeType]
         public function oauthbearerSetTokenFailure(string $error): void {}
     }
 }
@@ -818,6 +823,7 @@ namespace RdKafka {
         public function setLogCb($callback) {}
 
         /** @param callable(\RdKafka|KafkaConsumer, string|null): void $callback */
+        #[\TentativeType]
         public function setOauthbearerTokenRefreshCb(callable $callback): void {}
     }
 
@@ -926,9 +932,11 @@ namespace RdKafka {
         public function assign($topic_partitions = null) {}
 
         /** @param TopicPartition[] $topic_partitions */
+        #[\TentativeType]
         public function incrementalAssign(array $topic_partitions): void {}
 
         /** @param TopicPartition[] $topic_partitions */
+        #[\TentativeType]
         public function incrementalUnassign(array $topic_partitions): void {}
 
         /**
@@ -1033,20 +1041,24 @@ namespace RdKafka {
          */
         public function newTopic($topic_name, $topic_conf = null) {}
 
+        #[\TentativeType]
         public function getControllerId(int $timeout_ms): int {}
 
         /**
          * @param TopicPartition[] $topic_partitions
          * @return list<TopicPartition>
          */
+        #[\TentativeType]
         public function pausePartitions(array $topic_partitions): array {}
 
         /**
          * @param TopicPartition[] $topic_partitions
          * @return list<TopicPartition>
          */
+        #[\TentativeType]
         public function resumePartitions(array $topic_partitions): array {}
 
+        #[\TentativeType]
         public function poll(int $timeout_ms): int {}
 
         /**
@@ -1056,6 +1068,7 @@ namespace RdKafka {
          * @throws \InvalidArgumentException
          * @throws Exception
          */
+        #[\TentativeType]
         public function oauthbearerSetToken(
             string $token_value,
             int|float|string $lifetime_ms,
@@ -1063,6 +1076,7 @@ namespace RdKafka {
             array $extensions = [],
         ): void {}
 
+        #[\TentativeType]
         public function oauthbearerSetTokenFailure(string $error): void {}
 
         /** @return void */
@@ -1333,6 +1347,7 @@ namespace RdKafka {
          */
         public function setTopic($topic_name) {}
 
+        #[\TentativeType]
         public function getErr(): ?int {}
     }
 }

@@ -345,15 +345,19 @@ interface DateTimeInterface
      *
      * @return ($format is non-empty-string ? non-empty-string : string)
      */
+    #[TentativeType]
     public function format(string $format): string;
 
     /**
      * @return DateTimeZone
      */
+    #[TentativeType]
     public function getTimezone(): DateTimeZone|false;
 
+    #[TentativeType]
     public function getOffset(): int;
 
+    #[TentativeType]
     public function getTimestamp(): int;
 
     public function getMicrosecond(): int;
@@ -361,8 +365,10 @@ interface DateTimeInterface
     /**
      * @return DateInterval&object{days: int}
      */
+    #[TentativeType]
     public function diff(DateTimeInterface $targetObject, bool $absolute = false): DateInterval;
 
+    #[TentativeType]
     public function __wakeup(): void;
 
     public function __serialize(): array;
@@ -378,22 +384,27 @@ class DateTime implements DateTimeInterface
 
     public function __unserialize(array $data): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 
+    #[TentativeType]
     public static function __set_state(array $array): DateTime {}
 
+    #[TentativeType]
     public static function createFromImmutable(DateTimeImmutable $object): static {}
 
     /** @return static */
     #[Mago\AvailableSince(80000)]
     public static function createFromInterface(DateTimeInterface $object): DateTime {} // TODO return type should be static
 
+    #[TentativeType]
     public static function createFromFormat(
         string $format,
         string $datetime,
         ?DateTimeZone $timezone = null,
     ): DateTime|false {}
 
+    #[TentativeType]
     #[Mago\AvailableSince(80400)]
     public static function createFromTimestamp(int|float $timestamp): static {}
 
@@ -405,6 +416,7 @@ class DateTime implements DateTimeInterface
      *     errors: array<non-negative-int, non-empty-string>,
      * }|false
      */
+    #[TentativeType]
     public static function getLastErrors(): array|false {}
 
     /**
@@ -414,42 +426,55 @@ class DateTime implements DateTimeInterface
      *
      * @return ($format is non-empty-string ? non-empty-string : string)
      */
+    #[TentativeType]
     public function format(string $format): string {}
 
+    #[TentativeType]
     public function modify(string $modifier): DateTime {}
 
+    #[TentativeType]
     public function add(DateInterval $interval): DateTime {}
 
+    #[TentativeType]
     public function sub(DateInterval $interval): DateTime {}
 
     /**
      * @return DateTimeZone
      */
+    #[TentativeType]
     public function getTimezone(): DateTimeZone|false {}
 
+    #[TentativeType]
     public function setTimezone(DateTimeZone $timezone): DateTime {}
 
+    #[TentativeType]
     public function getOffset(): int {}
 
     #[Mago\AvailableSince(80400)]
     public function getMicrosecond(): int {}
 
+    #[TentativeType]
     public function setTime(int $hour, int $minute, int $second = 0, int $microsecond = 0): DateTime {}
 
+    #[TentativeType]
     public function setDate(int $year, int $month, int $day): DateTime {}
 
+    #[TentativeType]
     public function setISODate(int $year, int $week, int $dayOfWeek = 1): DateTime {}
 
+    #[TentativeType]
     public function setTimestamp(int $timestamp): DateTime {}
 
     #[Mago\AvailableSince(80400)]
     public function setMicrosecond(int $microsecond): static {}
 
+    #[TentativeType]
     public function getTimestamp(): int {}
 
     /**
      * @return DateInterval&object{days: int}
      */
+    #[TentativeType]
     public function diff(DateTimeInterface $targetObject, bool $absolute = false): DateInterval {}
 }
 
@@ -461,8 +486,10 @@ class DateTimeImmutable implements DateTimeInterface
 
     public function __unserialize(array $data): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 
+    #[TentativeType]
     public static function __set_state(array $array): DateTimeImmutable {}
 
     /**
@@ -470,12 +497,14 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static|false
      */
+    #[TentativeType]
     public static function createFromFormat(
         string $format,
         string $datetime,
         ?DateTimeZone $timezone = null,
     ): DateTimeImmutable|false {}
 
+    #[TentativeType]
     #[Mago\AvailableSince(80400)]
     public static function createFromTimestamp(int|float $timestamp): static {}
 
@@ -487,6 +516,7 @@ class DateTimeImmutable implements DateTimeInterface
      *     errors: array<non-negative-int, non-empty-string>,
      * }|false
      */
+    #[TentativeType]
     public static function getLastErrors(): array|false {}
 
     /**
@@ -496,6 +526,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return ($format is non-empty-string ? non-empty-string : string)
      */
+    #[TentativeType]
     public function format(string $format): string {}
 
     /**
@@ -506,16 +537,19 @@ class DateTimeImmutable implements DateTimeInterface
     /**
      * @return DateTimeZone
      */
+    #[TentativeType]
     public function getTimezone(): DateTimeZone|false {}
 
     /**
      * @psalm-mutation-free
      */
+    #[TentativeType]
     public function getOffset(): int {}
 
     /**
      * @psalm-mutation-free
      */
+    #[TentativeType]
     public function getTimestamp(): int {}
 
     #[Mago\AvailableSince(80400)]
@@ -528,6 +562,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return DateInterval&object{days: int}
      */
+    #[TentativeType]
     public function diff(DateTimeInterface $targetObject, bool $absolute = false): DateInterval {}
 
     /**
@@ -535,6 +570,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::modify() does not modify the object itself')]
     public function modify(string $modifier): DateTimeImmutable {}
 
@@ -543,6 +579,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::add() does not modify the object itself')]
     public function add(DateInterval $interval): DateTimeImmutable {}
 
@@ -551,6 +588,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::sub() does not modify the object itself')]
     public function sub(DateInterval $interval): DateTimeImmutable {}
 
@@ -559,6 +597,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::setTimezone() does not modify the object itself')]
     public function setTimezone(DateTimeZone $timezone): DateTimeImmutable {}
 
@@ -567,6 +606,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::setTime() does not modify the object itself')]
     public function setTime(int $hour, int $minute, int $second = 0, int $microsecond = 0): DateTimeImmutable {}
 
@@ -575,6 +615,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::setDate() does not modify the object itself')]
     public function setDate(int $year, int $month, int $day): DateTimeImmutable {}
 
@@ -583,6 +624,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::setISODate() does not modify the object itself')]
     public function setISODate(int $year, int $week, int $dayOfWeek = 1): DateTimeImmutable {}
 
@@ -591,6 +633,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     #[NoDiscard(message: 'as DateTimeImmutable::setTimestamp() does not modify the object itself')]
     public function setTimestamp(int $timestamp): DateTimeImmutable {}
 
@@ -608,6 +651,7 @@ class DateTimeImmutable implements DateTimeInterface
      *
      * @return static
      */
+    #[TentativeType]
     public static function createFromMutable(DateTime $object): static {}
 
     /**
@@ -644,11 +688,13 @@ class DateTimeZone
     public function __construct(string $timezone) {}
 
     /** @return non-empty-string */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @psalm-mutation-free
      */
+    #[TentativeType]
     public function getOffset(DateTimeInterface $datetime): int {}
 
     /**
@@ -660,6 +706,7 @@ class DateTimeZone
      *     abbr: string,
      * }>|false
      */
+    #[TentativeType]
     public function getTransitions(int $timestampBegin = PHP_INT_MIN, int $timestampEnd = 2147483647): array|false {}
 
     /**
@@ -670,6 +717,7 @@ class DateTimeZone
      *     comments: string,
      * }|false
      */
+    #[TentativeType]
     public function getLocation(): array|false {}
 
     /**
@@ -679,6 +727,7 @@ class DateTimeZone
      *     timezone_id: non-empty-string,
      * }>>
      */
+    #[TentativeType]
     public static function listAbbreviations(): array {}
 
     /**
@@ -686,6 +735,7 @@ class DateTimeZone
      *
      * @return list<non-empty-string>
      */
+    #[TentativeType]
     public static function listIdentifiers(
         int $timezoneGroup = DateTimeZone::ALL,
         ?string $countryCode = null,
@@ -695,8 +745,10 @@ class DateTimeZone
 
     public function __unserialize(array $data): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 
+    #[TentativeType]
     public static function __set_state(array $array): DateTimeZone {}
 }
 
@@ -717,16 +769,20 @@ class DateInterval
 
     public function __construct(string $duration) {}
 
+    #[TentativeType]
     public static function createFromDateString(string $datetime): DateInterval {}
 
+    #[TentativeType]
     public function format(string $format): string {}
 
     public function __serialize(): array {}
 
     public function __unserialize(array $data): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 
+    #[TentativeType]
     public static function __set_state(array $array): DateInterval {}
 }
 
@@ -783,20 +839,26 @@ class DatePeriod implements IteratorAggregate
      */
     public function __construct($start, $interval = UNKNOWN, $end = UNKNOWN, $options = UNKNOWN) {}
 
+    #[TentativeType]
     public function getStartDate(): DateTimeInterface {}
 
+    #[TentativeType]
     public function getEndDate(): ?DateTimeInterface {}
 
+    #[TentativeType]
     public function getDateInterval(): DateInterval {}
 
+    #[TentativeType]
     public function getRecurrences(): ?int {}
 
     public function __serialize(): array {}
 
     public function __unserialize(array $data): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 
+    #[TentativeType]
     public static function __set_state(array $array): DatePeriod {}
 
     public function getIterator(): Iterator {}

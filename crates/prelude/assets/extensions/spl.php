@@ -74,6 +74,7 @@ class CallbackFilterIterator extends FilterIterator implements OuterIterator
      */
     public function __construct(Iterator $iterator, callable $callback) {}
 
+    #[TentativeType]
     public function accept(): bool {}
 
     /**
@@ -163,53 +164,70 @@ class RecursiveIteratorIterator implements OuterIterator
      */
     public function __construct(Traversable $iterator, int $mode = self::LEAVES_ONLY, int $flags = 0) {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
     /**
      * @return null|K
      */
+    #[TentativeType]
     public function key(): mixed {}
 
     /**
      * @return null|V
      */
+    #[TentativeType]
     public function current(): mixed {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function getDepth(): int {}
 
     /**
      * @return RecursiveIterator<K, V>|null
      */
+    #[TentativeType]
     public function getSubIterator(?int $level = null): ?RecursiveIterator {}
 
     /**
      * @return RecursiveIterator<K, V>
      */
+    #[TentativeType]
     public function getInnerIterator(): RecursiveIterator {}
 
+    #[TentativeType]
     public function beginIteration(): void {}
 
+    #[TentativeType]
     public function endIteration(): void {}
 
+    #[TentativeType]
     public function callHasChildren(): bool {}
 
     /**
      * @return RecursiveIterator<K, V>|null
      */
+    #[TentativeType]
     public function callGetChildren(): ?RecursiveIterator {}
 
+    #[TentativeType]
     public function beginChildren(): void {}
 
+    #[TentativeType]
     public function endChildren(): void {}
 
+    #[TentativeType]
     public function nextElement(): void {}
 
+    #[TentativeType]
     public function setMaxDepth(int $maxDepth = -1): void {}
 
+    #[TentativeType]
     public function getMaxDepth(): int|false {}
 }
 
@@ -247,25 +265,31 @@ class IteratorIterator implements OuterIterator
     /**
      * @return Iterator<K, V>|null
      */
+    #[TentativeType]
     public function getInnerIterator(): ?Iterator {}
 
     /**
      * @return void
      */
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
     /**
      * @return null|K
      */
+    #[TentativeType]
     public function key(): mixed {}
 
     /**
      * @return null|V
      */
+    #[TentativeType]
     public function current(): mixed {}
 
+    #[TentativeType]
     public function next(): void {}
 
     public function __call(string $name, array $argv): mixed {}
@@ -394,6 +418,7 @@ class ParentIterator extends RecursiveFilterIterator implements RecursiveIterato
  */
 interface SeekableIterator extends Iterator
 {
+    #[TentativeType]
     public function seek(int $offset): void;
 }
 
@@ -450,9 +475,11 @@ class CachingIterator extends IteratorIterator implements OuterIterator, ArrayAc
     public function __construct(Iterator $iterator, int $flags = self::CALL_TOSTRING) {}
 
     /** @return non-negative-int */
+    #[TentativeType]
     public function count(): int {}
 
     /** @param K $key */
+    #[TentativeType]
     public function offsetExists($key): bool {}
 
     /**
@@ -460,15 +487,18 @@ class CachingIterator extends IteratorIterator implements OuterIterator, ArrayAc
      *
      * @return V
      */
+    #[TentativeType]
     public function offsetGet($key): mixed {}
 
     /**
      * @param K $key
      * @param V $value
      */
+    #[TentativeType]
     public function offsetSet($key, mixed $value): void {}
 
     /** @param K $key */
+    #[TentativeType]
     public function offsetUnset($key): void {}
 
     /**
@@ -639,6 +669,7 @@ class RegexIterator extends FilterIterator
         int $preg_flags = 0,
     ) {}
 
+    #[TentativeType]
     public function accept(): bool {}
 
     /**
@@ -691,6 +722,7 @@ class RecursiveRegexIterator extends RegexIterator implements RecursiveIterator
      */
     public function getChildren() {}
 
+    #[TentativeType]
     public function hasChildren(): bool {}
 }
 
@@ -756,14 +788,19 @@ class RecursiveTreeIterator extends RecursiveIteratorIterator implements OuterIt
      */
     public function current() {}
 
+    #[TentativeType]
     public function endChildren(): void {}
 
+    #[TentativeType]
     public function endIteration(): void {}
 
+    #[TentativeType]
     public function getEntry(): string {}
 
+    #[TentativeType]
     public function getPostfix(): string {}
 
+    #[TentativeType]
     public function getPrefix(): string {}
 
     /**
@@ -772,16 +809,22 @@ class RecursiveTreeIterator extends RecursiveIteratorIterator implements OuterIt
      */
     public function key() {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function nextElement(): void {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function setPostfix(string $postfix): void {}
 
+    #[TentativeType]
     public function setPrefixPart(int $part, string $value): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 }
 
@@ -1145,72 +1188,94 @@ class SplFileInfo implements Stringable
 {
     public function __construct(string $filename) {}
 
+    #[TentativeType]
     public function getPath(): string {}
 
+    #[TentativeType]
     public function getFilename(): string {}
 
+    #[TentativeType]
     public function getExtension(): string {}
 
+    #[TentativeType]
     public function getBasename(string $suffix = ''): string {}
 
+    #[TentativeType]
     public function getPathname(): string {}
 
+    #[TentativeType]
     public function getPerms(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getInode(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getSize(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getOwner(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getGroup(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getATime(): int|false {}
 
+    #[TentativeType]
     public function getMTime(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getCTime(): int|false {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getType(): string|false {}
 
+    #[TentativeType]
     public function isWritable(): bool {}
 
+    #[TentativeType]
     public function isReadable(): bool {}
 
+    #[TentativeType]
     public function isExecutable(): bool {}
 
+    #[TentativeType]
     public function isFile(): bool {}
 
+    #[TentativeType]
     public function isDir(): bool {}
 
+    #[TentativeType]
     public function isLink(): bool {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function getLinkTarget(): string|false {}
 
+    #[TentativeType]
     public function getRealPath(): string|false {}
 
     /**
@@ -1220,6 +1285,7 @@ class SplFileInfo implements Stringable
      *
      * @return ($class is null ? SplFileInfo : T)
      */
+    #[TentativeType]
     public function getFileInfo(?string $class = null): SplFileInfo {}
 
     /**
@@ -1229,6 +1295,7 @@ class SplFileInfo implements Stringable
      *
      * @return ($class is null ? null|SplFileInfo : null|T)
      */
+    #[TentativeType]
     public function getPathInfo(?string $class = null): ?SplFileInfo {}
 
     /**
@@ -1236,6 +1303,7 @@ class SplFileInfo implements Stringable
      *
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function openFile(string $mode = 'r', bool $useIncludePath = false, $context = null): SplFileObject {}
 
     /**
@@ -1243,6 +1311,7 @@ class SplFileInfo implements Stringable
      *
      * @param class-string<T> $class
      */
+    #[TentativeType]
     public function setFileClass(string $class = SplFileObject::class): void {}
 
     /**
@@ -1250,6 +1319,7 @@ class SplFileInfo implements Stringable
      *
      * @param class-string<T> $class
      */
+    #[TentativeType]
     public function setInfoClass(string $class = SplFileInfo::class): void {}
 
     /**
@@ -1261,6 +1331,7 @@ class SplFileInfo implements Stringable
 
     public function __wakeup() {}
 
+    #[TentativeType]
     public function __debugInfo(): array {}
 }
 
@@ -1305,6 +1376,7 @@ class DirectoryIterator extends SplFileInfo implements SeekableIterator
      */
     public function valid() {}
 
+    #[TentativeType]
     public function isDot(): bool {}
 }
 
@@ -1335,6 +1407,7 @@ class FilesystemIterator extends DirectoryIterator implements Iterator
      *
      * @ignore-nullable-return
      */
+    #[TentativeType]
     public function current(): string|SplFileInfo|null {}
 
     /**
@@ -1377,12 +1450,16 @@ class RecursiveDirectoryIterator extends FilesystemIterator implements Recursive
 
     public function __construct(string $path, int $flags = self::KEY_AS_PATHNAME | self::CURRENT_AS_FILEINFO) {}
 
+    #[TentativeType]
     public function getChildren(): RecursiveDirectoryIterator {}
 
+    #[TentativeType]
     public function hasChildren(bool $allowLinks = false): bool {}
 
+    #[TentativeType]
     public function getSubPath(): string {}
 
+    #[TentativeType]
     public function getSubPathname(): string {}
 
     /**
@@ -1429,17 +1506,22 @@ class SplFileObject extends SplFileInfo implements RecursiveIterator, SeekableIt
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function eof(): bool {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
     /**
      * @throws RuntimeException
      */
+    #[TentativeType]
     public function fgets(): string {}
 
+    #[TentativeType]
     public function fread(int $length): string|false {}
 
     /**
@@ -1447,6 +1529,7 @@ class SplFileObject extends SplFileInfo implements RecursiveIterator, SeekableIt
      */
     public function fgetcsv(string $separator = ',', string $enclosure = "\"", string $escape = "\\") {}
 
+    #[TentativeType]
     public function fputcsv(
         array $fields,
         string $separator = ',',
@@ -1455,48 +1538,67 @@ class SplFileObject extends SplFileInfo implements RecursiveIterator, SeekableIt
         string $eol = PHP_EOL,
     ): int|false {}
 
+    #[TentativeType]
     public function setCsvControl(string $separator = ',', string $enclosure = "\"", string $escape = "\\"): void {}
 
+    #[TentativeType]
     public function getCsvControl(): array {}
 
+    #[TentativeType]
     public function flock(int $operation, int &$wouldBlock = null): bool {}
 
+    #[TentativeType]
     public function fflush(): bool {}
 
+    #[TentativeType]
     public function ftell(): int|false {}
 
+    #[TentativeType]
     public function fseek(int $offset, int $whence = SEEK_SET): int {}
 
+    #[TentativeType]
     public function fgetc(): string|false {}
 
+    #[TentativeType]
     public function fpassthru(): int {}
 
+    #[TentativeType]
     public function fscanf(string $format, mixed &...$vars): array|int|null {}
 
+    #[TentativeType]
     public function fwrite(string $data, int $length = 0): int|false {}
 
+    #[TentativeType]
     public function fstat(): array {}
 
+    #[TentativeType]
     public function ftruncate(int $size): bool {}
 
+    #[TentativeType]
     public function current(): string|array|false {}
 
+    #[TentativeType]
     public function key(): int {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function setFlags(int $flags): void {}
 
+    #[TentativeType]
     public function getFlags(): int {}
 
     /**
      * @throws DomainException
      */
+    #[TentativeType]
     public function setMaxLineLen(int $maxLength): void {}
 
     /**
      * @return int<0, max>
      */
+    #[TentativeType]
     public function getMaxLineLen(): int {}
 
     /**
@@ -1512,8 +1614,10 @@ class SplFileObject extends SplFileInfo implements RecursiveIterator, SeekableIt
     /**
      * @throws LogicException
      */
+    #[TentativeType]
     public function seek(int $line): void {}
 
+    #[TentativeType]
     public function getCurrentLine(): string {}
 
     public function __toString(): string {}
@@ -1542,83 +1646,109 @@ class SplDoublyLinkedList implements Iterator, Countable, ArrayAccess, Serializa
     /**
      * @param V $value
      */
+    #[TentativeType]
     public function add(int $index, mixed $value): void {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function pop(): mixed {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function shift(): mixed {}
 
     /**
      * @param V $value
      */
+    #[TentativeType]
     public function push(mixed $value): void {}
 
     /**
      * @param V $value
      */
+    #[TentativeType]
     public function unshift(mixed $value): void {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function top(): mixed {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function bottom(): mixed {}
 
+    #[TentativeType]
     public function count(): int {}
 
+    #[TentativeType]
     public function isEmpty(): bool {}
 
+    #[TentativeType]
     public function setIteratorMode(int $mode): int {}
 
+    #[TentativeType]
     public function getIteratorMode(): int {}
 
+    #[TentativeType]
     public function offsetExists($index): bool {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function offsetGet($index): mixed {}
 
     /**
      * @param V $value
      */
+    #[TentativeType]
     public function offsetSet($index, mixed $value): void {}
 
+    #[TentativeType]
     public function offsetUnset($index): void {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function current(): mixed {}
 
+    #[TentativeType]
     public function key(): int {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function prev(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
+    #[TentativeType]
     public function unserialize(string $data): void {}
 
+    #[TentativeType]
     public function serialize(): string {}
 
+    #[TentativeType]
     public function __debugInfo(): array {}
 
+    #[TentativeType]
     public function __serialize(): array {}
 
+    #[TentativeType]
     public function __unserialize(array $data): void {}
 }
 
@@ -1630,11 +1760,13 @@ class SplQueue extends SplDoublyLinkedList
     /**
      * @param V $value
      */
+    #[TentativeType]
     public function enqueue(mixed $value): void {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function dequeue(): mixed {}
 
     /**
@@ -1668,35 +1800,46 @@ abstract class SplHeap implements Iterator, Countable
     /**
      * @return V
      */
+    #[TentativeType]
     public function extract(): mixed {}
 
     /**
      * @param V $value
      */
+    #[TentativeType]
     public function insert(mixed $value): bool {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function top(): mixed {}
 
+    #[TentativeType]
     public function count(): int {}
 
+    #[TentativeType]
     public function isEmpty(): bool {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function current(): mixed {}
 
+    #[TentativeType]
     public function key(): int {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
+    #[TentativeType]
     public function recoverFromCorruption(): bool {}
 
     /**
@@ -1707,8 +1850,10 @@ abstract class SplHeap implements Iterator, Countable
      */
     abstract protected function compare($value1, $value2);
 
+    #[TentativeType]
     public function isCorrupted(): bool {}
 
+    #[TentativeType]
     public function __debugInfo(): array {}
 }
 
@@ -1724,6 +1869,7 @@ class SplMinHeap extends SplHeap
      *
      * @return int
      */
+    #[TentativeType]
     protected function compare(mixed $value1, mixed $value2): int {}
 
     /**
@@ -1796,6 +1942,7 @@ class SplMaxHeap extends SplHeap
      *
      * @return int
      */
+    #[TentativeType]
     protected function compare(mixed $value1, mixed $value2): int {}
 }
 
@@ -1815,58 +1962,74 @@ class SplPriorityQueue implements Iterator, Countable
      * @param TPriority $priority1
      * @param TPriority $priority2
      */
+    #[TentativeType]
     public function compare(mixed $priority1, mixed $priority2): int {}
 
     /**
      * @param V $value
      * @param TPriority $priority
      */
+    #[TentativeType]
     public function insert(mixed $value, mixed $priority): true {}
 
+    #[TentativeType]
     public function setExtractFlags(int $flags): int {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function top(): mixed {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function extract(): mixed {}
 
+    #[TentativeType]
     public function count(): int {}
 
+    #[TentativeType]
     public function isEmpty(): bool {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function current(): mixed {}
 
     /**
      * @return int
      */
+    #[TentativeType]
     public function key(): int {}
 
     /**
      * @return void
      */
+    #[TentativeType]
     public function next(): void {}
 
     /**
      * @return bool
      */
+    #[TentativeType]
     public function valid(): bool {}
 
+    #[TentativeType]
     public function recoverFromCorruption(): true {}
 
+    #[TentativeType]
     public function isCorrupted(): bool {}
 
+    #[TentativeType]
     public function getExtractFlags(): int {}
 
+    #[TentativeType]
     public function __debugInfo(): array {}
 }
 
@@ -1884,18 +2047,22 @@ class SplFixedArray implements Iterator, ArrayAccess, Countable, IteratorAggrega
     /**
      * @return int<0, max>
      */
+    #[TentativeType]
     public function count(): int {}
 
     /**
      * @return list<V>
      */
+    #[TentativeType]
     public function toArray(): array {}
 
+    #[TentativeType]
     public static function fromArray(array $array, bool $preserveKeys = true): SplFixedArray {}
 
     /**
      * @return int<0, max>
      */
+    #[TentativeType]
     public function getSize(): int {}
 
     /**
@@ -1906,6 +2073,7 @@ class SplFixedArray implements Iterator, ArrayAccess, Countable, IteratorAggrega
     /**
      * @param int $index
      */
+    #[TentativeType]
     public function offsetExists($index): bool {}
 
     /**
@@ -1913,17 +2081,20 @@ class SplFixedArray implements Iterator, ArrayAccess, Countable, IteratorAggrega
      *
      * @return V
      */
+    #[TentativeType]
     public function offsetGet($index): mixed {}
 
     /**
      * @param int $index
      * @param V $value
      */
+    #[TentativeType]
     public function offsetSet($index, mixed $value): void {}
 
     /**
      * @param int $index
      */
+    #[TentativeType]
     public function offsetUnset($index): void {}
 
     /**
@@ -1949,8 +2120,10 @@ class SplFixedArray implements Iterator, ArrayAccess, Countable, IteratorAggrega
     /**
      * @return bool
      */
+    #[TentativeType]
     public function valid(): bool {}
 
+    #[TentativeType]
     #[Deprecated('The function is deprecated', since: '8.4')]
     public function __wakeup(): void {}
 
@@ -1968,15 +2141,19 @@ class SplFixedArray implements Iterator, ArrayAccess, Countable, IteratorAggrega
 
 interface SplObserver
 {
+    #[TentativeType]
     public function update(SplSubject $subject): void;
 }
 
 interface SplSubject
 {
+    #[TentativeType]
     public function attach(SplObserver $observer): void;
 
+    #[TentativeType]
     public function detach(SplObserver $observer): void;
 
+    #[TentativeType]
     public function notify(): void;
 }
 
@@ -1993,6 +2170,7 @@ class SplObjectStorage implements Countable, SeekableIterator, Serializable, Arr
      * @param O $object
      * @param V $info
      */
+    #[TentativeType]
     public function attach(object $object, mixed $info = null): void {}
 
     /**
@@ -2000,36 +2178,43 @@ class SplObjectStorage implements Countable, SeekableIterator, Serializable, Arr
      *
      * @return void
      */
+    #[TentativeType]
     public function detach(object $object): void {}
 
     /**
      * @param O $object
      */
+    #[TentativeType]
     public function contains(object $object): bool {}
 
     /**
      * @param SplObjectStorage<O, V> $storage
      */
+    #[TentativeType]
     public function addAll(SplObjectStorage $storage): int {}
 
     /**
      * @param SplObjectStorage<O, V> $storage
      */
+    #[TentativeType]
     public function removeAll(SplObjectStorage $storage): int {}
 
     /**
      * @param SplObjectStorage<O, V> $storage
      */
+    #[TentativeType]
     public function removeAllExcept(SplObjectStorage $storage): int {}
 
     /**
      * @return V
      */
+    #[TentativeType]
     public function getInfo(): mixed {}
 
     /**
      * @param V $info
      */
+    #[TentativeType]
     public function setInfo(mixed $info): void {}
 
     /**
@@ -2037,40 +2222,49 @@ class SplObjectStorage implements Countable, SeekableIterator, Serializable, Arr
      *
      * @return int
      */
+    #[TentativeType]
     public function count(int $mode = COUNT_NORMAL): int {}
 
     /**
      * @return void
      */
+    #[TentativeType]
     public function rewind(): void {}
 
     /**
      * @return bool
      */
+    #[TentativeType]
     public function valid(): bool {}
 
     /**
      * @return int
      */
+    #[TentativeType]
     public function key(): int {}
 
     /**
      * @return O
      */
+    #[TentativeType]
     public function current(): object {}
 
     /**
      * @return void
      */
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function unserialize(string $data): void {}
 
+    #[TentativeType]
     public function serialize(): string {}
 
     /**
      * @param O $object
      */
+    #[TentativeType]
     public function offsetExists($object): bool {}
 
     /**
@@ -2079,11 +2273,13 @@ class SplObjectStorage implements Countable, SeekableIterator, Serializable, Arr
      *
      * @return void
      */
+    #[TentativeType]
     public function offsetSet(mixed $object, mixed $info = null): void {}
 
     /**
      * @param O $object
      */
+    #[TentativeType]
     public function offsetUnset($object): void {}
 
     /**
@@ -2091,17 +2287,22 @@ class SplObjectStorage implements Countable, SeekableIterator, Serializable, Arr
      *
      * @return V
      */
+    #[TentativeType]
     public function offsetGet($object): mixed {}
 
     /**
      * @param O $object
      */
+    #[TentativeType]
     public function getHash(object $object): string {}
 
+    #[TentativeType]
     public function __serialize(): array {}
 
+    #[TentativeType]
     public function __unserialize(array $data): void {}
 
+    #[TentativeType]
     public function __debugInfo(): array {}
 
     public function seek(int $offset): void {}
@@ -2116,32 +2317,44 @@ class MultipleIterator implements Iterator
 
     public function __construct(int $flags = MultipleIterator::MIT_NEED_ALL | MultipleIterator::MIT_KEYS_NUMERIC) {}
 
+    #[TentativeType]
     public function getFlags(): int {}
 
+    #[TentativeType]
     public function setFlags(int $flags): void {}
 
+    #[TentativeType]
     public function attachIterator(Iterator $iterator, int|string|null $info = null): void {}
 
+    #[TentativeType]
     public function detachIterator(Iterator $iterator): void {}
 
+    #[TentativeType]
     public function containsIterator(Iterator $iterator): bool {}
 
+    #[TentativeType]
     public function countIterators(): int {}
 
+    #[TentativeType]
     public function rewind(): void {}
 
+    #[TentativeType]
     public function valid(): bool {}
 
+    #[TentativeType]
     public function key(): array {}
 
     /**
      * @throws RuntimeException
      * @throws InvalidArgumentException
      */
+    #[TentativeType]
     public function current(): array {}
 
+    #[TentativeType]
     public function next(): void {}
 
+    #[TentativeType]
     public function __debugInfo(): array {}
 }
 

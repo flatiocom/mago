@@ -2,45 +2,61 @@
 
 interface SessionHandlerInterface
 {
+    #[TentativeType]
     public function close(): bool;
 
+    #[TentativeType]
     public function destroy(string $id): bool;
 
+    #[TentativeType]
     public function gc(int $max_lifetime): int|false;
 
+    #[TentativeType]
     public function open(string $path, string $name): bool;
 
+    #[TentativeType]
     public function read(string $id): string|false;
 
+    #[TentativeType]
     public function write(string $id, string $data): bool;
 }
 
 interface SessionIdInterface
 {
+    #[TentativeType]
     public function create_sid(): string;
 }
 
 interface SessionUpdateTimestampHandlerInterface
 {
+    #[TentativeType]
     public function validateId(string $id): bool;
 
+    #[TentativeType]
     public function updateTimestamp(string $id, string $data): bool;
 }
 
 class SessionHandler implements SessionHandlerInterface, SessionIdInterface
 {
+    #[TentativeType]
     public function close(): bool {}
 
+    #[TentativeType]
     public function create_sid(): string {}
 
+    #[TentativeType]
     public function destroy(string $id): bool {}
 
+    #[TentativeType]
     public function gc(int $max_lifetime): int|false {}
 
+    #[TentativeType]
     public function open(string $path, string $name): bool {}
 
+    #[TentativeType]
     public function read(string $id): string|false {}
 
+    #[TentativeType]
     public function write(string $id, string $data): bool {}
 }
 

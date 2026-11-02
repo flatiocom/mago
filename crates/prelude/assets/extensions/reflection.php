@@ -11,6 +11,7 @@ class Reflection
     /**
      * @return list<string>
      */
+    #[TentativeType]
     public static function getModifierNames(int $modifiers): array {}
 }
 
@@ -114,11 +115,13 @@ class ReflectionExtension implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getVersion(): ?string {}
 
     /**
@@ -126,6 +129,7 @@ class ReflectionExtension implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getFunctions(): array {}
 
     /**
@@ -133,6 +137,7 @@ class ReflectionExtension implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getConstants(): array {}
 
     /**
@@ -140,6 +145,7 @@ class ReflectionExtension implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getINIEntries(): array {}
 
     /**
@@ -147,6 +153,7 @@ class ReflectionExtension implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getClasses(): array {}
 
     /**
@@ -154,6 +161,7 @@ class ReflectionExtension implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getClassNames(): array {}
 
     /**
@@ -161,18 +169,22 @@ class ReflectionExtension implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getDependencies(): array {}
 
+    #[TentativeType]
     public function info(): void {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPersistent(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isTemporary(): bool {}
 
     private function __clone(): void {}
@@ -183,6 +195,7 @@ abstract class ReflectionType implements Stringable
     /**
      * @pure
      */
+    #[TentativeType]
     public function allowsNull(): bool {}
 
     public function __toString(): string {}
@@ -195,11 +208,13 @@ class ReflectionNamedType extends ReflectionType
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isBuiltin(): bool {}
 }
 
@@ -241,26 +256,31 @@ class ReflectionZendExtension implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getVersion(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getAuthor(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getURL(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getCopyright(): string {}
 
     private function __clone(): void {}
@@ -355,41 +375,49 @@ class ReflectionClassConstant implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDeclaringClass(): ReflectionClass {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDocComment(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getModifiers(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getValue(): mixed {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPrivate(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isProtected(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPublic(): bool {}
 
     public function __toString(): string {}
@@ -495,43 +523,52 @@ class ReflectionProperty implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getValue(?object $object = null): mixed {}
 
+    #[TentativeType]
     public function setValue(mixed $objectOrValue, mixed $value = UNKNOWN): void {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPublic(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPrivate(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isProtected(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isStatic(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isDefault(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getModifiers(): int {}
 
     /**
@@ -539,27 +576,32 @@ class ReflectionProperty implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getDeclaringClass(): ReflectionClass {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDocComment(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     #[Deprecated(since: '8.5', message: 'as it has no effect')]
     public function setAccessible(bool $accessible): void {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getType(): ReflectionNamedType|ReflectionUnionType|ReflectionIntersectionType|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasType(): bool {}
 
     /**
@@ -567,6 +609,7 @@ class ReflectionProperty implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function isInitialized(?object $object = null): bool {}
 
     /**
@@ -581,6 +624,7 @@ class ReflectionProperty implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDefaultValue(): mixed {}
 
     /**
@@ -724,31 +768,37 @@ class ReflectionParameter implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPassedByReference(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function canBePassedByValue(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDeclaringFunction(): ReflectionFunctionAbstract {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDeclaringClass(): ?ReflectionClass {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     #[Deprecated(
         since: '8.0',
         reason: 'Use ReflectionParameter::getType() and the ReflectionType APIs should be used instead.',
@@ -758,16 +808,19 @@ class ReflectionParameter implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasType(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getType(): ReflectionNamedType|ReflectionUnionType|ReflectionIntersectionType|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     #[Deprecated(
         since: '8.0',
         reason: 'Use ReflectionParameter::getType() and the ReflectionType APIs should be used instead.',
@@ -777,6 +830,7 @@ class ReflectionParameter implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     #[Deprecated(
         since: '8.0',
         reason: 'Use ReflectionParameter::getType() and the ReflectionType APIs should be used instead.',
@@ -786,21 +840,25 @@ class ReflectionParameter implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function allowsNull(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getPosition(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isOptional(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isDefaultValueAvailable(): bool {}
 
     /**
@@ -808,11 +866,13 @@ class ReflectionParameter implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getDefaultValue(): mixed {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isDefaultValueConstant(): bool {}
 
     /**
@@ -820,11 +880,13 @@ class ReflectionParameter implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getDefaultValueConstantName(): ?string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isVariadic(): bool {}
 
     /**
@@ -856,97 +918,116 @@ abstract class ReflectionFunctionAbstract implements Reflector
 
     private function __clone(): void {}
 
+    #[TentativeType]
     public function inNamespace(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isClosure(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isDeprecated(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isInternal(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isUserDefined(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isGenerator(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isVariadic(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getClosureThis(): ?object {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getClosureScopeClass(): ?ReflectionClass {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     #[Mago\AvailableSince(80100)]
     public function getClosureCalledClass(): ?ReflectionClass {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDocComment(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getEndLine(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getExtension(): ?ReflectionExtension {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getExtensionName(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getFileName(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getNamespaceName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getNumberOfParameters(): int {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getNumberOfRequiredParameters(): int {}
 
     /**
@@ -954,36 +1035,43 @@ abstract class ReflectionFunctionAbstract implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getParameters(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getReturnType(): ReflectionNamedType|ReflectionUnionType|ReflectionIntersectionType|null {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getShortName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getStartLine(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getStaticVariables(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function returnsReference(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasReturnType(): bool {}
 
     /**
@@ -1018,6 +1106,7 @@ abstract class ReflectionFunctionAbstract implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function isStatic(): bool {}
 
     public function __toString(): string {}
@@ -1042,11 +1131,14 @@ class ReflectionFunction extends ReflectionFunctionAbstract
     /**
      * @pure
      */
+    #[TentativeType]
     #[\Deprecated(since: '8.0', reason: 'ReflectionFunction can no longer be constructed for disabled functions.')]
     public function isDisabled(): bool {}
 
+    #[TentativeType]
     public function invoke(mixed ...$args): mixed {}
 
+    #[TentativeType]
     public function invokeArgs(array $args): mixed {}
 
     /**
@@ -1054,6 +1146,7 @@ class ReflectionFunction extends ReflectionFunctionAbstract
      *
      * @pure
      */
+    #[TentativeType]
     public function getClosure(): Closure {}
 
     /**
@@ -1103,41 +1196,49 @@ class ReflectionMethod extends ReflectionFunctionAbstract
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPublic(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isPrivate(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isProtected(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isAbstract(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isFinal(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isStatic(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isConstructor(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isDestructor(): bool {}
 
     /**
@@ -1146,11 +1247,13 @@ class ReflectionMethod extends ReflectionFunctionAbstract
      * @throws ValueError
      * @throws ReflectionException
      */
+    #[TentativeType]
     public function getClosure(?object $object = null): Closure {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getModifiers(): int {}
 
     /**
@@ -1165,11 +1268,13 @@ class ReflectionMethod extends ReflectionFunctionAbstract
      *
      * @throws ReflectionException
      */
+    #[TentativeType]
     public function invokeArgs(?object $object, array $args): mixed {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDeclaringClass(): ReflectionClass {}
 
     /**
@@ -1177,11 +1282,13 @@ class ReflectionMethod extends ReflectionFunctionAbstract
      *
      * @pure
      */
+    #[TentativeType]
     public function getPrototype(): ReflectionMethod {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     #[Deprecated(since: '8.5', message: 'as it has no effect')]
     public function setAccessible(bool $accessible): void {}
 
@@ -1231,56 +1338,67 @@ class ReflectionClass implements Reflector
      *
      * @return class-string<T>
      */
+    #[TentativeType]
     public function getName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isInternal(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isUserDefined(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isInstantiable(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isCloneable(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getFileName(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getStartLine(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getEndLine(): int|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getDocComment(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getConstructor(): ?ReflectionMethod {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasMethod(string $name): bool {}
 
     /**
@@ -1290,6 +1408,7 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getMethod(string $name): ReflectionMethod {}
 
     /**
@@ -1297,11 +1416,13 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getMethods(?int $filter = null): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasProperty(string $name): bool {}
 
     /**
@@ -1311,6 +1432,7 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getProperty(string $name): ReflectionProperty {}
 
     /**
@@ -1318,6 +1440,7 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getProperties(?int $filter = null): array {}
 
     /**
@@ -1325,6 +1448,7 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getReflectionConstant(string $name): ReflectionClassConstant|false {}
 
     /**
@@ -1332,11 +1456,13 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getReflectionConstants(?int $filter = null): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function hasConstant(string $name): bool {}
 
     /**
@@ -1344,11 +1470,13 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getConstants(?int $filter = null): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getConstant(string $name): mixed {}
 
     /**
@@ -1356,21 +1484,25 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getInterfaces(): array {}
 
     /**
      * @return list<interface-string>
      */
+    #[TentativeType]
     public function getInterfaceNames(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isAnonymous(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isInterface(): bool {}
 
     /**
@@ -1378,6 +1510,7 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getTraits(): array {}
 
     /**
@@ -1385,6 +1518,7 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getTraitNames(): array {}
 
     /**
@@ -1392,21 +1526,25 @@ class ReflectionClass implements Reflector
      *
      * @pure
      */
+    #[TentativeType]
     public function getTraitAliases(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isTrait(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isAbstract(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isFinal(): bool {}
 
     /**
@@ -1418,6 +1556,7 @@ class ReflectionClass implements Reflector
     /**
      * @pure
      */
+    #[TentativeType]
     public function getModifiers(): int {}
 
     /**
@@ -1425,6 +1564,7 @@ class ReflectionClass implements Reflector
      *
      * @assert-if-true T $object
      */
+    #[TentativeType]
     public function isInstance(object $object): bool {}
 
     /**
@@ -1439,6 +1579,7 @@ class ReflectionClass implements Reflector
      *
      * @throws ReflectionException
      */
+    #[TentativeType]
     public function newInstanceWithoutConstructor(): object {}
 
     /**
@@ -1446,75 +1587,90 @@ class ReflectionClass implements Reflector
      *
      * @throws ReflectionException
      */
+    #[TentativeType]
     public function newInstanceArgs(array $args = []): ?object {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getParentClass(): ReflectionClass|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isSubclassOf(ReflectionClass|string $class): bool {}
 
     /**
      * @pure
      * @return array<string, mixed>
      */
+    #[TentativeType]
     public function getStaticProperties(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getStaticPropertyValue(string $name, mixed $default = UNKNOWN): mixed {}
 
+    #[TentativeType]
     public function setStaticPropertyValue(string $name, mixed $value): void {}
 
     /**
      * @pure
      * @return array<string, mixed>
      */
+    #[TentativeType]
     public function getDefaultProperties(): array {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isIterateable(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function isIterable(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function implementsInterface(ReflectionClass|string $interface): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getExtension(): ?ReflectionExtension {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getExtensionName(): string|false {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function inNamespace(): bool {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getNamespaceName(): string {}
 
     /**
      * @pure
      */
+    #[TentativeType]
     public function getShortName(): string {}
 
     /**

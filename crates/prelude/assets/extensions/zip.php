@@ -232,18 +232,25 @@ class ZipArchive implements Countable
 
     public int $lastId;
 
+    #[TentativeType]
     public function open(string $filename, int $flags = null): int|bool {}
 
+    #[TentativeType]
     public function close(): bool {}
 
+    #[TentativeType]
     public function count(): int {}
 
+    #[TentativeType]
     public function getStatusString(): string {}
 
+    #[TentativeType]
     public function addEmptyDir(string $dirname, int $flags = 0): bool {}
 
+    #[TentativeType]
     public function addFromString(string $name, string $content, int $flags = 8192): bool {}
 
+    #[TentativeType]
     public function addFile(
         string $filepath,
         string $entryname = null,
@@ -252,69 +259,97 @@ class ZipArchive implements Countable
         int $flags = 8192,
     ): bool {}
 
+    #[TentativeType]
     public function addGlob(string $pattern, int $flags = 0, array $options = []): array|false {}
 
+    #[TentativeType]
     public function addPattern(string $pattern, string $path = '.', array $options = []): array|false {}
 
+    #[TentativeType]
     public function renameIndex(int $index, string $new_name): bool {}
 
+    #[TentativeType]
     public function renameName(string $name, string $new_name): bool {}
 
+    #[TentativeType]
     public function setArchiveComment(string $comment): bool {}
 
+    #[TentativeType]
     public function getArchiveComment(int $flags = null): string|false {}
 
+    #[TentativeType]
     public function setCommentIndex(int $index, string $comment): bool {}
 
+    #[TentativeType]
     public function setCommentName(string $name, string $comment): bool {}
 
+    #[TentativeType]
     public function setCompressionIndex(int $index, int $method, int $compflags = 0): bool {}
 
+    #[TentativeType]
     public function setCompressionName(string $name, int $method, int $compflags = 0): bool {}
 
+    #[TentativeType]
     public function setEncryptionIndex(int $index, int $method, ?string $password = null): bool {}
 
+    #[TentativeType]
     public function setEncryptionName(string $name, int $method, ?string $password = null): bool {}
 
+    #[TentativeType]
     public function setPassword(string $password): bool {}
 
+    #[TentativeType]
     public function getCommentIndex(int $index, int $flags = null): string|false {}
 
+    #[TentativeType]
     public function getCommentName(string $name, int $flags = null): string|false {}
 
+    #[TentativeType]
     public function deleteIndex(int $index): bool {}
 
+    #[TentativeType]
     public function deleteName(string $name): bool {}
 
     /**
      * @return array{name: string, index: int, crc: int, size: int, mtime: int, comp_size: int, comp_method: int, encryption_method: int}|false
      */
+    #[TentativeType]
     public function statName(string $name, int $flags = null): array|false {}
 
     /**
      * @return array{name: string, index: int, crc: int, size: int, mtime: int, comp_size: int, comp_method: int, encryption_method: int}|false
      */
+    #[TentativeType]
     public function statIndex(int $index, int $flags = null): array|false {}
 
+    #[TentativeType]
     public function locateName(string $name, int $flags = null): int|false {}
 
+    #[TentativeType]
     public function getNameIndex(int $index, int $flags = null): string|false {}
 
+    #[TentativeType]
     public function unchangeArchive(): bool {}
 
+    #[TentativeType]
     public function unchangeAll(): bool {}
 
+    #[TentativeType]
     public function unchangeIndex(int $index): bool {}
 
+    #[TentativeType]
     public function unchangeName(string $name): bool {}
 
     /**
      * @param array<string>|string|null $files
      */
+    #[TentativeType]
     public function extractTo(string $pathto, array|string|null $files = null): bool {}
 
+    #[TentativeType]
     public function getFromName(string $name, int $len = 0, int $flags = null): string|false {}
 
+    #[TentativeType]
     public function getFromIndex(int $index, int $len = 0, int $flags = null): string|false {}
 
     /**
@@ -327,26 +362,35 @@ class ZipArchive implements Countable
      */
     public function getStreamIndex(int $index, int $flags = 0) {}
 
+    #[TentativeType]
     public function setExternalAttributesName(string $name, int $opsys, int $attr, int $flags = null): bool {}
 
+    #[TentativeType]
     public function getExternalAttributesName(string $name, int &$opsys, int &$attr, int $flags = null): bool {}
 
+    #[TentativeType]
     public function setExternalAttributesIndex(int $index, int $opsys, int $attr, int $flags = null): bool {}
 
+    #[TentativeType]
     public function getExternalAttributesIndex(int $index, int &$opsys, int &$attr, int $flags = null): bool {}
 
     public static function isEncryptionMethodSupported(int $method, bool $enc = true): bool {}
 
     public static function isCompressionMethodSupported(int $method, bool $enc = true): bool {}
 
+    #[TentativeType]
     public function registerCancelCallback(callable $callback): bool {}
 
+    #[TentativeType]
     public function registerProgressCallback(float $rate, callable $callback): bool {}
 
+    #[TentativeType]
     public function setMtimeName(string $name, int $timestamp, int $flags = null): bool {}
 
+    #[TentativeType]
     public function setMtimeIndex(int $index, int $timestamp, int $flags = null): bool {}
 
+    #[TentativeType]
     public function replaceFile(
         string $filepath,
         int $index,

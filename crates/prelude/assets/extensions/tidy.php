@@ -875,11 +875,14 @@ class tidy
         bool $useIncludePath = false,
     ) {}
 
+    #[TentativeType]
     public function getOpt(string $option): string|int|bool {}
 
+    #[TentativeType]
     public function cleanRepair(): bool {}
 
     /** @tentative-return-type */
+    #[TentativeType]
     public function parseFile(
         string $filename,
         array|string|null $config = null,
@@ -888,14 +891,17 @@ class tidy
     ): bool {}
 
     /** @tentative-return-type */
+    #[TentativeType]
     public function parseString(string $string, array|string|null $config = null, ?string $encoding = null): bool {}
 
+    #[TentativeType]
     public static function repairString(
         string $string,
         array|string|null $config = null,
         ?string $encoding = null,
     ): string|false {}
 
+    #[TentativeType]
     public static function repairFile(
         string $filename,
         array|string|null $config = null,
@@ -903,28 +909,40 @@ class tidy
         bool $useIncludePath = false,
     ): string|false {}
 
+    #[TentativeType]
     public function diagnose(): bool {}
 
+    #[TentativeType]
     public function getRelease(): string {}
 
+    #[TentativeType]
     public function getConfig(): array {}
 
+    #[TentativeType]
     public function getStatus(): int {}
 
+    #[TentativeType]
     public function getHtmlVer(): int {}
 
+    #[TentativeType]
     public function getOptDoc(string $option): string|false {}
 
+    #[TentativeType]
     public function isXhtml(): bool {}
 
+    #[TentativeType]
     public function isXml(): bool {}
 
+    #[TentativeType]
     public function root(): ?tidyNode {}
 
+    #[TentativeType]
     public function head(): ?tidyNode {}
 
+    #[TentativeType]
     public function html(): ?tidyNode {}
 
+    #[TentativeType]
     public function body(): ?tidyNode {}
 }
 

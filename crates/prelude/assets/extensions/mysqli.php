@@ -693,18 +693,25 @@ class mysqli
         ?string $socket = null,
     ) {}
 
+    #[TentativeType]
     public function autocommit(bool $enable): bool {}
 
+    #[TentativeType]
     public function begin_transaction(int $flags = 0, ?string $name = null): bool {}
 
+    #[TentativeType]
     public function change_user(string $username, #[\SensitiveParameter] string $password, ?string $database): bool {}
 
+    #[TentativeType]
     public function character_set_name(): string {}
 
+    #[TentativeType]
     public function close(): true {}
 
+    #[TentativeType]
     public function commit(int $flags = 0, ?string $name = null): bool {}
 
+    #[TentativeType]
     public function connect(
         ?string $hostname = null,
         ?string $username = null,
@@ -715,24 +722,31 @@ class mysqli
         ?string $socket = null,
     ): bool {}
 
+    #[TentativeType]
     public function dump_debug_info(): bool {}
 
+    #[TentativeType]
     public function debug(string $options): true {}
 
+    #[TentativeType]
     public function get_charset(): ?object {}
 
     public function execute_query(string $query, ?array $params = null): mysqli_result|bool {}
 
+    #[TentativeType]
     #[Deprecated(since: '8.1', message: 'use mysqli_get_client_info() instead')]
     public function get_client_info(): string {}
 
     /**
      * @return array<string, mixed>
      */
+    #[TentativeType]
     public function get_connection_stats(): array {}
 
+    #[TentativeType]
     public function get_server_info(): string {}
 
+    #[TentativeType]
     public function get_warnings(): mysqli_warning|false {}
 
     /**
@@ -741,21 +755,27 @@ class mysqli
     #[Deprecated(since: '8.1', message: 'replace calls to parent::init() with parent::__construct()')]
     public function init() {}
 
+    #[TentativeType]
     #[Deprecated(since: '8.4', message: 'use KILL CONNECTION/QUERY SQL statement instead')]
     public function kill(int $process_id): bool {}
 
+    #[TentativeType]
     public function multi_query(string $query): bool {}
 
+    #[TentativeType]
     public function more_results(): bool {}
 
+    #[TentativeType]
     public function next_result(): bool {}
 
+    #[TentativeType]
     #[Deprecated(
         since: '8.4',
         message: 'because the reconnect feature has been removed in PHP 8.2 and this method is now redundant',
     )]
     public function ping(): bool {}
 
+    #[TentativeType]
     public static function poll(
         ?array &$read,
         ?array &$error,
@@ -764,10 +784,13 @@ class mysqli
         int $microseconds = 0,
     ): int|false {}
 
+    #[TentativeType]
     public function prepare(string $query): mysqli_stmt|false {}
 
+    #[TentativeType]
     public function query(string $query, int $result_mode = MYSQLI_STORE_RESULT): mysqli_result|bool {}
 
+    #[TentativeType]
     public function real_connect(
         ?string $hostname = null,
         ?string $username = null,
@@ -779,34 +802,46 @@ class mysqli
         int $flags = 0,
     ): bool {}
 
+    #[TentativeType]
     public function real_escape_string(string $string): string {}
 
+    #[TentativeType]
     public function reap_async_query(): mysqli_result|bool {}
 
+    #[TentativeType]
     public function escape_string(string $string): string {}
 
+    #[TentativeType]
     public function real_query(string $query): bool {}
 
+    #[TentativeType]
     public function release_savepoint(string $name): bool {}
 
+    #[TentativeType]
     public function rollback(int $flags = 0, ?string $name = null): bool {}
 
+    #[TentativeType]
     public function savepoint(string $name): bool {}
 
+    #[TentativeType]
     public function select_db(string $database): bool {}
 
+    #[TentativeType]
     public function set_charset(string $charset): bool {}
 
     /**
      * @param string|int $value
      */
+    #[TentativeType]
     public function options(int $option, $value): bool {}
 
     /**
      * @param string|int $value
      */
+    #[TentativeType]
     public function set_opt(int $option, $value): bool {}
 
+    #[TentativeType]
     public function ssl_set(
         ?string $key,
         ?string $certificate,
@@ -815,16 +850,22 @@ class mysqli
         ?string $cipher_algos,
     ): true {}
 
+    #[TentativeType]
     public function stat(): string|false {}
 
+    #[TentativeType]
     public function stmt_init(): mysqli_stmt|false {}
 
+    #[TentativeType]
     public function store_result(int $mode = 0): mysqli_result|false {}
 
+    #[TentativeType]
     public function thread_safe(): bool {}
 
+    #[TentativeType]
     public function use_result(): mysqli_result|false {}
 
+    #[TentativeType]
     #[Deprecated(since: '8.4', message: 'use FLUSH SQL statement instead')]
     public function refresh(int $flags): bool {}
 }
@@ -855,47 +896,60 @@ class mysqli_result implements IteratorAggregate
 
     public function __construct(mysqli $mysql, int $result_mode = MYSQLI_STORE_RESULT) {}
 
+    #[TentativeType]
     public function close(): void {}
 
+    #[TentativeType]
     public function free(): void {}
 
+    #[TentativeType]
     public function data_seek(int $offset): bool {}
 
+    #[TentativeType]
     public function fetch_field(): object|false {}
 
     /**
      * @return array<int, object>
      */
+    #[TentativeType]
     public function fetch_fields(): array {}
 
+    #[TentativeType]
     public function fetch_field_direct(int $index): object|false {}
 
     /**
      * @return array<int|string, mixed>
      */
+    #[TentativeType]
     public function fetch_all(int $mode = MYSQLI_NUM): array {}
 
     /**
      * @return array<int|string, mixed>|null|false
      */
+    #[TentativeType]
     public function fetch_array(int $mode = MYSQLI_BOTH): array|null|false {}
 
     /**
      * @return array<int|string, mixed>|null|false
      */
+    #[TentativeType]
     public function fetch_assoc(): array|null|false {}
 
+    #[TentativeType]
     public function fetch_object(string $class = 'stdClass', array $constructor_args = []): object|null|false {}
 
     /**
      * @return array<int, mixed>|null|false
      */
+    #[TentativeType]
     public function fetch_row(): array|null|false {}
 
     public function fetch_column(int $column = 0): null|int|float|string|false {}
 
+    #[TentativeType]
     public function field_seek(int $index): true {}
 
+    #[TentativeType]
     public function free_result(): void {}
 
     public function getIterator(): Iterator {}
@@ -953,42 +1007,61 @@ class mysqli_stmt
 
     public function __construct(mysqli $mysql, ?string $query = null) {}
 
+    #[TentativeType]
     public function attr_get(int $attribute): int {}
 
+    #[TentativeType]
     public function attr_set(int $attribute, int $value): bool {}
 
+    #[TentativeType]
     public function bind_param(string $types, mixed &...$vars): bool {}
 
+    #[TentativeType]
     public function bind_result(mixed &...$vars): bool {}
 
+    #[TentativeType]
     public function close(): true {}
 
+    #[TentativeType]
     public function data_seek(int $offset): void {}
 
+    #[TentativeType]
     public function execute(?array $params = null): bool {}
 
+    #[TentativeType]
     public function fetch(): ?bool {}
 
+    #[TentativeType]
     public function get_warnings(): mysqli_warning|false {}
 
+    #[TentativeType]
     public function result_metadata(): mysqli_result|false {}
 
+    #[TentativeType]
     public function more_results(): bool {}
 
+    #[TentativeType]
     public function next_result(): bool {}
 
+    #[TentativeType]
     public function num_rows(): int|string {}
 
+    #[TentativeType]
     public function send_long_data(int $param_num, string $data): bool {}
 
+    #[TentativeType]
     public function free_result(): void {}
 
+    #[TentativeType]
     public function reset(): bool {}
 
+    #[TentativeType]
     public function prepare(string $query): bool {}
 
+    #[TentativeType]
     public function store_result(): bool {}
 
+    #[TentativeType]
     public function get_result(): mysqli_result|false {}
 }
 

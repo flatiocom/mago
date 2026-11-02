@@ -33,6 +33,7 @@ interface IteratorAggregate extends Traversable
      *
      * @throws Exception
      */
+    #[TentativeType]
     public function getIterator(): Traversable;
 }
 
@@ -47,17 +48,22 @@ interface Iterator extends Traversable
     /**
      * @return null|V
      */
+    #[TentativeType]
     public function current(): mixed;
 
+    #[TentativeType]
     public function next(): void;
 
     /**
      * @return null|K
      */
+    #[TentativeType]
     public function key(): mixed;
 
+    #[TentativeType]
     public function valid(): bool;
 
+    #[TentativeType]
     public function rewind(): void;
 }
 
@@ -72,6 +78,7 @@ interface ArrayAccess
      *
      * @no-named-arguments
      */
+    #[TentativeType]
     public function offsetExists(mixed $offset): bool;
 
     /**
@@ -81,6 +88,7 @@ interface ArrayAccess
      *
      * @no-named-arguments
      */
+    #[TentativeType]
     public function offsetGet(mixed $offset): mixed;
 
     /**
@@ -89,6 +97,7 @@ interface ArrayAccess
      *
      * @no-named-arguments
      */
+    #[TentativeType]
     public function offsetSet(mixed $offset, mixed $value): void;
 
     /**
@@ -96,6 +105,7 @@ interface ArrayAccess
      *
      * @no-named-arguments
      */
+    #[TentativeType]
     public function offsetUnset(mixed $offset): void;
 }
 
@@ -201,6 +211,7 @@ class Exception implements Throwable
 
     private function __clone(): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 }
 
@@ -267,6 +278,7 @@ class Error implements Throwable
 
     private function __clone(): void {}
 
+    #[TentativeType]
     public function __wakeup(): void {}
 }
 
@@ -367,6 +379,7 @@ final class Closure
 
 interface Countable
 {
+    #[TentativeType]
     public function count(): int;
 }
 

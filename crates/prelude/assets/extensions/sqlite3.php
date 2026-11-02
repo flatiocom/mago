@@ -109,48 +109,66 @@ class SQLite3
         string $encryptionKey = '',
     ) {}
 
+    #[TentativeType]
     public function open(
         string $filename,
         int $flags = SQLITE3_OPEN_READWRITE | SQLITE3_OPEN_CREATE,
         string $encryptionKey = '',
     ): void {}
 
+    #[TentativeType]
     public function close(): bool {}
 
+    #[TentativeType]
     public static function version(): array {}
 
+    #[TentativeType]
     public function lastInsertRowID(): int {}
 
+    #[TentativeType]
     public function lastErrorCode(): int {}
 
+    #[TentativeType]
     public function lastExtendedErrorCode(): int {}
 
+    #[TentativeType]
     public function lastErrorMsg(): string {}
 
+    #[TentativeType]
     public function changes(): int {}
 
+    #[TentativeType]
     public function busyTimeout(int $milliseconds): bool {}
 
+    #[TentativeType]
     public function loadExtension(string $name): bool {}
 
+    #[TentativeType]
     public function backup(
         SQLite3 $destination,
         string $sourceDatabase = 'main',
         string $destinationDatabase = 'main',
     ): bool {}
 
+    #[TentativeType]
     public static function escapeString(string $string): string {}
 
+    #[TentativeType]
     public function prepare(string $query): SQLite3Stmt|false {}
 
+    #[TentativeType]
     public function exec(string $query): bool {}
 
+    #[TentativeType]
     public function query(string $query): SQLite3Result|false {}
 
+    #[TentativeType]
     public function querySingle(string $query, bool $entireRow = false): mixed {}
 
+    #[TentativeType]
     public function createFunction(string $name, callable $callback, int $argCount = -1, int $flags = 0): bool {}
 
+    #[TentativeType]
     public function createAggregate(
         string $name,
         callable $stepCallback,
@@ -158,6 +176,7 @@ class SQLite3
         int $argCount = -1,
     ): bool {}
 
+    #[TentativeType]
     public function createCollation(string $name, callable $callback): bool {}
 
     /** @return resource|false */
@@ -169,10 +188,13 @@ class SQLite3
         int $flags = SQLITE3_OPEN_READONLY,
     ) {}
 
+    #[TentativeType]
     public function enableExceptions(bool $enable = false): bool {}
 
+    #[TentativeType]
     public function enableExtendedResultCodes(bool $enable = true): bool {}
 
+    #[TentativeType]
     public function setAuthorizer(?callable $callback): bool {}
 }
 
@@ -180,22 +202,31 @@ class SQLite3Stmt
 {
     private function __construct(SQLite3 $sqlite3, string $query) {}
 
+    #[TentativeType]
     public function bindParam(string|int $param, mixed &$var, int $type = SQLITE3_TEXT): bool {}
 
+    #[TentativeType]
     public function bindValue(string|int $param, mixed $value, int $type = SQLITE3_TEXT): bool {}
 
+    #[TentativeType]
     public function clear(): bool {}
 
+    #[TentativeType]
     public function close(): true {}
 
+    #[TentativeType]
     public function execute(): SQLite3Result|false {}
 
+    #[TentativeType]
     public function getSQL(bool $expand = false): string|false {}
 
+    #[TentativeType]
     public function paramCount(): int {}
 
+    #[TentativeType]
     public function readOnly(): bool {}
 
+    #[TentativeType]
     public function reset(): bool {}
 
     public function busy(): bool {}
@@ -213,15 +244,19 @@ class SQLite3Result
 {
     private function __construct() {}
 
+    #[TentativeType]
     public function numColumns(): int {}
 
+    #[TentativeType]
     public function columnName(int $column): string|false {}
 
+    #[TentativeType]
     public function columnType(int $column): int|false {}
 
     /**
      * @return ($mode is 2 ? non-empty-list<mixed>|false : ($mode is 1 ? non-empty-array<string, mixed>|false : non-empty-array<int|string, mixed>|false))
      */
+    #[TentativeType]
     public function fetchArray(int $mode = SQLITE3_BOTH): array|false {}
 
     /**
@@ -229,7 +264,9 @@ class SQLite3Result
      */
     public function fetchAll(int $mode = SQLITE3_BOTH): array|false {}
 
+    #[TentativeType]
     public function reset(): bool {}
 
+    #[TentativeType]
     public function finalize(): true {}
 }

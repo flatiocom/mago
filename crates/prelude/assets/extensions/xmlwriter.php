@@ -122,11 +122,13 @@ function xmlwriter_flush(XMLWriter $writer, bool $empty = true): string|int {}
 
 class XMLWriter
 {
+    #[TentativeType]
     public function openUri(string $uri): bool {}
 
     #[Mago\AvailableSince(80400)]
     public static function toUri(string $uri): static {}
 
+    #[TentativeType]
     public function openMemory(): bool {}
 
     public static function toMemory(): static {}
@@ -135,66 +137,95 @@ class XMLWriter
     #[Mago\AvailableSince(80400)]
     public static function toStream($stream): static {}
 
+    #[TentativeType]
     public function setIndent(bool $enable): bool {}
 
+    #[TentativeType]
     public function setIndentString(string $indentation): bool {}
 
+    #[TentativeType]
     public function startComment(): bool {}
 
+    #[TentativeType]
     public function endComment(): bool {}
 
+    #[TentativeType]
     public function startAttribute(string $name): bool {}
 
+    #[TentativeType]
     public function endAttribute(): bool {}
 
+    #[TentativeType]
     public function writeAttribute(string $name, string $value): bool {}
 
+    #[TentativeType]
     public function startAttributeNs(?string $prefix, string $name, ?string $namespace): bool {}
 
+    #[TentativeType]
     public function writeAttributeNs(?string $prefix, string $name, ?string $namespace, string $value): bool {}
 
+    #[TentativeType]
     public function startElement(string $name): bool {}
 
+    #[TentativeType]
     public function endElement(): bool {}
 
+    #[TentativeType]
     public function fullEndElement(): bool {}
 
+    #[TentativeType]
     public function startElementNs(?string $prefix, string $name, ?string $namespace): bool {}
 
+    #[TentativeType]
     public function writeElement(string $name, ?string $content = null): bool {}
 
+    #[TentativeType]
     public function writeElementNs(?string $prefix, string $name, ?string $namespace, ?string $content = null): bool {}
 
+    #[TentativeType]
     public function startPi(string $target): bool {}
 
+    #[TentativeType]
     public function endPi(): bool {}
 
+    #[TentativeType]
     public function writePi(string $target, string $content): bool {}
 
+    #[TentativeType]
     public function startCdata(): bool {}
 
+    #[TentativeType]
     public function endCdata(): bool {}
 
+    #[TentativeType]
     public function writeCdata(string $content): bool {}
 
+    #[TentativeType]
     public function text(string $content): bool {}
 
+    #[TentativeType]
     public function writeRaw(string $content): bool {}
 
+    #[TentativeType]
     public function startDocument(
         ?string $version = '1.0',
         ?string $encoding = null,
         ?string $standalone = null,
     ): bool {}
 
+    #[TentativeType]
     public function endDocument(): bool {}
 
+    #[TentativeType]
     public function writeComment(string $content): bool {}
 
+    #[TentativeType]
     public function startDtd(string $qualifiedName, ?string $publicId = null, ?string $systemId = null): bool {}
 
+    #[TentativeType]
     public function endDtd(): bool {}
 
+    #[TentativeType]
     public function writeDtd(
         string $name,
         ?string $publicId = null,
@@ -202,22 +233,31 @@ class XMLWriter
         ?string $content = null,
     ): bool {}
 
+    #[TentativeType]
     public function startDtdElement(string $qualifiedName): bool {}
 
+    #[TentativeType]
     public function endDtdElement(): bool {}
 
+    #[TentativeType]
     public function writeDtdElement(string $name, string $content): bool {}
 
+    #[TentativeType]
     public function startDtdAttlist(string $name): bool {}
 
+    #[TentativeType]
     public function endDtdAttlist(): bool {}
 
+    #[TentativeType]
     public function writeDtdAttlist(string $name, string $content): bool {}
 
+    #[TentativeType]
     public function startDtdEntity(string $name, bool $isParam): bool {}
 
+    #[TentativeType]
     public function endDtdEntity(): bool {}
 
+    #[TentativeType]
     public function writeDtdEntity(
         string $name,
         string $content,
@@ -227,7 +267,9 @@ class XMLWriter
         ?string $notationData = null,
     ): bool {}
 
+    #[TentativeType]
     public function outputMemory(bool $flush = true): string {}
 
+    #[TentativeType]
     public function flush(bool $empty = true): string|int {}
 }
