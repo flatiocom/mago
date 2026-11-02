@@ -892,9 +892,11 @@ where
                         }
                     }),
                 );
+
+                break;
             }
 
-            break;
+            continue;
         } else if *argument_offset >= invocation.target.parameter_count() {
             has_too_many_arguments = true;
             continue;
