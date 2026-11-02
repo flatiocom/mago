@@ -79,8 +79,10 @@ trait BaseControllerTrait
     public function checkStatic(): bool
     {
         $selfClass = self::USER_CLASS;
+        // @mago-expect analysis:mixed-assignment
         $staticClass = static::USER_CLASS;
 
+        // @mago-expect analysis:unknown-class-instantiation,ambiguous-object-method-access
         return self::current()->isAdmin()
             && static::current()->isAdmin()
             && (new $selfClass())->isAdmin()

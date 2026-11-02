@@ -373,23 +373,7 @@ where
         let display = format!("{}::{}", metadata.original_name, const_name);
         crate::utils::availability::check_class_constant_availability(context, constant_metadata, &display, const_span);
 
-        // Prefer the docblock type (@var) when it exists, as it reflects the user's
-        // intended type. When type_metadata was merely copied from the type declaration
-        // (they are equal), fall back to the more specific inferred type.
-        let mut const_type = if is_overridable_by_late_static_binding(metadata, constant_metadata, resolution_origin) {
-            constant_metadata.type_metadata.clone().map_or_else(get_mixed, |type_metadata| type_metadata.type_union)
-        } else if let Some(type_metadata) = &constant_metadata.type_metadata
-            && type_metadata.from_docblock
-        {
-            type_metadata.type_union.clone()
-        } else {
-            constant_metadata
-                .inferred_type
-                .clone()
-                .map(wrap_atomic)
-                .or_else(|| constant_metadata.type_metadata.clone().map(|s| s.type_union))
-                .unwrap_or_else(get_mixed)
-        };
+        let mut const_type = get_constant_type(metadata, constant_metadata, resolution_origin);
 
         expander::expand_union(
             context.codebase,
@@ -463,18 +447,7 @@ where
                 const_span,
             );
 
-            let mut const_type = if let Some(type_metadata) = &constant_metadata.type_metadata
-                && type_metadata.from_docblock
-            {
-                type_metadata.type_union.clone()
-            } else {
-                constant_metadata
-                    .inferred_type
-                    .clone()
-                    .map(wrap_atomic)
-                    .or_else(|| constant_metadata.type_metadata.clone().map(|s| s.type_union))
-                    .unwrap_or_else(get_mixed)
-            };
+            let mut const_type = get_constant_type(required_metadata, constant_metadata, resolution_origin);
 
             expander::expand_union(
                 context.codebase,
@@ -518,6 +491,30 @@ where
     // Not found, report error.
     report_non_existent_constant(context, metadata, const_name, class_span, const_span);
     None
+}
+
+/// The declared type of a constant a child class may override, otherwise the docblock type (`@var`) when it exists,
+/// as it reflects the user's intended type. When type_metadata was merely copied from the type declaration
+/// (they are equal), the more specific inferred type.
+fn get_constant_type(
+    metadata: &ClassLikeMetadata,
+    constant_metadata: &ClassLikeConstantMetadata,
+    resolution_origin: &ResolutionOrigin,
+) -> TUnion {
+    if is_overridable_by_late_static_binding(metadata, constant_metadata, resolution_origin) {
+        constant_metadata.type_metadata.clone().map_or_else(get_mixed, |type_metadata| type_metadata.type_union)
+    } else if let Some(type_metadata) = &constant_metadata.type_metadata
+        && type_metadata.from_docblock
+    {
+        type_metadata.type_union.clone()
+    } else {
+        constant_metadata
+            .inferred_type
+            .clone()
+            .map(wrap_atomic)
+            .or_else(|| constant_metadata.type_metadata.clone().map(|s| s.type_union))
+            .unwrap_or_else(get_mixed)
+    }
 }
 
 fn is_overridable_by_late_static_binding(
