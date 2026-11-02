@@ -493,8 +493,21 @@ where
                         resulting_types.push(TAtomic::Scalar(TScalar::float()));
                     }
                 }
-                _ => {
-                    // Other scalars (ClassLikeString, etc.) - treat as possibly valid
+                TScalar::ArrayKey | TScalar::Generic => {
+                    invalid_operand_messages.push((
+                        format!("Cannot reliably {verb} `{}`; it may be a non-numeric string", scalar.get_id()),
+                        operand_span,
+                    ));
+                    resulting_types.push(TAtomic::Scalar(TScalar::int()));
+                    resulting_types.push(TAtomic::Scalar(TScalar::float()));
+                }
+                TScalar::ClassLikeString(_) => {
+                    invalid_operand_messages.push((
+                        format!("Cannot {verb} `{}`; a class name is never numeric", scalar.get_id()),
+                        operand_span,
+                    ));
+                }
+                TScalar::Numeric => {
                     resulting_types.push(TAtomic::Scalar(TScalar::int()));
                     resulting_types.push(TAtomic::Scalar(TScalar::float()));
                 }
