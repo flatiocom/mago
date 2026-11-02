@@ -98,13 +98,15 @@ impl DeadCatchCheck {
         context: &mut Context<'_, 'arena, A>,
         catch_clause: &TryCatchClause<'arena>,
         caught_classes: &WordSet,
-    ) where
+    ) -> bool
+    where
         A: Arena,
     {
         let mut caught_classes = caught_classes.iter().copied().collect::<Vec<_>>();
         caught_classes.sort();
 
         let catches_throwable = caught_classes.iter().any(|class| class.as_bytes().eq_ignore_ascii_case(THROWABLE));
+        let mut catches_nothing = !caught_classes.is_empty();
 
         for caught_class in &caught_classes {
             if self.caught_above.iter().any(|above| is_same_or_subclass(context, *caught_class, *above)) {
@@ -118,7 +120,9 @@ impl DeadCatchCheck {
                     || self.throw_points.iter().any(|throw_point| can_be_caught_as(context, throw_point, *caught_class))
             };
 
-            if !is_thrown {
+            if is_thrown {
+                catches_nothing = false;
+            } else {
                 report_dead_catch(context, catch_clause, *caught_class);
             }
         }
@@ -126,6 +130,8 @@ impl DeadCatchCheck {
         remove_caught_throw_points(context, &mut self.throw_points, &caught_classes);
 
         self.caught_above.extend(caught_classes);
+
+        catches_nothing
     }
 }
 

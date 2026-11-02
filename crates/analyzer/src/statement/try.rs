@@ -219,9 +219,9 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
             catch_block_context.flags.set_has_returned(false);
             let (caught_classes, has_valid_caught_classes) =
                 get_caught_classes(context, &catch_block_context, artifacts, &catch_clause.hint);
-            if let Some(dead_catch_check) = &mut dead_catch_check {
-                dead_catch_check.check_catch_clause(context, catch_clause, &caught_classes);
-            }
+            let catches_nothing = dead_catch_check.as_mut().is_some_and(|dead_catch_check| {
+                dead_catch_check.check_catch_clause(context, catch_clause, &caught_classes)
+            });
 
             for (variable_id, variable_type) in &mut catch_block_context.locals {
                 if let Some(old_type) = old_block_context_locals.get(variable_id) {
@@ -379,7 +379,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for Try<'arena> {
                 let end_action_only =
                     try_block_control_actions.len() == 1 && try_block_control_actions.contains(ControlAction::End);
 
-                if block_context.flags.collect_initializations() {
+                if block_context.flags.collect_initializations() && !catches_nothing {
                     merge_catch_initializations(
                         block_context,
                         &catch_block_context,
