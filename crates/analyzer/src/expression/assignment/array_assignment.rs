@@ -43,6 +43,7 @@ use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
 use crate::context::Context;
 use crate::context::block::BlockContext;
+use crate::context::block::NestedElementWrite;
 use crate::context::block::ReferenceConstraintSource;
 use crate::context::scope::narrowed_function_call_reads;
 use crate::context::scope::var_has_root;
@@ -140,6 +141,9 @@ where
             })
             .collect::<Vec<_>>()
     });
+    let nested_elements = get_nested_elements(&array_target_expressions, root_var_id, context, block_context);
+    let root_element = nested_elements.last().copied().flatten();
+
     let current_index = analyze_nested_array_assignment(
         context,
         block_context,
@@ -151,6 +155,7 @@ where
         &mut current_type,
         index_read_first,
         target_was_narrowed,
+        &nested_elements,
     )?;
 
     let mut key_values = Vec::new();
@@ -174,7 +179,8 @@ where
         target_span: array_target.span(),
         mark_non_empty: root_var_id.is_none_or(|id| !block_context.references_in_scope.contains_key(&id)),
     };
-    let root_array_type = root_offset_write.apply(context, block_context, Rc::unwrap_or_clone(root_array_type));
+    let root_before_write = get_container_before_element_writes(block_context, root_element, root_array_type);
+    let root_array_type = root_offset_write.apply(context, block_context, (*root_before_write).clone());
     let remembered_root_write =
         root_var_id.is_some_and(|id| block_context.locals.contains_key(&id)).then_some(&root_offset_write);
 
@@ -212,6 +218,12 @@ where
         block_context.locals.insert(*root_var_id, Rc::clone(&root_array_type));
         block_context.locals.retain(|variable_id, _| !narrowed_function_call_reads(*variable_id, *root_var_id));
         block_context.assigned_variable_ids.insert(*root_var_id, array_target.span().start_offset());
+
+        block_context.nested_element_writes.retain(|element_id, _| {
+            !var_has_root(*element_id, *root_var_id)
+                || nested_elements.iter().flatten().any(|element| element.id == *element_id)
+        });
+        remember_element_write(block_context, root_element, root_before_write, Rc::clone(&root_array_type));
 
         if let Some(written_ids) = &written_ids_under_mixed_root {
             block_context.locals.retain(|variable_id, _| {
@@ -806,6 +818,7 @@ pub(crate) fn analyze_nested_array_assignment<'ctx, 'ast, 'arena, A>(
     last_array_expr_type: &mut Rc<TUnion>,
     index_read_first: bool,
     target_was_narrowed: bool,
+    nested_elements: &[Option<NestedElement>],
 ) -> Result<Option<&'ast Expression<'arena>>, AnalysisError>
 where
     A: Arena,
@@ -939,7 +952,7 @@ where
 
         let array_expr_type = Rc::new(if is_last {
             assign_value_type.clone()
-        } else if !target_is_narrowed && is_optional_shape_item(&array_expression_type, &new_index_type) {
+        } else if !target_is_narrowed && may_lack_item(&array_expression_type, &new_index_type) {
             let mut array_expr_type =
                 add_union_type(array_expr_type, &get_empty_keyed_array(), context.codebase, CombinerOptions::default());
             array_expr_type.set_possibly_undefined(false, None);
@@ -993,7 +1006,10 @@ where
     var_id_additions.pop();
 
     for (i, array_target) in array_target_expressions.iter().enumerate() {
-        let mut array_expr_type = artifacts.get_expression_type(array_target).cloned().unwrap_or_else(get_mixed);
+        let array_expr_type =
+            artifacts.get_rc_expression_type(array_target).cloned().unwrap_or_else(|| Rc::new(get_mixed()));
+        let element = nested_elements[i];
+        let container_before_write = get_container_before_element_writes(block_context, element, array_expr_type);
 
         let index_type = if let Some(current_index) = last_array_expression_index {
             artifacts.get_rc_expression_type(current_index).cloned()
@@ -1014,15 +1030,14 @@ where
                 mago_word::word(&combined)
             });
 
-        array_expr_type = update_type_with_key_values(
+        *last_array_expr_type = Rc::new(update_type_with_key_values(
             context,
-            array_expr_type,
+            (*container_before_write).clone(),
             last_array_expr_type,
             &key_values,
             index_type.as_ref(),
-        );
-
-        *last_array_expr_type = Rc::new(array_expr_type);
+        ));
+        remember_element_write(block_context, element, container_before_write, Rc::clone(last_array_expr_type));
         last_array_expression_index = array_target.get_index();
 
         if let Some(array_expr_id) = &array_expr_id
@@ -1049,17 +1064,87 @@ where
     Ok(last_array_expression_index)
 }
 
-fn is_optional_shape_item(container_type: &TUnion, index_type: &TUnion) -> bool {
-    let Some(key) = index_type.get_single_array_key() else {
-        return false;
-    };
+#[derive(Clone, Copy)]
+pub(crate) struct NestedElement {
+    id: Word,
+    in_scope: bool,
+}
+
+fn get_nested_elements<A>(
+    array_target_expressions: &[ArrayTarget<'_, '_>],
+    root_var_id: Option<Word>,
+    context: &Context<'_, '_, A>,
+    block_context: &BlockContext<'_>,
+) -> Vec<Option<NestedElement>>
+where
+    A: Arena,
+{
+    let root_is_tracked = root_var_id.is_some_and(|root_var_id| {
+        !block_context.references_in_scope.contains_key(&root_var_id)
+            && !block_context.references_in_scope.values().any(|referenced| *referenced == root_var_id)
+    });
+    if !root_is_tracked {
+        return vec![None; array_target_expressions.len()];
+    }
+
+    let replaced_target = None;
+    let written_containers = array_target_expressions.iter().skip(1).map(|array_target| {
+        let ArrayTarget::Access(element_access) = array_target else {
+            return None;
+        };
+
+        let id = get_array_access_id(
+            element_access,
+            block_context.scope.get_class_like_name(),
+            context.resolved_names,
+            Some(context.codebase),
+        )
+        .filter(|id| has_dynamic_index(id.as_bytes()))?;
+        let in_scope = block_context.locals.get(&id).is_some_and(|element_type| !element_type.possibly_undefined());
+
+        Some(NestedElement { id, in_scope })
+    });
+
+    std::iter::once(replaced_target).chain(written_containers).collect()
+}
+
+fn get_container_before_element_writes(
+    block_context: &BlockContext<'_>,
+    element: Option<NestedElement>,
+    container_type: Rc<TUnion>,
+) -> Rc<TUnion> {
+    element
+        .filter(|element| element.in_scope)
+        .and_then(|element| block_context.nested_element_writes.get(&element.id))
+        .filter(|element_write| *element_write.container_after_last_write == *container_type)
+        .map_or(container_type, |element_write| Rc::clone(&element_write.container_before_first_write))
+}
+
+fn remember_element_write(
+    block_context: &mut BlockContext<'_>,
+    element: Option<NestedElement>,
+    container_before_first_write: Rc<TUnion>,
+    container_after_last_write: Rc<TUnion>,
+) {
+    if let Some(element) = element {
+        block_context
+            .nested_element_writes
+            .insert(element.id, NestedElementWrite { container_before_first_write, container_after_last_write });
+    }
+}
+
+fn may_lack_item(container_type: &TUnion, index_type: &TUnion) -> bool {
+    let key = index_type.get_single_array_key();
 
     container_type.types.iter().any(|atomic| {
-        matches!(
-            atomic,
-            TAtomic::Array(TArray::Keyed(keyed))
-                if keyed.get_known_items().and_then(|items| items.get(&key)).is_some_and(|(optional, _)| *optional)
-        )
+        let TAtomic::Array(TArray::Keyed(keyed)) = atomic else {
+            return false;
+        };
+
+        match key.as_ref().and_then(|key| keyed.get_known_items().and_then(|items| items.get(key))) {
+            Some((optional, _)) => *optional,
+            None => keyed.parameters.is_some(),
+        }
     })
 }
 

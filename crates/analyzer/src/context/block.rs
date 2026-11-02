@@ -58,6 +58,12 @@ pub struct ReferenceConstraint {
     pub constraint_type: Option<Rc<TUnion>>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NestedElementWrite {
+    pub container_before_first_write: Rc<TUnion>,
+    pub container_after_last_write: Rc<TUnion>,
+}
+
 #[derive(Clone, Debug)]
 pub struct BlockContext<'ctx> {
     pub scope: ScopeContext<'ctx>,
@@ -69,6 +75,7 @@ pub struct BlockContext<'ctx> {
     pub assigned_variable_ids: WordMap<u32>,
     pub possibly_assigned_variable_ids: WordSet,
     pub derived_local_sources: WordMap<Word>,
+    pub nested_element_writes: WordMap<NestedElementWrite>,
 
     /// Maps a variable holding the result of `get_class($source)` to `$source`, so that
     /// `get_class()` case narrowing on the holder propagates back to the tested variable.
@@ -229,6 +236,7 @@ impl<'ctx> BlockContext<'ctx> {
             assigned_variable_ids: WordMap::default(),
             possibly_assigned_variable_ids: WordSet::default(),
             derived_local_sources: WordMap::default(),
+            nested_element_writes: WordMap::default(),
             class_string_sources: WordMap::default(),
             possibly_undefined_variable_ids: WordSet::default(),
             referenced_counts: WordMap::default(),
