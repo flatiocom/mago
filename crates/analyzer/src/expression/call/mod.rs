@@ -46,6 +46,7 @@ use crate::reconciler::assertion_reconciler;
 use crate::utils::expression::get_non_nullsafe_expression_id;
 use crate::utils::names::display_function_like_identifier;
 
+mod call_user_func;
 pub mod function_call;
 mod in_array;
 pub mod method_call;

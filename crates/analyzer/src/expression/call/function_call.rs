@@ -23,6 +23,7 @@ use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::expression::call::analyze_invocation_targets;
+use crate::expression::call::call_user_func::check_call_user_func_arguments;
 use crate::expression::call::get_function_like_target;
 use crate::expression::call::get_function_like_target_with_skip;
 use crate::expression::call::in_array::report_constant_in_array;
@@ -97,6 +98,7 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for FunctionCall<'arena> {
         )?;
 
         report_constant_in_array(context, artifacts, self);
+        check_call_user_func_arguments(context, artifacts, self);
 
         if context.plugin_registry.has_function_call_hooks() {
             let mut hook_context = HookContext::new(context.codebase, context.source_file, block_context, artifacts);
