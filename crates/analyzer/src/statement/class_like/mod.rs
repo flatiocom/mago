@@ -64,10 +64,12 @@ use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
 use crate::plugin::context::HookContext;
 use crate::statement::attributes::analyze_class_like_attributes;
+use crate::statement::class_like::clone_reassignment::CloneReassignedProperties;
 use crate::statement::class_like::method_signature::SignatureCompatibilityIssue;
 use crate::statement::function_like::report_undefined_type_references;
 use crate::utils::missing_type_hints;
 
+mod clone_reassignment;
 pub mod constant;
 pub mod enum_case;
 pub mod initialization;
@@ -1081,6 +1083,13 @@ where
 
     if let Some(constructor) = constructor {
         constructor.analyze(context, &mut block_context, artifacts)?;
+
+        let clone_reassigned = CloneReassignedProperties::collect(members);
+        if let Some(property_types) = context.constructor_property_types.get_mut(&class_like_metadata.name) {
+            property_types.retain(|(expression_id, _)| {
+                expression_id.as_bytes().strip_prefix(b"$this->").is_none_or(|name| !clone_reassigned.contains(name))
+            });
+        }
     }
 
     for member in members {
