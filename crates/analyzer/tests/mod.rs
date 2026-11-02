@@ -3695,3 +3695,4 @@ test_case!(dead_catch_keeps_try_initializations, {
 });
 test_case!(new_static_in_trait_judged_per_using_class);
 test_case!(late_static_constant_in_trait_declared_type);
+test_case!(offset_on_object_without_array_access_reports_the_access_only);

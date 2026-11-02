@@ -1714,6 +1714,8 @@ where
             .with_help("Ensure the object implements `ArrayAccess` before attempting to access it as an array."),
         );
 
+        *has_valid_expected_index = true;
+
         return get_implicit_mixed();
     };
 
