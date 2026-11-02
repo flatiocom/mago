@@ -3688,6 +3688,7 @@ test_case!(callable_variadic_parameter_checked_over_accepting_rest);
 test_case!(call_user_func_checks_arguments_against_callback);
 test_case!(call_user_func_returns_function_name_callback_type);
 test_case!(call_user_func_array_checks_arguments_against_callback);
+test_case!(call_user_func_counts_arguments_against_callback);
 test_case!(redundant_check_on_trait_property_initialized_by_constructor);
 test_case!(dead_catch_keeps_try_initializations, {
     let mut s = crate::framework::default_test_settings();
