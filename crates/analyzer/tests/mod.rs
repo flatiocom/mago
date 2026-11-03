@@ -3692,6 +3692,7 @@ test_case!(call_user_func_counts_arguments_against_callback);
 test_case!(call_user_func_finds_callback_and_arguments_by_name);
 test_case!(call_user_func_passes_named_arguments_to_callback);
 test_case!(call_user_func_unpacks_arguments_for_callback);
+test_case!(call_user_func_skips_unpacked_value_without_element_type);
 test_case!(call_user_func_rejects_positional_after_named_argument);
 test_case!(call_user_func_rejects_parameter_passed_twice);
 test_case!(named_argument_collected_by_variadic_keeps_binding_later_arguments);

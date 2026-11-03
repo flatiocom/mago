@@ -153,8 +153,7 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
         let Some(parameter_type) = parameters[parameter_offset].get_type_signature() else {
             continue;
         };
-        let Some(value_type) = value.value_type.as_ref().or_else(|| artifacts.get_expression_type(value.expression))
-        else {
+        let Some(value_type) = value.value_type.as_ref() else {
             continue;
         };
 
@@ -416,7 +415,7 @@ where
             values.push(PassedValue {
                 expression: argument.expression,
                 name: argument.name,
-                value_type: None,
+                value_type: artifacts.get_expression_type(argument.expression).cloned(),
                 stands_for_any_count: false,
                 string_keys: None,
             });
