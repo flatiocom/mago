@@ -113,7 +113,8 @@ where
 {
     // Handle both named arguments and named placeholders
     if let Some(parameter_name) = argument.get_parameter_name() {
-        argument_offset = find_named_parameter_offset(target, parameter_name)?;
+        argument_offset =
+            find_named_parameter_offset(target, parameter_name).or_else(|| get_name_collecting_offset(target))?;
     }
 
     argument_offset = adjust_offset_for_variadic(target, argument_offset);
@@ -156,6 +157,14 @@ where
     target
         .iter_parameters()
         .position(|parameter| parameter.get_name().is_some_and(|param_name| argument_variable_name == param_name.0))
+}
+
+fn get_name_collecting_offset(target: &InvocationTarget<'_>) -> Option<usize> {
+    let variadic_offset = target.parameter_count().checked_sub(1)?;
+    let collects_names = target.get_parameter(variadic_offset).is_some_and(|parameter| parameter.is_variadic())
+        && !target.get_function_like_metadata().is_some_and(|metadata| metadata.flags.is_built_in());
+
+    collects_names.then_some(variadic_offset)
 }
 
 /// Adjusts argument offset for variadic parameters.
@@ -285,6 +294,7 @@ where
                 offsets
                     .get(name)
                     .and_then(|offset| invocation.target.get_parameter(*offset).map(|parameter| (*offset, parameter)))
+                    .or_else(|| get_parameter_of_argument(&invocation.target, &argument, offset))
             } else {
                 get_parameter_of_argument(&invocation.target, &argument, offset)
             };
@@ -749,7 +759,10 @@ where
 
             if let Some(named_argument) = argument.get_named_argument() {
                 let named_value_display = BytesDisplay(named_argument.name.value);
-                if let Some(previous_span) = assigned_parameters_by_name.get(&parameter_offset) {
+                let names_parameter = parameter_ref
+                    .get_name()
+                    .is_some_and(|name| name.0.as_bytes().strip_prefix(b"$") == Some(named_argument.name.value));
+                if let Some(previous_span) = assigned_parameters_by_name.get(named_argument.name.value) {
                     has_named_argument_anomaly = true;
                     let target_name_str = invocation.target.guess_name(context);
                     context.collector.report_with_code(
@@ -767,7 +780,9 @@ where
                         )
                         .with_help("Remove one of the duplicate named arguments."),
                     );
-                } else if let Some(previous_span) = assigned_parameters_by_position.get(&parameter_offset) {
+                } else if names_parameter
+                    && let Some(previous_span) = assigned_parameters_by_position.get(&parameter_offset)
+                {
                     has_named_argument_anomaly = true;
                     let target_name_str = invocation.target.guess_name(context);
                     if parameter_ref.is_variadic() {
@@ -799,9 +814,9 @@ where
                             .with_help("Provide the argument either positionally or by name, but not both."),
                         );
                     }
-                    assigned_parameters_by_name.insert(parameter_offset, named_argument.name.span());
+                    assigned_parameters_by_name.insert(named_argument.name.value, named_argument.name.span());
                 } else {
-                    assigned_parameters_by_name.insert(parameter_offset, named_argument.name.span());
+                    assigned_parameters_by_name.insert(named_argument.name.value, named_argument.name.span());
                 }
             } else {
                 assigned_parameters_by_position.insert(parameter_offset, argument.span());

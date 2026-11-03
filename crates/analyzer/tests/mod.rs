@@ -3718,3 +3718,4 @@ test_case!(readonly_property_type_not_kept_when_a_clone_reassigns_it);
 test_case!(unpacked_iterable_checks_first_parameter);
 test_case!(nested_write_through_general_array_key);
 test_case!(offset_on_array_or_object_without_array_access_checks_the_array_key);
+test_case!(variadic_parameter_checks_named_arguments_it_collects);
