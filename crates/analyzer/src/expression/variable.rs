@@ -13,7 +13,9 @@ use mago_reporting::Annotation;
 use mago_reporting::Issue;
 use mago_span::HasSpan;
 use mago_span::Span;
+use mago_syntax::cst::ArrayAccess;
 use mago_syntax::cst::DirectVariable;
+use mago_syntax::cst::Expression;
 use mago_syntax::cst::IndirectVariable;
 use mago_syntax::cst::NestedVariable;
 use mago_syntax::cst::Variable;
@@ -21,6 +23,7 @@ use mago_syntax::cst::Variable;
 use crate::analyzable::Analyzable;
 use crate::artifacts::AnalysisArtifacts;
 use crate::code::IssueCode;
+use crate::common::synthetic::new_synthetic_variable;
 use crate::context::Context;
 use crate::context::block::BlockContext;
 use crate::error::AnalysisError;
@@ -75,6 +78,26 @@ impl<'ast, 'arena> Analyzable<'ast, 'arena> for IndirectVariable<'arena> {
     where
         A: Arena,
     {
+        if let Expression::ArrayAccess(access) = self.expression
+            && let Expression::Identifier(name) = access.array
+        {
+            let variable_name = [b"$", name.value()].concat();
+            let access_on_variable = context.arena.alloc(ArrayAccess {
+                array: context.arena.alloc(new_synthetic_variable(context.arena, &variable_name, name.span())),
+                left_bracket: access.left_bracket,
+                index: access.index,
+                right_bracket: access.right_bracket,
+            });
+
+            access_on_variable.analyze(context, block_context, artifacts)?;
+
+            let resulting_type =
+                artifacts.get_rc_expression_type(access_on_variable).cloned().unwrap_or_else(|| Rc::new(get_mixed()));
+            artifacts.set_rc_expression_type(self, resulting_type);
+
+            return Ok(());
+        }
+
         self.expression.analyze(context, block_context, artifacts)?;
 
         let resulting_type = match artifacts.get_rc_expression_type(&self.expression).cloned() {

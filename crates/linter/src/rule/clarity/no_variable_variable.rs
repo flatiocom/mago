@@ -98,9 +98,7 @@ impl LintRule for NoVariableVariableRule {
 
         let span = match variable {
             Variable::Nested(nested_variable) => nested_variable.span(),
-            Variable::Indirect(indirect_variable)
-                if !matches!(indirect_variable.expression, Expression::Identifier(_)) =>
-            {
+            Variable::Indirect(indirect_variable) if !names_a_variable(indirect_variable.expression) => {
                 indirect_variable.span()
             }
             _ => return,
@@ -121,6 +119,14 @@ impl LintRule for NoVariableVariableRule {
             )
             .with_help("Refactor the code to avoid using variable variables."),
         );
+    }
+}
+
+fn names_a_variable(expression: &Expression<'_>) -> bool {
+    match expression {
+        Expression::Identifier(_) => true,
+        Expression::ArrayAccess(access) => matches!(access.array, Expression::Identifier(_)),
+        _ => false,
     }
 }
 
@@ -153,6 +159,16 @@ mod tests {
             <?php
 
             echo "${name}";
+        "#}
+    }
+
+    test_lint_success! {
+        name = interpolated_braced_array_name_is_not_reported,
+        rule = NoVariableVariableRule,
+        code = indoc! {r#"
+            <?php
+
+            echo "${name['k']}";
         "#}
     }
 }

@@ -3723,3 +3723,4 @@ test_case!(call_user_func_array_rejects_unpacked_positional_after_named);
 test_case!(offset_on_array_or_member_without_offsets_checks_the_array_key);
 test_case!(offset_with_template_key_is_judged_by_its_constraint);
 test_case!(offset_with_key_that_may_be_bool_is_invalid);
+test_case!(interpolated_braced_array_name_reads_the_variable);
