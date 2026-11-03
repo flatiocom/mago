@@ -3740,3 +3740,4 @@ test_case!(offset_on_list_with_numeric_mixed_or_bounded_template_key_may_not_exi
     s.strict_array_index_existence = true;
     s
 });
+test_case!(numeric_docblock_type_on_int_float_string_native_type);

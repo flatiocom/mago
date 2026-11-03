@@ -12,6 +12,9 @@ use crate::ttype::combiner::CombinerOptions;
 use crate::ttype::comparator::ComparisonResult;
 use crate::ttype::comparator::atomic_comparator;
 use crate::ttype::comparator::iterable_comparator;
+use crate::ttype::get_float;
+use crate::ttype::get_int;
+use crate::ttype::get_numeric_string;
 use crate::ttype::template::TemplateBound;
 use crate::ttype::union::TUnion;
 use crate::ttype::wrap_atomic;
@@ -222,6 +225,22 @@ fn is_contained_by_atomic(
         if has_int && has_string {
             return true;
         }
+    }
+
+    if matches!(input_type_part, TAtomic::Scalar(TScalar::Numeric))
+        && [get_int(), get_float(), get_numeric_string()].iter().all(|numeric_part| {
+            is_contained_by(
+                codebase,
+                numeric_part,
+                container_type,
+                ignore_null,
+                ignore_false,
+                inside_assertion,
+                &mut ComparisonResult::new(),
+            )
+        })
+    {
+        return true;
     }
 
     if matches!(input_type_part, TAtomic::Scalar(TScalar::Generic))

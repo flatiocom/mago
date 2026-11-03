@@ -45,6 +45,7 @@ use mago_codex::ttype::get_keyed_array;
 use mago_codex::ttype::get_list;
 use mago_codex::ttype::get_mixed;
 use mago_codex::ttype::get_never;
+use mago_codex::ttype::get_numeric_string;
 use mago_codex::ttype::get_void;
 use mago_codex::ttype::template::GenericTemplate;
 use mago_codex::ttype::template::TemplateResult;
@@ -525,7 +526,14 @@ where
                                     native_atomic,
                                     false,
                                     &mut ComparisonResult::default(),
-                                )
+                                ) || matches!(docblock_atomic, TAtomic::Scalar(TScalar::Numeric))
+                                    && atomic_comparator::is_contained_by(
+                                        context.codebase,
+                                        get_numeric_string().get_single(),
+                                        native_atomic,
+                                        false,
+                                        &mut ComparisonResult::default(),
+                                    )
                             })
                         })
                         .collect();
