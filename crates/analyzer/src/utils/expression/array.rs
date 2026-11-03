@@ -220,7 +220,8 @@ where
     let mut has_union_key_mismatch = false; // Track if we're in a union where key exists in some but not all variants
     let mut reported_undefined_key = false;
     let mut has_null_or_false_container = false;
-    let mut has_object_without_array_access = false;
+    let mut has_member_without_offsets = false;
+    let mut has_array_member = false;
     let mut string_value_rejecting_write = None;
     context.collector.start_recording();
     while let Some(atomic_var_type) = array_atomic_types.pop() {
@@ -235,6 +236,8 @@ where
 
             continue;
         }
+
+        has_array_member |= atomic_var_type.is_array();
 
         match atomic_var_type {
             TAtomic::Array(TArray::List(_)) => {
@@ -426,7 +429,7 @@ where
                     atomic_var_type,
                     index_type,
                     &mut has_valid_expected_index,
-                    &mut has_object_without_array_access,
+                    &mut has_member_without_offsets,
                     &mut expected_index_types,
                     assign_value_type,
                 );
@@ -481,7 +484,7 @@ where
                     }
                 }
 
-                has_valid_expected_index = true;
+                has_member_without_offsets = true;
             }
         }
     }
@@ -490,8 +493,8 @@ where
         has_valid_expected_index = true;
     }
 
-    if has_object_without_array_access
-        && (!array_like_type.has_array()
+    if has_member_without_offsets
+        && (!has_array_member
             || index_type.types.iter().all(|atomic| atomic.is_int() || atomic.is_any_string() || atomic.is_array_key()))
     {
         has_valid_expected_index = true;
