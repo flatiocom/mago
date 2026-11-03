@@ -33,6 +33,7 @@ use crate::context::Context;
 use crate::invocation::InvocationTarget;
 use crate::invocation::arguments::UnpackedStringKeys;
 use crate::invocation::arguments::get_unpacked_string_keys;
+use crate::invocation::arguments::may_unpack_positional_keys;
 use crate::invocation::arguments::verify_argument_type;
 
 struct ForwardedCall<'arena> {
@@ -53,6 +54,7 @@ struct PassedValue<'arena> {
     value_type: Option<TUnion>,
     stands_for_any_count: bool,
     string_keys: Option<UnpackedStringKeys>,
+    positional_keys: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -103,12 +105,46 @@ pub(super) fn check_call_user_func_arguments<'arena, A>(
         get_callback_metadata(context, &signature).is_some_and(|metadata| metadata.flags.forbids_named_arguments());
     let mut passed_parameters: Vec<Option<PassedAs>> = vec![None; parameters.len()];
     let mut named_value_passed = false;
+    let mut unpacked_string_keys: Option<UnpackedStringKeys> = None;
 
     for (offset, value) in values.iter().enumerate() {
+        if value.name.is_none()
+            && !value.stands_for_any_count
+            && !named_value_passed
+            && let Some(string_keys) = unpacked_string_keys
+        {
+            report_positional_after_named(
+                context,
+                &call,
+                value.expression,
+                &format!("Positional argument after an unpacked array with {}", string_keys.describe()),
+                "Passed by position after the unpacked array",
+                "Move the value before the unpacked array.",
+            );
+        }
+
+        unpacked_string_keys = unpacked_string_keys.or(value.string_keys);
+
         let parameter_offset = match value.name {
             None if named_value_passed => {
                 if !value.stands_for_any_count {
-                    report_positional_after_named(context, &call, value.expression);
+                    report_positional_after_named(
+                        context,
+                        &call,
+                        value.expression,
+                        "Positional argument after a named one",
+                        "Passed by position after a named argument",
+                        "Move the value before the named arguments, or pass it by name.",
+                    );
+                } else if value.positional_keys {
+                    report_positional_after_named(
+                        context,
+                        &call,
+                        value.expression,
+                        "Unpacked array with integer keys after a named argument",
+                        "PHP passes integer keys on by position",
+                        "Unpack the array before the named arguments.",
+                    );
                 }
 
                 continue;
@@ -283,21 +319,25 @@ fn report_named_argument_not_allowed<A>(
     );
 }
 
-fn report_positional_after_named<A>(context: &mut Context<'_, '_, A>, call: &ForwardedCall<'_>, value: &Expression<'_>)
-where
+fn report_positional_after_named<A>(
+    context: &mut Context<'_, '_, A>,
+    call: &ForwardedCall<'_>,
+    value: &Expression<'_>,
+    problem: &str,
+    label: &'static str,
+    help: &'static str,
+) where
     A: Arena,
 {
     let function_name = call.function_name;
 
     context.collector.report_with_code(
         IssueCode::PositionalArgumentAfterNamed,
-        Issue::error(format!(
-            "Positional argument after a named one in the arguments `{function_name}()` passes on to its callback."
-        ))
-        .with_annotation(Annotation::primary(value.span()).with_message("Passed by position after a named argument"))
-        .with_annotation(Annotation::secondary(call.callback.span()).with_message("For this callback"))
-        .with_note("PHP throws an `Error`: a positional argument cannot follow a named one.")
-        .with_help("Move the value before the named arguments, or pass it by name."),
+        Issue::error(format!("{problem} in the arguments `{function_name}()` passes on to its callback."))
+            .with_annotation(Annotation::primary(value.span()).with_message(label))
+            .with_annotation(Annotation::secondary(call.callback.span()).with_message("For this callback"))
+            .with_note("PHP throws an `Error`: a positional argument cannot follow a named one.")
+            .with_help(help),
     );
 }
 
@@ -418,6 +458,7 @@ where
                 value_type: artifacts.get_expression_type(argument.expression).cloned(),
                 stands_for_any_count: false,
                 string_keys: None,
+                positional_keys: false,
             });
 
             continue;
@@ -436,6 +477,7 @@ where
                 value_type: None,
                 stands_for_any_count: true,
                 string_keys: None,
+                positional_keys: false,
             });
 
             continue;
@@ -448,6 +490,7 @@ where
                 value_type: Some(value_type),
                 stands_for_any_count: false,
                 string_keys: None,
+                positional_keys: false,
             }));
 
             continue;
@@ -459,6 +502,7 @@ where
             value_type: get_unpacked_value_type(context, unpacked_type),
             stands_for_any_count: true,
             string_keys: get_unpacked_string_keys(context.codebase, unpacked_type),
+            positional_keys: may_unpack_positional_keys(context.codebase, unpacked_type),
         });
     }
 

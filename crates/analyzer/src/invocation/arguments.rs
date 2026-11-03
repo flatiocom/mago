@@ -488,6 +488,19 @@ impl UnpackedStringKeys {
 
 #[must_use]
 pub fn get_unpacked_string_keys(codebase: &CodebaseMetadata, unpacked_type: &TUnion) -> Option<UnpackedStringKeys> {
+    match get_unpacked_key_kinds(codebase, unpacked_type) {
+        (true, false) => Some(UnpackedStringKeys::Always),
+        (true, true) => Some(UnpackedStringKeys::Possibly),
+        (false, _) => None,
+    }
+}
+
+#[must_use]
+pub fn may_unpack_positional_keys(codebase: &CodebaseMetadata, unpacked_type: &TUnion) -> bool {
+    get_unpacked_key_kinds(codebase, unpacked_type).1
+}
+
+fn get_unpacked_key_kinds(codebase: &CodebaseMetadata, unpacked_type: &TUnion) -> (bool, bool) {
     let mut has_string_key = false;
     let mut has_other_key = false;
 
@@ -499,11 +512,7 @@ pub fn get_unpacked_string_keys(codebase: &CodebaseMetadata, unpacked_type: &TUn
         }
     }
 
-    match (has_string_key, has_other_key) {
-        (true, false) => Some(UnpackedStringKeys::Always),
-        (true, true) => Some(UnpackedStringKeys::Possibly),
-        (false, _) => None,
-    }
+    (has_string_key, has_other_key)
 }
 
 fn note_key_kinds(key_types: &[TAtomic], has_string_key: &mut bool, has_other_key: &mut bool) {
