@@ -493,10 +493,7 @@ where
         has_valid_expected_index = true;
     }
 
-    if has_member_without_offsets
-        && (!has_array_member
-            || index_type.types.iter().all(|atomic| atomic.is_int() || atomic.is_any_string() || atomic.is_array_key()))
-    {
+    if has_member_without_offsets && (!has_array_member || index_type.types.iter().all(is_int_or_string_key)) {
         has_valid_expected_index = true;
     }
 
@@ -738,6 +735,15 @@ fn union_member_issue_group(issue: &Issue) -> Option<u8> {
     } else {
         None
     }
+}
+
+fn is_int_or_string_key(atomic: &TAtomic) -> bool {
+    atomic.is_int()
+        || atomic.is_any_string()
+        || atomic.is_array_key()
+        || atomic
+            .map_generic_parameter_constraint(|constraint| constraint.types.iter().all(is_int_or_string_key))
+            .unwrap_or(false)
 }
 
 fn check_index_of_auto_vivified_array<A>(
@@ -1176,7 +1182,7 @@ where
     let index_overlaps_keys = !index_type_contained_by_expected
         && !expected_contained_by_index
         && !key_parameter.is_never()
-        && index_type.types.iter().all(|atomic| atomic.is_int() || atomic.is_string() || atomic.is_array_key())
+        && index_type.types.iter().all(is_int_or_string_key)
         && can_expression_types_be_identical(context.codebase, index_type, &key_parameter, false, false);
 
     if index_type_contained_by_expected || expected_contained_by_index || index_overlaps_keys {

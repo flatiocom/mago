@@ -3721,3 +3721,4 @@ test_case!(offset_on_array_or_object_without_array_access_checks_the_array_key);
 test_case!(variadic_parameter_checks_named_arguments_it_collects);
 test_case!(call_user_func_array_rejects_unpacked_positional_after_named);
 test_case!(offset_on_array_or_member_without_offsets_checks_the_array_key);
+test_case!(offset_with_template_key_is_judged_by_its_constraint);
