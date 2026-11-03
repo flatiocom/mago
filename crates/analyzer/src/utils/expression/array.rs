@@ -801,6 +801,7 @@ where
         && !expected_key_type.is_never()
         && !dim_type.is_mixed()
         && !dim_type.has_float()
+        && !dim_type.has_bool()
         && is_contained_by(
             context.codebase,
             &expected_key_type,
@@ -1169,6 +1170,7 @@ where
         && !key_parameter.is_never()
         && !index_type.is_mixed()
         && !index_type.has_float()
+        && !index_type.has_bool()
         && is_contained_by(
             context.codebase,
             &key_parameter,
@@ -1471,6 +1473,7 @@ where
 
         let is_contained = !index_type.is_mixed()
             && !index_type.has_float()
+            && !index_type.has_bool()
             && is_contained_by(
                 context.codebase,
                 &key_parameter,
