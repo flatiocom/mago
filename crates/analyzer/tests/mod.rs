@@ -3729,3 +3729,4 @@ test_case!(offset_on_list_with_key_that_may_be_bool_may_not_exist, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(offset_with_template_key_on_union_with_object_without_offsets);
