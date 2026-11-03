@@ -3735,3 +3735,8 @@ test_case!(offset_on_list_with_template_key_that_may_be_float_may_not_exist, {
     s.strict_array_index_existence = true;
     s
 });
+test_case!(offset_on_list_with_numeric_mixed_or_bounded_template_key_may_not_exist, {
+    let mut s = crate::framework::default_test_settings();
+    s.strict_array_index_existence = true;
+    s
+});

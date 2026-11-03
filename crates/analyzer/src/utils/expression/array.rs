@@ -747,11 +747,24 @@ fn is_int_or_string_key(atomic: &TAtomic) -> bool {
             .unwrap_or(false)
 }
 
-fn may_be_float(atomic: &TAtomic) -> bool {
-    atomic.is_float()
-        || atomic
-            .map_generic_parameter_constraint(|constraint| constraint.types.iter().any(may_be_float))
-            .unwrap_or(false)
+fn key_bound(dim_type: &TUnion) -> TUnion {
+    TUnion::from_vec(
+        dim_type
+            .types
+            .iter()
+            .flat_map(|atomic| match atomic {
+                TAtomic::GenericParameter(parameter) => key_bound(parameter.constraint.as_ref()).types.into_owned(),
+                _ => vec![atomic.clone()],
+            })
+            .collect(),
+    )
+}
+
+fn may_cast_to_int(key_bound: &TUnion) -> bool {
+    key_bound.has_float()
+        || key_bound.has_bool()
+        || key_bound.has_mixed()
+        || key_bound.types.iter().any(|atomic| matches!(atomic, TAtomic::Scalar(TScalar::Numeric)))
 }
 
 fn bool_key_reads_present_elements(dim_type: &TUnion, known_elements: &BTreeMap<usize, (bool, TUnion)>) -> bool {
@@ -816,22 +829,20 @@ where
     // Accept a wider index type (e.g., `array<1, T>` indexed by `int`) as long as the key type
     // is contained by the index type; the access is type-valid, even if the specific key may
     // not be present at runtime.
+    let dim_bound = key_bound(dim_type);
+    let dim_casts_to_int = may_cast_to_int(&dim_bound);
     let expected_contained_by_index = !index_type_contained_by_expected
         && !expected_key_type.is_never()
-        && !dim_type.is_mixed()
-        && !dim_type.has_float()
-        && !dim_type.has_bool()
+        && !dim_casts_to_int
         && is_contained_by(
             context.codebase,
             &expected_key_type,
-            dim_type,
+            &dim_bound,
             true,
             false,
             false,
             &mut ComparisonResult::new(),
         );
-
-    let dim_casts_to_int = dim_type.types.iter().any(may_be_float) || dim_type.has_bool();
 
     if index_type_contained_by_expected || expected_contained_by_index {
         *has_valid_expected_index = true;
