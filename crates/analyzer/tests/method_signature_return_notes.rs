@@ -125,6 +125,45 @@ final class Square implements Shape
 }
 ";
 
+const IMPLICIT_RETURN_SOURCE: &str = "<?php
+
+declare(strict_types=1);
+
+final class Failure extends Exception
+{
+    public function __toString()
+    {
+        return 'failure';
+    }
+}
+
+class Label
+{
+    public function __toString(): string
+    {
+        return 'label';
+    }
+
+    public function __invoke(): int
+    {
+        return 1;
+    }
+}
+
+final class Caption extends Label
+{
+    public function __toString()
+    {
+        return 'caption';
+    }
+
+    public function __invoke()
+    {
+        return 2;
+    }
+}
+";
+
 fn analyze(source: &'static str) -> (Arc<File>, Vec<Issue>) {
     let file = Arc::new(File::new(
         Cow::Borrowed(b"src/return-notes.php"),
@@ -235,5 +274,18 @@ fn signature_findings_start_at_the_first_attribute_line() {
             ("incompatible-return-type".to_string(), 24),
             ("incompatible-return-type".to_string(), 34),
         ]
+    );
+}
+
+#[test]
+fn only_to_string_has_an_implicit_return_type() {
+    assert_eq!(
+        return_type_messages(IMPLICIT_RETURN_SOURCE),
+        [(
+            "`Caption::__invoke()` must declare a return type compatible with `int` declared by `Label::__invoke()`"
+                .to_string(),
+            "PHP requires an overriding method to declare a return type when the overridden method declares one."
+                .to_string()
+        )]
     );
 }

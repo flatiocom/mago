@@ -45,7 +45,8 @@ pub enum SignatureCompatibilityIssue {
 /// - Parameters are contravariant (child must accept >= parent accepts)
 /// - Return type is covariant (child must return <= parent returns)
 /// - Return type declaration must be present when a parent declares one, except a builtin
-///   tentative declaration, where omission only deprecates
+///   tentative declaration, where omission only deprecates, and `__toString()`, which PHP
+///   declares `string` implicitly
 /// - Parameter count (child must accept at least parent's required parameters)
 /// - Parameter names should match (warning only - breaks named arguments)
 ///
@@ -264,6 +265,7 @@ pub fn validate_method_signature_compatibility(
 
     if let Some(parent_return) = &parent_method.return_type_declaration_metadata
         && child_method.return_type_declaration_metadata.is_none()
+        && !has_implicit_string_return_type(child_method)
         && !has_tentative_return_type(parent_method)
     {
         let mut expanded_parent_return_type = parent_return.type_union.clone();
@@ -427,6 +429,10 @@ fn native_return_type_check(
     let return_type_will_change = has_attribute(child_method, b"ReturnTypeWillChange");
 
     if return_type_will_change { ReturnTypeCheck::Docblock } else { ReturnTypeCheck::Tentative }
+}
+
+fn has_implicit_string_return_type(method: &FunctionLikeMetadata) -> bool {
+    method.name.as_bytes() == b"__tostring"
 }
 
 fn has_tentative_return_type(method: &FunctionLikeMetadata) -> bool {
