@@ -75,3 +75,12 @@ function false_key_on_non_empty_list(array $value): mixed
     // @mago-expect analysis:invalid-array-index
     return $value[false];
 }
+
+/**
+ * @param list{int, int} $value
+ */
+function int_or_bool_key_on_list_shape_with_both_indexes(array $value, int|bool $key): mixed
+{
+    // @mago-expect analysis:mismatched-array-index,possibly-undefined-int-array-index
+    return $value[$key];
+}
