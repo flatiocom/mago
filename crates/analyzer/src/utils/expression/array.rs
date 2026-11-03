@@ -3,6 +3,7 @@
 use foldhash::HashSet;
 use mago_allocator::Arena;
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 use mago_word::Word;
 use mago_word::word;
@@ -746,6 +747,17 @@ fn is_int_or_string_key(atomic: &TAtomic) -> bool {
             .unwrap_or(false)
 }
 
+fn bool_key_reads_present_elements(dim_type: &TUnion, known_elements: &BTreeMap<usize, (bool, TUnion)>) -> bool {
+    let is_present = |index: usize| known_elements.range(index..).any(|(_, (optional, _))| !optional);
+
+    dim_type.types.iter().all(|atomic| match atomic {
+        TAtomic::Scalar(TScalar::Bool(boolean)) => {
+            (boolean.is_true() || is_present(0)) && (boolean.is_false() || is_present(1))
+        }
+        _ => false,
+    })
+}
+
 fn check_index_of_auto_vivified_array<A>(
     context: &Context<'_, '_, A>,
     index_type: &TUnion,
@@ -811,6 +823,8 @@ where
             false,
             &mut ComparisonResult::new(),
         );
+
+    let dim_casts_to_int = dim_type.has_float() || dim_type.has_bool();
 
     if index_type_contained_by_expected || expected_contained_by_index {
         *has_valid_expected_index = true;
@@ -900,7 +914,7 @@ where
 
                 let mut resulting_type = type_param.into_owned();
                 if context.settings.strict_array_index_existence
-                    && (*has_valid_expected_index || dim_type.has_float())
+                    && (*has_valid_expected_index || dim_casts_to_int)
                     && !block_context.flags.inside_isset()
                     && !block_context.flags.inside_unset()
                     && let Some(span) = span
@@ -938,7 +952,8 @@ where
         let mut result = if type_param.is_never() { get_mixed() } else { type_param.into_owned() };
         if !in_assignment {
             if context.settings.strict_array_index_existence
-                && (*has_valid_expected_index || dim_type.has_float())
+                && (*has_valid_expected_index || dim_casts_to_int)
+                && !bool_key_reads_present_elements(dim_type, known_elements)
                 && !block_context.flags.inside_isset()
                 && !block_context.flags.inside_unset()
                 && let Some(span) = span
@@ -991,10 +1006,11 @@ where
         } else {
             let mut elem_type = TUnion::clone(element_type);
 
-            let is_definitely_defined = *non_empty && dim_type.get_single_literal_int_value() == Some(0);
+            let is_definitely_defined =
+                *non_empty && (dim_type.get_single_literal_int_value() == Some(0) || dim_type.is_false());
             if !is_definitely_defined {
                 if context.settings.strict_array_index_existence
-                    && (*has_valid_expected_index || dim_type.has_float())
+                    && (*has_valid_expected_index || dim_casts_to_int)
                     && !in_assignment
                     && !block_context.flags.inside_isset()
                     && !block_context.flags.inside_unset()
