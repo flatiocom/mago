@@ -747,6 +747,13 @@ fn is_int_or_string_key(atomic: &TAtomic) -> bool {
             .unwrap_or(false)
 }
 
+fn may_be_float(atomic: &TAtomic) -> bool {
+    atomic.is_float()
+        || atomic
+            .map_generic_parameter_constraint(|constraint| constraint.types.iter().any(may_be_float))
+            .unwrap_or(false)
+}
+
 fn bool_key_reads_present_elements(dim_type: &TUnion, known_elements: &BTreeMap<usize, (bool, TUnion)>) -> bool {
     let is_present = |index: usize| known_elements.range(index..).any(|(_, (optional, _))| !optional);
 
@@ -824,7 +831,7 @@ where
             &mut ComparisonResult::new(),
         );
 
-    let dim_casts_to_int = dim_type.has_float() || dim_type.has_bool();
+    let dim_casts_to_int = dim_type.types.iter().any(may_be_float) || dim_type.has_bool();
 
     if index_type_contained_by_expected || expected_contained_by_index {
         *has_valid_expected_index = true;
